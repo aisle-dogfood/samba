@@ -62,7 +62,7 @@ enum commands {
 	CMD_SPEED,
 	CMD_FIRST,
 	CMD_NEXT,
-	CMD_SYSTEM,
+
 	CMD_CHECK,
 	CMD_REPACK,
 	CMD_QUIT,
@@ -103,7 +103,7 @@ COMMAND_TABLE cmd_table[] = {
 	{"check",	CMD_CHECK},
 	{"quit",	CMD_QUIT},
 	{"q",		CMD_QUIT},
-	{"!",		CMD_SYSTEM},
+
 	{"repack",	CMD_REPACK},
 	{NULL,		CMD_HELP}
 };
@@ -241,7 +241,7 @@ static void help(void)
 "  check                : check the integrity of an opened database\n"
 "  repack               : repack the database\n"
 "  speed                : perform speed tests on the database\n"
-"  ! command            : execute system command\n"
+"\n"
 "  1 | first            : print the first record\n"
 "  n | next             : print the next record\n"
 "  q | quit             : terminate\n"
@@ -729,14 +729,7 @@ static int do_command(void)
 	case CMD_OPEN_TDB:
 		bIterate = 0;
 		return open_tdb(arg1);
-	case CMD_SYSTEM:
-		/* Shell command */
-		ret = system(arg1);
-		if (ret != 0) {
-			terror("system() call failed\n");
-			return ret;
-		}
-		return 0;
+
 	case CMD_QUIT:
 		return 1;
 	default:
