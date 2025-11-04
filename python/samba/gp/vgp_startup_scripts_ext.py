@@ -75,8 +75,12 @@ class vgp_startup_scripts_ext(gp_xml_ext, gp_file_applier):
                     run_once = listelement.find('run_once') is not None
                     if run_once:
                         def applier_func(script_file, parameters):
-                            Popen(['/bin/sh %s %s' % (script_file, parameters)],
-                                shell=True).wait()
+                            # Build command arguments safely without shell=True
+                            cmd = ['/bin/sh', script_file]
+                            if parameters:
+                                # Split parameters by whitespace and add them as separate arguments
+                                cmd.extend(parameters.split())
+                            Popen(cmd, shell=False).wait()
                             # Run once scripts don't create a file to unapply,
                             # so their is nothing to return.
                             return []
