@@ -116,7 +116,7 @@ static int script_args(TALLOC_CTX *mem_ctx, const char *event_str,
 	argc = 2;
 
 	if (arg_str != NULL) {
-		char *str, *t, *tok;
+		char *str, *t, *tok, *saveptr;
 
 		str = talloc_strdup(argv, arg_str);
 		if (str == NULL) {
@@ -124,7 +124,7 @@ static int script_args(TALLOC_CTX *mem_ctx, const char *event_str,
 		}
 
 		t = str;
-		while ((tok = strtok(t, " ")) != NULL) {
+		while ((tok = strtok_r(t, " ", &saveptr)) != NULL) {
 			argv[argc] = talloc_strdup(argv, tok);
 			if (argv[argc] == NULL) {
 				talloc_free(argv);
@@ -399,7 +399,7 @@ static int debug_args(TALLOC_CTX *mem_ctx, const char *path,
 
 static void debug_log(int loglevel, const char *output, const char *log_prefix)
 {
-	char *line, *s;
+	char *line, *s, *saveptr;
 
 	s = strdup(output);
 	if (s == NULL) {
@@ -407,10 +407,10 @@ static void debug_log(int loglevel, const char *output, const char *log_prefix)
 		return;
 	}
 
-	line = strtok(s, "\n");
+	line = strtok_r(s, "\n", &saveptr);
 	while (line != NULL) {
 		DEBUG(loglevel, ("%s: %s\n", log_prefix, line));
-		line = strtok(NULL, "\n");
+		line = strtok_r(NULL, "\n", &saveptr);
 	}
 	free(s);
 }
