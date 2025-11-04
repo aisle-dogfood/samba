@@ -1062,6 +1062,7 @@ static int ctdb_add_public_address(struct ctdb_context *ctdb,
 	struct ctdb_vnn      *vnn;
 	char *tmp;
 	const char *iface;
+	char *saveptr;
 
 	/* Verify that we don't have an entry for this IP yet */
 	for (vnn = ctdb->vnn; vnn != NULL; vnn = vnn->next) {
@@ -1092,7 +1093,7 @@ static int ctdb_add_public_address(struct ctdb_context *ctdb,
 		talloc_free(vnn);
 		return -1;
 	}
-	for (iface = strtok(tmp, ","); iface; iface = strtok(NULL, ",")) {
+	for (iface = strtok_r(tmp, ",", &saveptr); iface; iface = strtok_r(NULL, ",", &saveptr)) {
 		struct vnn_interface *vnn_iface;
 		struct ctdb_interface *i;
 
