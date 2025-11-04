@@ -627,8 +627,12 @@ def backup_restore(src_tarfile_path, dst_service_path, samdb_conn, smb_conf_path
     ntacls_helper = NtaclsHelper(service, smb_conf_path, dom_sid)
     session_info = system_session_unix()
 
-    with tarfile.open(src_tarfile_path) as f:
-        f.extractall(path=tempdir)
+    try:
+        with tarfile.open(src_tarfile_path) as f:
+            f.extractall(path=tempdir)
+    except (tarfile.ExtractError, OSError) as e:
+        shutil.rmtree(tempdir)
+        raise Exception(f"Failed to safely extract tarfile: {e}")
         # e.g.: /tmp/tmpRNystY/{dir1,dir1.NTACL,...file1,file1.NTACL}
 
     for dirpath, dirnames, filenames in os.walk(tempdir):
