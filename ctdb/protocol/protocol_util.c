@@ -593,7 +593,7 @@ int ctdb_connection_from_string(const char *str, bool client_first,
 				struct ctdb_connection *conn)
 {
 	char s[128];
-	char *t1 = NULL, *t2 = NULL;
+	char *t1 = NULL, *t2 = NULL, *saveptr = NULL;
 	size_t len;
 	ctdb_sock_addr *first = (client_first ? &conn->client : &conn->server);
 	ctdb_sock_addr *second = (client_first ? &conn->server : &conn->client);
@@ -604,12 +604,12 @@ int ctdb_connection_from_string(const char *str, bool client_first,
 		return EINVAL;
 	}
 
-	t1 = strtok(s, " \t\n");
+	t1 = strtok_r(s, " \t\n", &saveptr);
 	if (t1 == NULL) {
 		return EINVAL;
 	}
 
-	t2 = strtok(NULL, " \t\n\0");
+	t2 = strtok_r(NULL, " \t\n\0", &saveptr);
 	if (t2 == NULL) {
 		return EINVAL;
 	}
