@@ -1062,6 +1062,7 @@ static int ctdb_add_public_address(struct ctdb_context *ctdb,
 	struct ctdb_vnn      *vnn;
 	char *tmp;
 	const char *iface;
+	char *saveptr;
 
 	/* Verify that we don't have an entry for this IP yet */
 	for (vnn = ctdb->vnn; vnn != NULL; vnn = vnn->next) {
@@ -1092,7 +1093,7 @@ static int ctdb_add_public_address(struct ctdb_context *ctdb,
 		talloc_free(vnn);
 		return -1;
 	}
-	for (iface = strtok(tmp, ","); iface; iface = strtok(NULL, ",")) {
+	for (iface = strtok_r(tmp, ",", &saveptr); iface; iface = strtok_r(NULL, ",", &saveptr)) {
 		struct vnn_interface *vnn_iface;
 		struct ctdb_interface *i;
 
@@ -1177,6 +1178,7 @@ int ctdb_set_public_addresses(struct ctdb_context *ctdb)
 		const char *addrstr;
 		const char *ifaces;
 		char *tok, *line;
+		char *saveptr;
 		int ret;
 
 		line = lines[i];
@@ -1189,10 +1191,10 @@ int ctdb_set_public_addresses(struct ctdb_context *ctdb)
 		if (strcmp(line, "") == 0) {
 			continue;
 		}
-		tok = strtok(line, " \t");
+		tok = strtok_r(line, " \t", &saveptr);
 		addrstr = tok;
 
-		tok = strtok(NULL, " \t");
+		tok = strtok_r(NULL, " \t", &saveptr);
 		if (tok == NULL) {
 			D_ERR("No interface specified at line %u "
 			      "of public addresses file\n", i+1);
