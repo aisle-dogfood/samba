@@ -380,7 +380,7 @@ static int cmdline_match_section(struct cmdline_context *cmdline,
 		struct cmdline_command *cmd;
 		char name[CMDLINE_MAX_LEN+1];
 		size_t len;
-		char *t, *str;
+		char *t, *str, *saveptr;
 		int n = 0;
 		bool match = false;
 
@@ -392,7 +392,7 @@ static int cmdline_match_section(struct cmdline_context *cmdline,
 		}
 
 		str = name;
-		while ((t = strtok(str, " ")) != NULL) {
+		while ((t = strtok_r(str, " ", &saveptr)) != NULL) {
 			if (n >= cmdline->argc) {
 				match = false;
 				break;
