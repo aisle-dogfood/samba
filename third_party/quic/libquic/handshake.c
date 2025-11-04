@@ -1063,21 +1063,21 @@ int quic_session_get_alpn(gnutls_session_t session, void *alpn, size_t *size)
 int quic_session_set_alpn(gnutls_session_t session, const void *alpns, size_t size)
 {
 	gnutls_datum_t alpn_data[5];
-	char *s, data[64] = {};
+	char *s, *saveptr, data[64] = {};
 	int count = 0;
 
 	if (size >= 64)
 		return -EINVAL;
 
 	memcpy(data, alpns, size);
-	s = strtok(data, ",");
+	s = strtok_r(data, ",", &saveptr);
 	while (s) {
 		while (*s == ' ')
 			s++;
 		alpn_data[count].data = (unsigned char *)s;
 		alpn_data[count].size = strlen(s);
 		count++;
-		s = strtok(NULL, ",");
+		s = strtok_r(NULL, ",", &saveptr);
 	}
 
 	return gnutls_alpn_set_protocols(session, alpn_data, count,
