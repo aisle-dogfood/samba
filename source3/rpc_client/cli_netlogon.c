@@ -912,9 +912,17 @@ NTSTATUS rpccli_netlogon_interactive_logon(
 		TALLOC_FREE(frame);
 		return NT_STATUS_INVALID_PARAMETER;
 	}
+	if (nt_hash.data == NULL) {
+		TALLOC_FREE(frame);
+		return NT_STATUS_INVALID_PARAMETER;
+	}
 	memcpy(password_info->ntpassword.hash, nt_hash.data, nt_hash.length);
 	if (lm_hash.length != 0) {
 		if (lm_hash.length != sizeof(password_info->lmpassword.hash)) {
+			TALLOC_FREE(frame);
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+		if (lm_hash.data == NULL) {
 			TALLOC_FREE(frame);
 			return NT_STATUS_INVALID_PARAMETER;
 		}
