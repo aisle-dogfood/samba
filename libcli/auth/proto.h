@@ -351,6 +351,10 @@ int des_crypt112(uint8_t out[8], const uint8_t in[8], const uint8_t key[14],
 		 enum samba_gnutls_direction encrypt);
 int des_crypt112_16(uint8_t out[16], const uint8_t in[16], const uint8_t key[14],
 		    enum samba_gnutls_direction encrypt);
+int sam_rid_crypt_aes(unsigned int rid, const uint8_t *in, uint8_t *out,
+		      enum samba_gnutls_direction encrypt);
+int sam_rid_crypt_secure(unsigned int rid, const uint8_t *in, uint8_t *out,
+			 enum samba_gnutls_direction encrypt, bool prefer_aes);
 int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 		  enum samba_gnutls_direction encrypt);
 #undef _PRINTF_ATTRIBUTE
