@@ -159,12 +159,21 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
 		if (!NT_STATUS_IS_OK(status)) {
 			return status;
 		}
-	} else {
-		rc = des_crypt112(out->data, in->data, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
-		if (rc != 0) {
-			return gnutls_error_to_ntstatus(rc,
-							NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+		memcpy(out->data, in->data, sizeof(out->data));
+
+		status = netlogon_creds_arcfour_crypt(creds,
+						      out->data,
+						      sizeof(out->data));
+		if (!NT_STATUS_IS_OK(status)) {
+			return status;
 		}
+	} else {
+		/*
+		 * DES encryption is no longer supported due to inadequate encryption strength.
+		 * Require AES or ARCFOUR encryption for secure communication.
+		 */
+		return NT_STATUS_NOT_SUPPORTED;
 	}
 
 	return NT_STATUS_OK;
