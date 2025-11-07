@@ -119,7 +119,7 @@ static bool Ucrit_addPid( struct server_id pid )
 
 	if ( Ucrit_MaxPid >= SMB_MAXPIDS ) {
 		fprintf(stderr, "ERROR: More than %d pids for user %s!\n",
-			 SMB_MAXPIDS, uidtoname(Ucrit_uid));
+			 SMB_MAXPIDS, uidtoname(talloc_tos(), Ucrit_uid));
 
 		return False;
 	}
@@ -223,7 +223,7 @@ static int print_share_mode(struct file_id fid,
 		struct server_id_buf tmp;
 		pid = server_id_str_buf(e->pid, &tmp);
 		if (state->resolve_uids) {
-			user_str = talloc_asprintf(tmp_ctx, "%s", uidtoname(e->uid));
+			user_str = talloc_asprintf(tmp_ctx, "%s", uidtoname(tmp_ctx, e->uid));
 		} else {
 			user_str = talloc_asprintf(tmp_ctx, "%u", (unsigned int)e->uid);
 		}
@@ -761,7 +761,7 @@ static int traverse_sessionid(const char *key, struct sessionid *session,
 			const char *gid_name = "-1";
 
 			if (session->uid != -1) {
-				uid_name = uidtoname(session->uid);
+				uid_name = uidtoname(tmp_ctx, session->uid);
 				if (uid_name == NULL) {
 					TALLOC_FREE(tmp_ctx);
 					return -1;

@@ -600,18 +600,17 @@ bool process_exists(const struct server_id pid)
  Convert a uid into a user name.
 ********************************************************************/
 
-const char *uidtoname(uid_t uid)
+const char *uidtoname(TALLOC_CTX *mem_ctx, uid_t uid)
 {
-	TALLOC_CTX *ctx = talloc_tos();
 	char *name = NULL;
 	struct passwd *pass = NULL;
 
-	pass = getpwuid_alloc(ctx,uid);
+	pass = getpwuid_alloc(mem_ctx, uid);
 	if (pass) {
-		name = talloc_strdup(ctx,pass->pw_name);
+		name = talloc_strdup(mem_ctx, pass->pw_name);
 		TALLOC_FREE(pass);
 	} else {
-		name = talloc_asprintf(ctx,
+		name = talloc_asprintf(mem_ctx,
 				"%ld",
 				(long int)uid);
 	}

@@ -309,7 +309,7 @@ char *get_mydnsdomname(TALLOC_CTX *ctx);
 char *automount_lookup(TALLOC_CTX *ctx, const char *user_name);
 char *automount_lookup(TALLOC_CTX *ctx, const char *user_name);
 bool process_exists(const struct server_id pid);
-const char *uidtoname(uid_t uid);
+const char *uidtoname(TALLOC_CTX *mem_ctx, uid_t uid);
 char *gidtoname(gid_t gid);
 uid_t nametouid(const char *name);
 gid_t nametogid(const char *name);

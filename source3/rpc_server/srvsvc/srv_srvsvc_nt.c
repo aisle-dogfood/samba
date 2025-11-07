@@ -109,7 +109,7 @@ static int enum_file_fn(struct file_id id,
 		return 0;
 	}
 
-	username = uidtoname(e->uid);
+	username = uidtoname(fenum->ctx, e->uid);
 
 	if ((fenum->username != NULL)
 	    && !strequal(username, fenum->username)) {

@@ -45,13 +45,13 @@ static int show_session(const char *key, struct sessionid *session,
 	if (*parseable) {
 		d_printf("%s\\%s\\%s\\%s\\%s\n",
 			 server_id_str_buf(session->pid, &tmp),
-			 uidtoname(session->uid),
+			 uidtoname(talloc_tos(), session->uid),
 			 gidtoname(session->gid),
 			 session->remote_machine, session->hostname);
 	} else {
 		d_printf("%7s   %-12s  %-12s  %-12s (%s)\n",
 			 server_id_str_buf(session->pid, &tmp),
-			 uidtoname(session->uid),
+			 uidtoname(talloc_tos(), session->uid),
 			 gidtoname(session->gid),
 			 session->remote_machine, session->hostname);
 	}
@@ -162,7 +162,7 @@ static int show_share_parseable(const struct connections_data *crec,
 
 	d_printf("%s\\%s\\%s\\%s\\%s\\%s\\%s",
 		 crec->servicename, server_id_str_buf(crec->pid, &tmp),
-		 guest ? "" : uidtoname(ids->entries[i].uid),
+		 guest ? "" : uidtoname(talloc_tos(), ids->entries[i].uid),
 		 guest ? "" : gidtoname(ids->entries[i].gid),
 		 crec->machine,
 		 guest ? "" : ids->entries[i].hostname,
