@@ -385,8 +385,6 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	/* Static buffers we will return. */
 	struct smb_passwd *pw_buf = &smbpasswd_state->pw_buf;
 	char  *user_name = smbpasswd_state->user_name;
-	unsigned char *smbpwd = smbpasswd_state->smbpwd;
-	unsigned char *smbntpwd = smbpasswd_state->smbntpwd;
 	char linebuf[256];
 	unsigned char *p;
 	long uidval;
@@ -528,8 +526,8 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 				/* NULL LM password */
 				pw_buf->smb_passwd = NULL;
 				DEBUG(10, ("getsmbfilepwent: LM password for user %s invalidated\n", user_name));
-			} else if (pdb_gethexpwd((char *)p, smbpwd)) {
-				pw_buf->smb_passwd = smbpwd;
+			} else if (pdb_gethexpwd((char *)p, smbpasswd_state->smbpwd)) {
+				pw_buf->smb_passwd = smbpasswd_state->smbpwd;
 			} else {
 				pw_buf->smb_passwd = NULL;
 				DEBUG(0, ("getsmbfilepwent: Malformed Lanman password entry for user %s \
@@ -545,8 +543,8 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		p += 33; /* Move to the first character of the line after the lanman password. */
 		if ((linebuf_len >= (PTR_DIFF(p, linebuf) + 33)) && (p[32] == ':')) {
 			if (*p != '*' && *p != 'X') {
-				if(pdb_gethexpwd((char *)p,smbntpwd)) {
-					pw_buf->smb_nt_passwd = smbntpwd;
+				if(pdb_gethexpwd((char *)p, smbpasswd_state->smbntpwd)) {
+					pw_buf->smb_nt_passwd = smbpasswd_state->smbntpwd;
 				}
 			}
 			p += 33; /* Move to the first character of the line after the NT password. */
