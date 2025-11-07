@@ -737,6 +737,18 @@ Error was %s. Password file may be corrupt ! Please examine by hand !\n",
 		return result;
 	}
 
+	/*
+	 * Clear sensitive password data from memory to prevent heap inspection.
+	 */
+	if (pwd != NULL) {
+		if (pwd->smb_passwd != NULL) {
+			memset((void *)pwd->smb_passwd, 0, 16);
+		}
+		if (pwd->smb_nt_passwd != NULL) {
+			memset((void *)pwd->smb_nt_passwd, 0, 16);
+		}
+	}
+
 	free(new_entry);
 	endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 	return NT_STATUS_OK;
@@ -1201,6 +1213,18 @@ Error was %s\n", pwd->smb_name, pfile2, strerror(errno)));
 		unlink(pfile2);
 	}
 
+	/*
+	 * Clear sensitive password data from memory to prevent heap inspection.
+	 */
+	if (pwd != NULL) {
+		if (pwd->smb_passwd != NULL) {
+			memset((void *)pwd->smb_passwd, 0, 16);
+		}
+		if (pwd->smb_nt_passwd != NULL) {
+			memset((void *)pwd->smb_nt_passwd, 0, 16);
+		}
+	}
+
 	endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 	endsmbfilepwent(fp_write,&pfile2_lockdepth);
 	return True;
@@ -1335,12 +1359,41 @@ static NTSTATUS smbpasswd_getsampwnam(struct pdb_methods *my_methods,
 
 	if (!sam_acct) {
 		DEBUG(10,("getsampwnam (smbpasswd): struct samu is NULL\n"));
+		/*
+		 * Clear sensitive password data from memory to prevent heap inspection.
+		 */
+		if (smb_pw->smb_passwd != NULL) {
+			memset((void *)smb_pw->smb_passwd, 0, 16);
+		}
+		if (smb_pw->smb_nt_passwd != NULL) {
+			memset((void *)smb_pw->smb_nt_passwd, 0, 16);
+		}
 		return nt_status;
 	}
 
 	/* now build the struct samu */
-	if (!build_sam_account(smbpasswd_state, sam_acct, smb_pw))
+	if (!build_sam_account(smbpasswd_state, sam_acct, smb_pw)) {
+		/*
+		 * Clear sensitive password data from memory to prevent heap inspection.
+		 */
+		if (smb_pw->smb_passwd != NULL) {
+			memset((void *)smb_pw->smb_passwd, 0, 16);
+		}
+		if (smb_pw->smb_nt_passwd != NULL) {
+			memset((void *)smb_pw->smb_nt_passwd, 0, 16);
+		}
 		return nt_status;
+	}
+
+	/*
+	 * Clear sensitive password data from memory to prevent heap inspection.
+	 */
+	if (smb_pw->smb_passwd != NULL) {
+		memset((void *)smb_pw->smb_passwd, 0, 16);
+	}
+	if (smb_pw->smb_nt_passwd != NULL) {
+		memset((void *)smb_pw->smb_nt_passwd, 0, 16);
+	}
 
 	/* success */
 	return NT_STATUS_OK;
@@ -1393,12 +1446,31 @@ static NTSTATUS smbpasswd_getsampwsid(struct pdb_methods *my_methods, struct sam
 
 	if (!sam_acct) {
 		DEBUG(10,("getsampwrid: (smbpasswd) struct samu is NULL\n"));
+		/*
+		 * Clear sensitive password data from memory to prevent heap inspection.
+		 */
+		if (smb_pw->smb_passwd != NULL) {
+			memset((void *)smb_pw->smb_passwd, 0, 16);
+		}
+		if (smb_pw->smb_nt_passwd != NULL) {
+			memset((void *)smb_pw->smb_nt_passwd, 0, 16);
+		}
 		return nt_status;
 	}
 
 	/* now build the struct samu */
-	if (!build_sam_account (smbpasswd_state, sam_acct, smb_pw))
+	if (!build_sam_account (smbpasswd_state, sam_acct, smb_pw)) {
+		/*
+		 * Clear sensitive password data from memory to prevent heap inspection.
+		 */
+		if (smb_pw->smb_passwd != NULL) {
+			memset((void *)smb_pw->smb_passwd, 0, 16);
+		}
+		if (smb_pw->smb_nt_passwd != NULL) {
+			memset((void *)smb_pw->smb_nt_passwd, 0, 16);
+		}
 		return nt_status;
+	}
 
 	/* build_sam_account might change the SID on us, if the name was for the guest account */
 	if (NT_STATUS_IS_OK(nt_status) && !dom_sid_equal(pdb_get_user_sid(sam_acct), sid)) {
@@ -1408,7 +1480,26 @@ static NTSTATUS smbpasswd_getsampwsid(struct pdb_methods *my_methods, struct sam
 			  dom_sid_str_buf(sid, &buf1),
 			  dom_sid_str_buf(pdb_get_user_sid(sam_acct), &buf2),
 			  pdb_get_username(sam_acct)));
+		/*
+		 * Clear sensitive password data from memory to prevent heap inspection.
+		 */
+		if (smb_pw->smb_passwd != NULL) {
+			memset((void *)smb_pw->smb_passwd, 0, 16);
+		}
+		if (smb_pw->smb_nt_passwd != NULL) {
+			memset((void *)smb_pw->smb_nt_passwd, 0, 16);
+		}
 		return NT_STATUS_NO_SUCH_USER;
+	}
+
+	/*
+	 * Clear sensitive password data from memory to prevent heap inspection.
+	 */
+	if (smb_pw->smb_passwd != NULL) {
+		memset((void *)smb_pw->smb_passwd, 0, 16);
+	}
+	if (smb_pw->smb_nt_passwd != NULL) {
+		memset((void *)smb_pw->smb_nt_passwd, 0, 16);
 	}
 
 	/* success */
@@ -1685,6 +1776,18 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 				   entry, &search_state->entries,
 				   &search_state->num_entries,
 				   &search_state->array_size);
+	}
+
+	/*
+	 * Clear sensitive password data from memory to prevent heap inspection.
+	 */
+	if (pwd != NULL) {
+		if (pwd->smb_passwd != NULL) {
+			memset((void *)pwd->smb_passwd, 0, 16);
+		}
+		if (pwd->smb_nt_passwd != NULL) {
+			memset((void *)pwd->smb_nt_passwd, 0, 16);
+		}
 	}
 
 	endsmbfilepwent(fp, &(smbpasswd_state->pw_file_lock_depth));
