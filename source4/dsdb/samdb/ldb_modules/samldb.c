@@ -1194,6 +1194,10 @@ static int samldb_gmsa_add(struct samldb_ctx *ac)
 					  &pwd_id_blob,
 					  &password);
 		if (ret) {
+			/* Clear sensitive password data before exit */
+			if (password != NULL) {
+				memset(password->buf, 0, sizeof(password->buf));
+			}
 			goto out;
 		}
 
@@ -1206,6 +1210,10 @@ static int samldb_gmsa_add(struct samldb_ctx *ac)
 						 &password_blob,
 						 0);
 		if (ret) {
+			/* Clear sensitive password data before exit */
+			if (password != NULL) {
+				memset(password->buf, 0, sizeof(password->buf));
+			}
 			goto out;
 		}
 
@@ -1215,7 +1223,16 @@ static int samldb_gmsa_add(struct samldb_ctx *ac)
 						 &pwd_id_blob,
 						 0);
 		if (ret) {
+			/* Clear sensitive password data before exit */
+			if (password != NULL) {
+				memset(password->buf, 0, sizeof(password->buf));
+			}
 			goto out;
+		}
+
+		/* Clear sensitive password data after successful use */
+		if (password != NULL) {
+			memset(password->buf, 0, sizeof(password->buf));
 		}
 	}
 
