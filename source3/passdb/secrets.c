@@ -469,13 +469,51 @@ bool secrets_fetch_afs_key(const char *cell, struct afs_key *result)
   restrictions for anonymous connections" set in the win2k Local
   Security Policy.
 
-  Caller to free() result in domain, username, password
+  Caller to free() result in domain, username using SAFE_FREE() and password using BURN_FREE_STR()
 *******************************************************************************/
 void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 {
-	*username = (char *)secrets_fetch(SECRETS_AUTH_USER, NULL);
-	*domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, NULL);
-	*password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, NULL);
+	size_t username_size, domain_size, password_size;
+	char *raw_username, *raw_domain, *raw_password;
+	
+	/* Fetch raw data from secrets database */
+	raw_username = (char *)secrets_fetch(SECRETS_AUTH_USER, &username_size);
+	raw_domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, &domain_size);
+	raw_password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, &password_size);
+	
+	/* Ensure null-termination for string safety */
+	if (raw_username != NULL) {
+		*username = malloc(username_size + 1);
+		if (*username != NULL) {
+			memcpy(*username, raw_username, username_size);
+			(*username)[username_size] = '\0';
+		}
+		BURN_FREE(raw_username, username_size);
+	} else {
+		*username = NULL;
+	}
+	
+	if (raw_domain != NULL) {
+		*domain = malloc(domain_size + 1);
+		if (*domain != NULL) {
+			memcpy(*domain, raw_domain, domain_size);
+			(*domain)[domain_size] = '\0';
+		}
+		BURN_FREE(raw_domain, domain_size);
+	} else {
+		*domain = NULL;
+	}
+	
+	if (raw_password != NULL) {
+		*password = malloc(password_size + 1);
+		if (*password != NULL) {
+			memcpy(*password, raw_password, password_size);
+			(*password)[password_size] = '\0';
+		}
+		BURN_FREE(raw_password, password_size);
+	} else {
+		*password = NULL;
+	}
 
 	if (*username && **username) {
 
