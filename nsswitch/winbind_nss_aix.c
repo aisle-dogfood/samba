@@ -172,7 +172,7 @@ static char *decode_user(const char *name)
 	if (!pwd) {
 		return NULL;
 	}
-	ret = strdup(pwd->pw_name);
+	ret = pwd->pw_name ? strdup(pwd->pw_name) : strdup("");
 
 	free_pwd(pwd);
 
@@ -197,11 +197,19 @@ static struct passwd *fill_pwent(struct winbindd_pw *pw)
 
 	result->pw_uid = pw->pw_uid;
 	result->pw_gid = pw->pw_gid;
-	result->pw_name   = strdup(pw->pw_name);
-	result->pw_passwd = strdup(pw->pw_passwd);
-	result->pw_gecos  = strdup(pw->pw_gecos);
-	result->pw_dir    = strdup(pw->pw_dir);
-	result->pw_shell  = strdup(pw->pw_shell);
+	result->pw_name   = pw->pw_name ? strdup(pw->pw_name) : strdup("");
+	result->pw_passwd = pw->pw_passwd ? strdup(pw->pw_passwd) : strdup("");
+	result->pw_gecos  = pw->pw_gecos ? strdup(pw->pw_gecos) : strdup("");
+	result->pw_dir    = pw->pw_dir ? strdup(pw->pw_dir) : strdup("");
+	result->pw_shell  = pw->pw_shell ? strdup(pw->pw_shell) : strdup("");
+
+	/* Check if any strdup failed */
+	if (!result->pw_name || !result->pw_passwd || !result->pw_gecos || 
+	    !result->pw_dir || !result->pw_shell) {
+		free_pwd(result);
+		errno = ENOMEM;
+		return NULL;
+	}
 
 	return result;
 }
@@ -224,8 +232,15 @@ static struct group *fill_grent(struct winbindd_gr *gr, char *gr_mem)
 
 	result->gr_gid = gr->gr_gid;
 
-	result->gr_name   = strdup(gr->gr_name);
-	result->gr_passwd = strdup(gr->gr_passwd);
+	result->gr_name   = gr->gr_name ? strdup(gr->gr_name) : strdup("");
+	result->gr_passwd = gr->gr_passwd ? strdup(gr->gr_passwd) : strdup("");
+
+	/* Check if strdup failed */
+	if (!result->gr_name || !result->gr_passwd) {
+		free_grp(result);
+		errno = ENOMEM;
+		return NULL;
+	}
 
 	/* Group membership */
 	if ((gr->num_gr_mem < 0) || !gr_mem) {
@@ -576,7 +591,7 @@ static attrval_t pwd_to_group(struct passwd *pwd)
 
 	if (grp != NULL) {
 		r.attr_flag = 0;
-		r.attr_un.au_char = strdup(grp->gr_name);
+		r.attr_un.au_char = grp->gr_name ? strdup(grp->gr_name) : strdup("");
 		free_grp(grp);
 	}
 
@@ -677,15 +692,15 @@ static int wb_aix_user_attrib(const char *key, char *attributes[],
 			results[i].attr_un.au_int = pwd->pw_gid;
 #endif
 		} else if (strcmp(attributes[i], S_PWD) == 0) {
-			results[i].attr_un.au_char = strdup(pwd->pw_passwd);
+			results[i].attr_un.au_char = pwd->pw_passwd ? strdup(pwd->pw_passwd) : strdup("");
 		} else if (strcmp(attributes[i], S_HOME) == 0) {
-			results[i].attr_un.au_char = strdup(pwd->pw_dir);
+			results[i].attr_un.au_char = pwd->pw_dir ? strdup(pwd->pw_dir) : strdup("");
 		} else if (strcmp(attributes[i], S_SHELL) == 0) {
-			results[i].attr_un.au_char = strdup(pwd->pw_shell);
+			results[i].attr_un.au_char = pwd->pw_shell ? strdup(pwd->pw_shell) : strdup("");
 		} else if (strcmp(attributes[i], S_REGISTRY) == 0) {
 			results[i].attr_un.au_char = strdup("WINBIND");
 		} else if (strcmp(attributes[i], S_GECOS) == 0) {
-			results[i].attr_un.au_char = strdup(pwd->pw_gecos);
+			results[i].attr_un.au_char = pwd->pw_gecos ? strdup(pwd->pw_gecos) : strdup("");
 		} else if (strcmp(attributes[i], S_PGRP) == 0) {
 			results[i] = pwd_to_group(pwd);
 		} else if (strcmp(attributes[i], S_GROUPS) == 0) {
@@ -721,7 +736,7 @@ static int wb_aix_group_attrib(const char *key, char *attributes[],
 		results[i].attr_flag = 0;
 
 		if (strcmp(attributes[i], S_PWD) == 0) {
-			results[i].attr_un.au_char = strdup(grp->gr_passwd);
+			results[i].attr_un.au_char = grp->gr_passwd ? strdup(grp->gr_passwd) : strdup("");
 		} else if (strcmp(attributes[i], S_ID) == 0) {
 			results[i].attr_un.au_int = grp->gr_gid;
 		} else {
