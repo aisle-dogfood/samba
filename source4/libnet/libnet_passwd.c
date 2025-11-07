@@ -123,6 +123,13 @@ done:
 	return status;
 }
 
+/*
+ * WARNING: This function uses legacy cryptographic algorithms (MD4, DES)
+ * that are cryptographically weak and should only be used for backward
+ * compatibility with older systems. The RC4 cipher has been replaced with
+ * AES-128-CBC for improved security, but MD4 and DES hashing remain for
+ * protocol compatibility requirements.
+ */
 static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 					       struct dcerpc_binding_handle *h,
 					       struct lsa_String *server,
@@ -163,7 +170,7 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	encode_pw_buffer(lm_pass.data, new_password, STR_UNICODE);
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&nt_session_key,
 				NULL);
 	if (rc < 0) {
@@ -189,7 +196,7 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	encode_pw_buffer(nt_pass.data, new_password, STR_UNICODE);
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&nt_session_key,
 				NULL);
 	if (rc < 0) {
@@ -249,7 +256,7 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	encode_pw_buffer(lm_pass.data, new_password, STR_ASCII | STR_TERMINATE);
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&lm_session_key,
 				NULL);
 	if (rc < 0) {
@@ -275,7 +282,7 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	encode_pw_buffer(nt_pass.data, new_password, STR_UNICODE);
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&nt_session_key,
 				NULL);
 	if (rc < 0) {
@@ -331,7 +338,7 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	encode_pw_buffer(lm_pass.data, new_password, STR_ASCII);
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&lm_session_key,
 				NULL);
 	if (rc < 0) {
@@ -654,7 +661,7 @@ static NTSTATUS libnet_SetPassword_samr_handle_24(struct libnet_context *ctx, TA
 	};
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&enc_session_key,
 				NULL);
 	data_blob_clear_free(&session_key);
@@ -732,7 +739,7 @@ static NTSTATUS libnet_SetPassword_samr_handle_23(struct libnet_context *ctx, TA
 	};
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&_session_key,
 				NULL);
 	data_blob_clear_free(&session_key);
