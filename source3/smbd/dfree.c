@@ -137,6 +137,12 @@ static uint64_t sys_disk_free(connection_struct *conn,
 	if (disk_quotas(conn, fname, &bsize_q, &dfree_q, &dsize_q)) {
 		uint64_t min_bsize = MIN(*bsize, bsize_q);
 
+		/* Prevent division by zero */
+		if (min_bsize == 0) {
+			DEBUG(0,("disk_free: min_bsize is 0, using fallback bsize of 512\n"));
+			min_bsize = 512;
+		}
+
 		(*dfree) = (*dfree) * (*bsize) / min_bsize;
 		(*dsize) = (*dsize) * (*bsize) / min_bsize;
 		dfree_q = dfree_q * bsize_q / min_bsize;
