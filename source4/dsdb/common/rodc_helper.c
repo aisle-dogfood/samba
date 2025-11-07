@@ -204,7 +204,8 @@ WERROR samdb_confirm_rodc_allowed_to_repl_to_sid_list(struct ldb_context *sam_ct
 	}
 
 	/* The RODC can replicate and print tickets for itself. */
-	if (dom_sid_equal(&token_sids[PRIMARY_USER_SID_INDEX], rodc_machine_account_sid)) {
+	if (num_token_sids > PRIMARY_USER_SID_INDEX &&
+	    dom_sid_equal(&token_sids[PRIMARY_USER_SID_INDEX], rodc_machine_account_sid)) {
 		TALLOC_FREE(frame);
 		return WERR_OK;
 	}
