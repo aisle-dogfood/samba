@@ -228,6 +228,31 @@ main(int argc,			/* I - Number of command-line arguments */
 
 	if (print_file != NULL) {
 		char *endp;
+		char *resolved_path = NULL;
+
+		/* Validate print_file to prevent directory traversal attacks */
+		if (strstr(print_file, "..") != NULL) {
+			fprintf(stderr,
+				"ERROR: Invalid print file path (contains '..'): %s\n",
+				print_file);
+			goto done;
+		}
+
+		/* Check for absolute paths - only allow relative paths */
+		if (print_file[0] == '/') {
+			fprintf(stderr,
+				"ERROR: Absolute paths not allowed for print file: %s\n",
+				print_file);
+			goto done;
+		}
+
+		/* Validate against dangerous characters */
+		if (strpbrk(print_file, "|;&$`<>") != NULL) {
+			fprintf(stderr,
+				"ERROR: Invalid characters in print file path: %s\n",
+				print_file);
+			goto done;
+		}
 
 		fp = fopen(print_file, "rb");
 		if (fp == NULL) {
