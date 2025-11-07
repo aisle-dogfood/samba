@@ -832,6 +832,9 @@ static NTSTATUS ntlmssp_server_preauth(struct gensec_security *gensec_security,
 	user_info->password.response.lanman = ntlmssp_state->lm_resp;
 	user_info->password.response.nt = ntlmssp_state->nt_resp;
 
+	/* Set destructor to clear sensitive password state information */
+	auth_usersupplied_info_set_secure_destructor(user_info);
+
 	state->user_info = user_info;
 	return NT_STATUS_OK;
 }

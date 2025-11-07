@@ -204,6 +204,9 @@ static void sesssetup_old(struct smbsrv_request *req, union smb_sesssetup *sess)
 	user_info->password.response.lanman.data = talloc_steal(user_info, sess->old.in.password.data);
 	user_info->password.response.nt = data_blob(NULL, 0);
 
+	/* Set destructor to clear sensitive password state information */
+	auth_usersupplied_info_set_secure_destructor(user_info);
+
 	state = talloc(req, struct sesssetup_context);
 	if (!state) goto nomem;
 
@@ -389,6 +392,9 @@ static void sesssetup_nt1(struct smbsrv_request *req, union smb_sesssetup *sess)
 	user_info->password.response.lanman.data = talloc_steal(user_info, sess->nt1.in.password1.data);
 	user_info->password.response.nt = sess->nt1.in.password2;
 	user_info->password.response.nt.data = talloc_steal(user_info, sess->nt1.in.password2.data);
+
+	/* Set destructor to clear sensitive password state information */
+	auth_usersupplied_info_set_secure_destructor(user_info);
 
 	if (!allow_raw && user_info->password.response.nt.length >= 48) {
 		/*

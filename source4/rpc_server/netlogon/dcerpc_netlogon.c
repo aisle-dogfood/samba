@@ -1816,6 +1816,9 @@ static NTSTATUS dcesrv_netr_LogonSamLogon_base_call(struct dcesrv_netr_LogonSamL
 		user_info->logon_id
 		    = r->in.logon->password->identity_info.logon_id;
 
+		/* Set destructor to clear sensitive password state information */
+		auth_usersupplied_info_set_secure_destructor(user_info);
+
 		break;
 	case NetlogonNetworkInformation:
 	case NetlogonNetworkTransitiveInformation:
@@ -1842,6 +1845,9 @@ static NTSTATUS dcesrv_netr_LogonSamLogon_base_call(struct dcesrv_netr_LogonSamL
 
 		user_info->logon_id
 		    = r->in.logon->network->identity_info.logon_id;
+
+		/* Set destructor to clear sensitive password state information */
+		auth_usersupplied_info_set_secure_destructor(user_info);
 
 		nt_status = dcesrv_netr_NTLMv2_RESPONSE_verify(dce_call,
 							       user_info,

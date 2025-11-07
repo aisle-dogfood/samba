@@ -2261,6 +2261,10 @@ static void log_authentication(
 	} else {
 		ui->password_state = AUTH_PASSWORD_RESPONSE;
 	}
+
+	/* Set destructor to clear sensitive password state information */
+	auth_usersupplied_info_set_secure_destructor(ui);
+
 	/*
 	 * In the event of a failure ui->auth_description will be null,
 	 * the logging code handles this correctly so it can be ignored.

@@ -37,6 +37,24 @@ static int clear_string(char *password)
 	return 0;
 }
 
+static int clear_user_info(struct auth_usersupplied_info *user_info)
+{
+	/* Clear sensitive password state information */
+	user_info->password_state = 0;
+	return 0;
+}
+
+/*
+ * Set up secure memory clearing for auth_usersupplied_info structure
+ * to prevent heap inspection vulnerabilities
+ */
+void auth_usersupplied_info_set_secure_destructor(struct auth_usersupplied_info *user_info)
+{
+	if (user_info != NULL) {
+		talloc_set_destructor(user_info, clear_user_info);
+	}
+}
+
 /****************************************************************************
  Create an auth_usersupplied_data structure
 ****************************************************************************/
@@ -157,6 +175,9 @@ NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
 	}
 
 	user_info->password_state = password_state;
+
+	/* Set destructor to clear sensitive password state information */
+	auth_usersupplied_info_set_secure_destructor(user_info);
 
 	user_info->logon_parameters = 0;
 

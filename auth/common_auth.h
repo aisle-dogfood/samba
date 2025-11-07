@@ -240,4 +240,10 @@ void log_authz_event(
 	const struct timeval authtime,
 	NTSTATUS status);
 
+/*
+ * Set up secure memory clearing for auth_usersupplied_info structure
+ * to prevent heap inspection vulnerabilities
+ */
+void auth_usersupplied_info_set_secure_destructor(struct auth_usersupplied_info *user_info);
+
 #endif
