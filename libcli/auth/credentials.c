@@ -735,10 +735,11 @@ struct netlogon_creds_CredentialState *netlogon_creds_client_init(TALLOC_CTX *me
 			return NULL;
 		}
 	} else {
-		status = netlogon_creds_init_64bit(creds,
-						   client_challenge,
-						   server_challenge,
-						   machine_password);
+		/* Fallback to 128-bit encryption instead of weak DES */
+		status = netlogon_creds_init_128bit(creds,
+						    client_challenge,
+						    server_challenge,
+						    machine_password);
 		if (!NT_STATUS_IS_OK(status)) {
 			talloc_free(creds);
 			return NULL;
@@ -945,10 +946,11 @@ struct netlogon_creds_CredentialState *netlogon_creds_server_init(TALLOC_CTX *me
 			return NULL;
 		}
 	} else {
-		status = netlogon_creds_init_64bit(creds,
-						   client_challenge,
-						   server_challenge,
-						   machine_password);
+		/* Fallback to 128-bit encryption instead of weak DES */
+		status = netlogon_creds_init_128bit(creds,
+						    client_challenge,
+						    server_challenge,
+						    machine_password);
 		if (!NT_STATUS_IS_OK(status)) {
 			talloc_free(creds);
 			return NULL;
