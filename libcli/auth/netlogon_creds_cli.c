@@ -2411,6 +2411,8 @@ struct netlogon_creds_cli_ServerPasswordSet_state {
 static void netlogon_creds_cli_ServerPasswordSet_cleanup(struct tevent_req *req,
 						     NTSTATUS status);
 static void netlogon_creds_cli_ServerPasswordSet_locked(struct tevent_req *subreq);
+static int netlogon_creds_cli_ServerPasswordSet_state_destructor(
+		struct netlogon_creds_cli_ServerPasswordSet_state *state);
 
 struct tevent_req *netlogon_creds_cli_ServerPasswordSet_send(TALLOC_CTX *mem_ctx,
 				struct tevent_context *ev,
@@ -2429,6 +2431,10 @@ struct tevent_req *netlogon_creds_cli_ServerPasswordSet_send(TALLOC_CTX *mem_ctx
 	if (req == NULL) {
 		return NULL;
 	}
+
+	/* Set destructor to clear sensitive data when state is destroyed */
+	talloc_set_destructor(state,
+			      netlogon_creds_cli_ServerPasswordSet_state_destructor);
 
 	state->ev = ev;
 	state->context = context;
@@ -2525,6 +2531,16 @@ static void netlogon_creds_cli_ServerPasswordSet_cleanup(struct tevent_req *req,
 
 	netlogon_creds_cli_delete(state->context, state->creds);
 	TALLOC_FREE(state->creds);
+}
+
+static int netlogon_creds_cli_ServerPasswordSet_state_destructor(
+		struct netlogon_creds_cli_ServerPasswordSet_state *state)
+{
+	/* Clear sensitive password data from memory to prevent heap inspection */
+	ZERO_STRUCT(state->samr_password);
+	ZERO_STRUCT(state->samr_crypt_password);
+	ZERO_STRUCT(state->netr_crypt_password);
+	return 0;
 }
 
 static void netlogon_creds_cli_ServerPasswordSet_done(struct tevent_req *subreq);
