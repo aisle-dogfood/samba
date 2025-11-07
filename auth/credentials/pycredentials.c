@@ -2767,13 +2767,7 @@ static PyObject *py_netlogon_creds_decrypt_samr_Password(PyObject *module,
 		return NULL;
 	}
 
-	/*
-	 * we can't use pytalloc_get_type as
-	 * NDR_PULL_ALLOC()/talloc_ptrtype() doesn't set the
-	 * correct talloc name because of old
-	 * compilers.
-	 */
-	pwd = pytalloc_get_ptr(py_pwd);
+	pwd = pytalloc_get_type(py_pwd, struct samr_Password);
 	if (pwd == NULL) {
 		/* pytalloc_get_type sets TypeError */
 		return NULL;
