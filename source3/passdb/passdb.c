@@ -33,6 +33,7 @@
 #include "auth/credentials/credentials.h"
 #include "lib/param/param.h"
 #include "lib/util/string_wrappers.h"
+#include "local.h"
 #include "source3/lib/substitute.h"
 
 #undef DBGC_CLASS
@@ -2007,6 +2008,13 @@ static uint32_t init_buffer_from_samu_v3 (uint8_t **buf, struct samu *sampass, b
 		pdb_get_bad_password_count(sampass),	/* w */
 		pdb_get_logon_count(sampass),		/* w */
 		pdb_get_unknown_6(sampass));		/* d */
+
+	/* Validate the calculated buffer size to prevent heap inspection vulnerabilities */
+	if (len == 0 || len > MAX_RPC_DATA_SIZE) {
+		DEBUG(0,("init_buffer_from_samu_v3: Invalid buffer size calculated: %lu bytes. "
+			 "Maximum allowed: %d bytes\n", (unsigned long)len, MAX_RPC_DATA_SIZE));
+		return (-1);
+	}
 
 	if (size_only) {
 		return buflen;
