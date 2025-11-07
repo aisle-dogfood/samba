@@ -25,6 +25,32 @@
 #include "includes.h"
 #include "../lib/util/asn1.h"
 #include "../libcli/ldap/ldap_message.h"
+#include "../lib/util/memory.h"
+
+/*
+ * Destructor function to securely clear password memory
+ */
+static int ldap_password_destructor(char *password)
+{
+	if (password != NULL) {
+		size_t len = strlen(password);
+		if (len > 0) {
+			memset_s(password, len, 0, len);
+		}
+	}
+	return 0;
+}
+
+/*
+ * Destructor function to securely clear SASL security blob memory
+ */
+static int ldap_secblob_destructor(DATA_BLOB *secblob)
+{
+	if (secblob != NULL) {
+		data_blob_clear(secblob);
+	}
+	return 0;
+}
 
 _PUBLIC_ struct ldap_message *new_ldap_message(TALLOC_CTX *mem_ctx)
 {
@@ -1201,6 +1227,8 @@ _PUBLIC_ NTSTATUS ldap_decode(struct asn1_data *data,
 				if (!asn1_read(data, pw, pwlen)) goto prot_err;
 				pw[pwlen] = '\0';
 				r->creds.password = pw;
+				/* Set destructor to securely clear password memory */
+				talloc_set_destructor(pw, ldap_password_destructor);
 			}
 			if (!asn1_end_tag(data)) goto prot_err;
 		} else if (asn1_peek_tag(data, ASN1_CONTEXT(3))){
@@ -1216,6 +1244,8 @@ _PUBLIC_ NTSTATUS ldap_decode(struct asn1_data *data,
 				}
 				*r->creds.SASL.secblob = data_blob_talloc(r->creds.SASL.secblob,
 									  tmp_blob.data, tmp_blob.length);
+				/* Set destructor to securely clear SASL secblob memory */
+				talloc_set_destructor(r->creds.SASL.secblob, ldap_secblob_destructor);
 				data_blob_free(&tmp_blob);
 			} else {
 				r->creds.SASL.secblob = NULL;
@@ -1243,6 +1273,8 @@ _PUBLIC_ NTSTATUS ldap_decode(struct asn1_data *data,
 			}
 			*r->SASL.secblob = data_blob_talloc(r->SASL.secblob,
 							    tmp_blob.data, tmp_blob.length);
+			/* Set destructor to securely clear SASL secblob memory */
+			talloc_set_destructor(r->SASL.secblob, ldap_secblob_destructor);
 			data_blob_free(&tmp_blob);
 		} else {
 			r->SASL.secblob = NULL;
