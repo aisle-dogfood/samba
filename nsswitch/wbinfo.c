@@ -1680,6 +1680,9 @@ static bool wbinfo_auth_krb5(char *username, const char *cctype, uint32_t flags)
 	}
 
 	local_cctype = talloc_strdup(frame, cctype);
+	if (local_cctype == NULL) {
+		return false;
+	}
 
 	name = s;
 
@@ -1719,7 +1722,7 @@ static bool wbinfo_auth_krb5(char *username, const char *cctype, uint32_t flags)
 				     "krb5_cc_type",
 				     0,
 				     (uint8_t *)local_cctype,
-				     strlen(cctype)+1);
+				     strlen(local_cctype)+1);
 	if (!WBC_ERROR_IS_OK(wbc_status)) {
 		d_fprintf(stderr, "failed to call wbcAddNamedBlob: %s\n",
 			  wbcErrorString(wbc_status));
