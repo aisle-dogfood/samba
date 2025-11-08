@@ -180,6 +180,36 @@ static char *iscmd(const char *buf, const char *s)
 	return strdup(buf + len);
 }
 
+static int is_safe_filename(const char *filename)
+{
+	/* Reject NULL or empty filenames */
+	if (filename == NULL || filename[0] == '\0') {
+		return 0;
+	}
+
+	/* Reject absolute paths */
+	if (filename[0] == '/') {
+		return 0;
+	}
+
+	/* Reject path traversal sequences */
+	if (strstr(filename, "../") != NULL || strstr(filename, "..\\") != NULL) {
+		return 0;
+	}
+
+	/* Reject filenames that start with ".." */
+	if (strncmp(filename, "..", 2) == 0) {
+		return 0;
+	}
+
+	/* Additional check for Windows-style paths */
+	if (strchr(filename, '\\') != NULL) {
+		return 0;
+	}
+
+	return 1;
+}
+
 static void parse_configuration(const char *fn)
 {
 	struct command *c;
@@ -190,6 +220,11 @@ static void parse_configuration(const char *fn)
 	FILE *cmd;
 	const char *err_message = NULL;
 	char err_buf[256];
+
+	/* Validate filename to prevent path traversal attacks */
+	if (!is_safe_filename(fn)) {
+		errx(1, "Invalid or unsafe filename: %s", fn);
+	}
 
 	cmd = fopen(fn, "r");
 	if (cmd == NULL)
