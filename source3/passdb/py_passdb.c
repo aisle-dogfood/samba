@@ -3091,9 +3091,18 @@ static PyObject *py_pdb_set_trusteddom_pw(PyObject *self, PyObject *args)
 	domain_sid = pytalloc_get_ptr(py_domain_sid);
 
 	if (!methods->set_trusteddom_pw(methods, domain, pwd, domain_sid)) {
+		/* Clear password from memory before returning error */
+		if (pwd) {
+			memset((char *)pwd, '\0', strlen(pwd));
+		}
 		PyErr_Format(py_pdb_error, "Unable to set trusted domain password");
 		talloc_free(frame);
 		return NULL;
+	}
+
+	/* Clear password from memory after successful use */
+	if (pwd) {
+		memset((char *)pwd, '\0', strlen(pwd));
 	}
 
 	talloc_free(frame);
