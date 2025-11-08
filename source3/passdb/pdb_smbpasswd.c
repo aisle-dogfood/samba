@@ -658,8 +658,8 @@ static NTSTATUS add_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state,
 	const char *pfile = smbpasswd_state->smbpasswd_file;
 	struct smb_passwd *pwd = NULL;
 	FILE *fp = NULL;
-	int wr_len;
-	int fd;
+	int wr_len = 0;
+	int fd = -1;
 	size_t new_entry_length;
 	char *new_entry;
 	off_t offpos;
