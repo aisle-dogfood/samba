@@ -32,6 +32,7 @@
 #include "lib/crypto/gnutls_helpers.h"
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
+#include "librpc/rpc/dcerpc_samr.h"
 
 int SMBencrypt_hash(const uint8_t lm_hash[16], const uint8_t *c8, uint8_t p24[24])
 {
@@ -1576,67 +1577,136 @@ bool decode_pwd_string_from_buffer514(TALLOC_CTX *mem_ctx,
 }
 
 /***********************************************************
- Encode an arc4 password change buffer.
+ Encode an AES password change buffer (replaces RC4 for security).
 ************************************************************/
 NTSTATUS encode_rc4_passwd_buffer(const char *passwd,
 				  const DATA_BLOB *session_key,
 				  struct samr_CryptPasswordEx *out_crypt_pwd)
 {
-	uint8_t _confounder[16] = {0};
-	DATA_BLOB confounder = data_blob_const(_confounder, 16);
-	DATA_BLOB pw_data = data_blob_const(out_crypt_pwd->data, 516);
+	TALLOC_CTX *tmp_ctx = talloc_new(NULL);
+	uint8_t pw_data[448] = {0};  /* Reduced to fit auth_tag */
+	DATA_BLOB plaintext = {
+		.data = pw_data,
+		.length = sizeof(pw_data),
+	};
+	DATA_BLOB ciphertext = data_blob_null;
+	DATA_BLOB iv = data_blob_null;
+	uint8_t auth_tag[64] = {0};
+	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
 	bool ok;
-	int rc;
 
-	ok = encode_pw_buffer(pw_data.data, passwd, STR_UNICODE);
-	if (!ok) {
-		return NT_STATUS_INVALID_PARAMETER;
+	if (tmp_ctx == NULL) {
+		return NT_STATUS_NO_MEMORY;
 	}
 
-	generate_random_buffer(confounder.data, confounder.length);
+	/* Encode password into 448-byte buffer (adjusted for new layout) */
+	ok = encode_pw_buffer(pw_data, passwd, STR_UNICODE);
+	if (!ok) {
+		status = NT_STATUS_INVALID_PARAMETER;
+		goto out;
+	}
 
-	rc = samba_gnutls_arcfour_confounded_md5(&confounder,
-						 session_key,
-						 &pw_data,
-						 SAMBA_GNUTLS_ENCRYPT);
-	if (rc < 0) {
-		ZERO_ARRAY(_confounder);
-		data_blob_clear(&pw_data);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	/* Generate random 16-byte IV */
+	iv = data_blob_talloc_zero(tmp_ctx, 16);
+	if (iv.data == NULL) {
+		status = NT_STATUS_NO_MEMORY;
+		goto out;
+	}
+	generate_random_buffer(iv.data, iv.length);
+
+	/* Encrypt using AES-256-CBC-HMAC-SHA512 */
+	status = samba_gnutls_aead_aes_256_cbc_hmac_sha512_encrypt(
+			tmp_ctx,
+			&plaintext,
+			session_key,
+			&samr_aes256_enc_key_salt,
+			&samr_aes256_mac_key_salt,
+			&iv,
+			&ciphertext,
+			auth_tag);
+	BURN_DATA(pw_data);
+	if (!NT_STATUS_IS_OK(status)) {
+		goto out;
 	}
 
 	/*
-	 * The packet format is the 516 byte RC4 encrypted
-	 * password followed by the 16 byte confounder
-	 * The confounder is a salt to prevent pre-computed hash attacks on the
-	 * database.
+	 * Pack the encrypted data into the 532-byte structure:
+	 * - First 448 bytes: encrypted password data
+	 * - Next 16 bytes: IV
+	 * - Next 64 bytes: auth_tag
+	 * - Last 4 bytes: reserved/padding
+	 * Total: 448 + 16 + 64 + 4 = 532 bytes
 	 */
-	memcpy(&out_crypt_pwd->data[516], confounder.data, confounder.length);
-	ZERO_ARRAY(_confounder);
+	if (ciphertext.length > 448) {
+		status = NT_STATUS_BUFFER_TOO_SMALL;
+		goto out;
+	}
 
-	return NT_STATUS_OK;
+	ZERO_ARRAY(out_crypt_pwd->data);
+	memcpy(out_crypt_pwd->data, ciphertext.data, ciphertext.length);
+	memcpy(&out_crypt_pwd->data[448], iv.data, 16);
+	memcpy(&out_crypt_pwd->data[464], auth_tag, 64);
+	/* Bytes 528-531 remain as padding/reserved */
+
+	status = NT_STATUS_OK;
+
+out:
+	talloc_free(tmp_ctx);
+	return status;
 }
 
 /***********************************************************
- Decode an arc4 encrypted password change buffer.
+ Decode an AES encrypted password change buffer (replaces RC4 for security).
 ************************************************************/
 
 NTSTATUS decode_rc4_passwd_buffer(const DATA_BLOB *psession_key,
 				  struct samr_CryptPasswordEx *inout_crypt_pwd)
 {
-	/* Confounder is last 16 bytes. */
-	DATA_BLOB confounder = data_blob_const(&inout_crypt_pwd->data[516], 16);
-	DATA_BLOB pw_data = data_blob_const(&inout_crypt_pwd->data, 516);
-	int rc;
+	TALLOC_CTX *tmp_ctx = talloc_new(NULL);
+	DATA_BLOB ciphertext = data_blob_null;
+	DATA_BLOB iv = data_blob_null;
+	DATA_BLOB plaintext = data_blob_null;
+	uint8_t auth_tag[64] = {0};
+	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
 
-	rc = samba_gnutls_arcfour_confounded_md5(&confounder,
-						 psession_key,
-						 &pw_data,
-						 SAMBA_GNUTLS_DECRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	if (tmp_ctx == NULL) {
+		return NT_STATUS_NO_MEMORY;
 	}
 
+	/* Extract ciphertext from first 448 bytes */
+	ciphertext = data_blob_const(&inout_crypt_pwd->data[0], 448);
+
+	/* Extract IV from bytes 448-463 */
+	iv = data_blob_const(&inout_crypt_pwd->data[448], 16);
+
+	/* Extract auth_tag from bytes 464-527 */
+	memcpy(auth_tag, &inout_crypt_pwd->data[464], 64);
+
+	/* Decrypt using AES-256-CBC-HMAC-SHA512 */
+	status = samba_gnutls_aead_aes_256_cbc_hmac_sha512_decrypt(
+			tmp_ctx,
+			&ciphertext,
+			psession_key,
+			&samr_aes256_enc_key_salt,
+			&samr_aes256_mac_key_salt,
+			&iv,
+			auth_tag,
+			&plaintext);
+	if (!NT_STATUS_IS_OK(status)) {
+		talloc_free(tmp_ctx);
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+
+	/* Copy decrypted data back to the first 448 bytes */
+	if (plaintext.length > 448) {
+		talloc_free(tmp_ctx);
+		return NT_STATUS_BUFFER_TOO_SMALL;
+	}
+
+	ZERO_ARRAY(inout_crypt_pwd->data);
+	memcpy(inout_crypt_pwd->data, plaintext.data, plaintext.length);
+
+	talloc_free(tmp_ctx);
 	return NT_STATUS_OK;
 }
 
