@@ -125,6 +125,10 @@ _PUBLIC_ bool check_password_quality(const char *pwd)
 	}
 
 	while (true) {
+		/* Check bounds before accessing pwd[ofs] */
+		if (pwd[ofs] == '\0') {
+			break;
+		}
 		const char *s = &pwd[ofs];
 		size_t len = 0;
 		codepoint_t c;
