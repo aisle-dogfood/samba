@@ -824,6 +824,15 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 			return NULL;
 		}
 	} else {
+		/*
+		 * Security Warning: Using MD4 for password hashing.
+		 * MD4 is cryptographically weak and should be avoided when possible.
+		 * This is required for NTLM protocol compatibility with Windows systems.
+		 * Consider using stronger authentication methods like Kerberos when available.
+		 */
+		DBG_WARNING("Using MD4 for NT password hash generation. "
+			    "MD4 is cryptographically weak. "
+			    "Consider using stronger authentication methods.\n");
 		E_md4hash(password, nt_hash->hash);
 	}
 
@@ -876,6 +885,15 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_old_nt_hash(struct cli_creden
 		}
 		talloc_keep_secret(nt_hash);
 
+		/*
+		 * Security Warning: Using MD4 for password hashing.
+		 * MD4 is cryptographically weak and should be avoided when possible.
+		 * This is required for NTLM protocol compatibility with Windows systems.
+		 * Consider using stronger authentication methods like Kerberos when available.
+		 */
+		DBG_WARNING("Using MD4 for old NT password hash generation. "
+			    "MD4 is cryptographically weak. "
+			    "Consider using stronger authentication methods.\n");
 		E_md4hash(old_password, nt_hash->hash);
 
 		return nt_hash;
