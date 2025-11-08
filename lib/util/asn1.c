@@ -281,6 +281,8 @@ bool ber_write_OID_String(TALLOC_CTX *mem_ctx, DATA_BLOB *blob, const char *OID)
 	char *newp;
 	int i;
 	int error = 0;
+	size_t estimated_size;
+	size_t oid_components = 0;
 
 	if (!isdigit(*p)) return false;
 	v = smb_strtoul(p, &newp, 10, &error, SMB_STR_STANDARD);
@@ -296,8 +298,25 @@ bool ber_write_OID_String(TALLOC_CTX *mem_ctx, DATA_BLOB *blob, const char *OID)
 	}
 	p = newp + 1;
 
-	/*the ber representation can't use more space than the string one */
-	*blob = data_blob_talloc(mem_ctx, NULL, strlen(OID));
+	/* Count OID components to estimate buffer size needed */
+	const char *temp_p = p;
+	while (*temp_p) {
+		if (*temp_p == '.') {
+			oid_components++;
+		}
+		temp_p++;
+	}
+	if (temp_p > p) {
+		oid_components++; /* Last component after final dot */
+	}
+
+	/* 
+	 * Estimate buffer size: each OID component can require up to 5 bytes
+	 * in BER encoding (for 32-bit values), plus 1 byte for the first combined component
+	 */
+	estimated_size = 1 + (oid_components * 5);
+	
+	*blob = data_blob_talloc(mem_ctx, NULL, estimated_size);
 	if (!blob->data) return false;
 
 	blob->data[0] = 40*v + v2;
@@ -319,6 +338,13 @@ bool ber_write_OID_String(TALLOC_CTX *mem_ctx, DATA_BLOB *blob, const char *OID)
 			data_blob_free(blob);
 			return false;
 		}
+		
+		/* Check buffer bounds before writing */
+		if (i + 5 > estimated_size) {
+			data_blob_free(blob);
+			return false;
+		}
+		
 		if (v >= (1<<28)) blob->data[i++] = (0x80 | ((v>>28)&0x7f));
 		if (v >= (1<<21)) blob->data[i++] = (0x80 | ((v>>21)&0x7f));
 		if (v >= (1<<14)) blob->data[i++] = (0x80 | ((v>>14)&0x7f));
