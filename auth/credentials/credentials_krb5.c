@@ -1670,6 +1670,8 @@ _PUBLIC_ int cli_credentials_get_kerberos_key(struct cli_credentials *cred,
 	ret = cli_credentials_get_krb5_context(cred, lp_ctx,
 					       &smb_krb5_context);
 	if (ret != 0) {
+		/* Clear sensitive data before returning */
+		ZERO_STRUCT(cleartext_data);
 		TALLOC_FREE(frame);
 		return ret;
 	}
@@ -1687,6 +1689,10 @@ _PUBLIC_ int cli_credentials_get_kerberos_key(struct cli_credentials *cred,
 						   &cleartext_data,
 						   enctype,
 						   &key);
+	
+	/* Clear sensitive data immediately after use */
+	ZERO_STRUCT(cleartext_data);
+	
 	if (krb5_ret != 0) {
 		DEBUG(1,("cli_credentials_get_aes256_key: "
 			 "generation of a aes256-cts-hmac-sha1-96 key failed: %s\n",
