@@ -977,8 +977,8 @@ static int ildb_connect(struct ldb_context *ldb, const char *url,
 	if (creds != NULL && cli_credentials_authentication_requested(creds)) {
 		const char *bind_dn = cli_credentials_get_bind_dn(creds);
 		if (bind_dn) {
-			const char *password = cli_credentials_get_password(creds);
-			status = ldap_bind_simple(ildb->ldap, bind_dn, password);
+			status = ldap_bind_simple(ildb->ldap, bind_dn, 
+						  cli_credentials_get_password(creds));
 			if (!NT_STATUS_IS_OK(status)) {
 				if (no_debug) {
 					goto failed;
