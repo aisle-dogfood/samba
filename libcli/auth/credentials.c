@@ -421,17 +421,18 @@ static NTSTATUS netlogon_creds_des_decrypt_LMKey(struct netlogon_creds_Credentia
 }
 
 /*
-  DES encrypt a 16 byte password buffer using the session key
+  AES encrypt a 16 byte password buffer using the session key
 */
 NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds,
 				    struct samr_Password *pass)
 {
 	struct samr_Password tmp;
-	int rc;
+	NTSTATUS status;
 
-	rc = des_crypt112_16(tmp.hash, pass->hash, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	tmp = *pass;
+	status = netlogon_creds_aes_encrypt(creds, tmp.hash, sizeof(tmp.hash));
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
 	}
 	*pass = tmp;
 
@@ -439,17 +440,18 @@ NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds
 }
 
 /*
-  DES decrypt a 16 byte password buffer using the session key
+  AES decrypt a 16 byte password buffer using the session key
 */
 NTSTATUS netlogon_creds_des_decrypt(struct netlogon_creds_CredentialState *creds,
 				    struct samr_Password *pass)
 {
 	struct samr_Password tmp;
-	int rc;
+	NTSTATUS status;
 
-	rc = des_crypt112_16(tmp.hash, pass->hash, creds->session_key, SAMBA_GNUTLS_DECRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	tmp = *pass;
+	status = netlogon_creds_aes_decrypt(creds, tmp.hash, sizeof(tmp.hash));
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
 	}
 	*pass = tmp;
 
