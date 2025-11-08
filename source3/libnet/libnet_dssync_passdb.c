@@ -1334,11 +1334,11 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	   think this channel is secure enough - don't set the passwords at all
 	   in that case
 	*/
-	if (dBCSPwd.length == 16 && !all_zero(dBCSPwd.data, 16)) {
+	if (dBCSPwd.length == 16 && dBCSPwd.data != NULL && !all_zero(dBCSPwd.data, 16)) {
 		pdb_set_lanman_passwd(account, dBCSPwd.data, PDB_CHANGED);
 	}
 
-	if (unicodePwd.length == 16 && !all_zero(unicodePwd.data, 16)) {
+	if (unicodePwd.length == 16 && unicodePwd.data != NULL && !all_zero(unicodePwd.data, 16)) {
 		pdb_set_nt_passwd(account, unicodePwd.data, PDB_CHANGED);
 	}
 
