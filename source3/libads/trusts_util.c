@@ -376,6 +376,13 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 			/*
 			 * We had a failure before we changed the password.
 			 */
+			if (idx >= ARRAY_SIZE(nt_hashes)) {
+				DEBUG(0, ("Too many passwords for domain %s, "
+					  "idx=%u >= %zu\n",
+					  domain, idx, ARRAY_SIZE(nt_hashes)));
+				TALLOC_FREE(frame);
+				return NT_STATUS_INTERNAL_ERROR;
+			}
 			status = extract_nt_hash_and_pwd(frame,
 							 prev->password,
 							 &nt_hashes[idx],
@@ -409,6 +416,13 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 		}
 
 		idx_current = idx;
+		if (idx >= ARRAY_SIZE(nt_hashes)) {
+			DEBUG(0, ("Too many passwords for domain %s, "
+				  "idx=%u >= %zu\n",
+				  domain, idx, ARRAY_SIZE(nt_hashes)));
+			TALLOC_FREE(frame);
+			return NT_STATUS_INTERNAL_ERROR;
+		}
 		status = extract_nt_hash_and_pwd(frame,
 						 info->password,
 						 &nt_hashes[idx],
@@ -422,6 +436,13 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 		}
 		idx += 1;
 		if (info->old_password != NULL) {
+			if (idx >= ARRAY_SIZE(nt_hashes)) {
+				DEBUG(0, ("Too many passwords for domain %s, "
+					  "idx=%u >= %zu\n",
+					  domain, idx, ARRAY_SIZE(nt_hashes)));
+				TALLOC_FREE(frame);
+				return NT_STATUS_INTERNAL_ERROR;
+			}
 			status = extract_nt_hash_and_pwd(frame,
 							 info->old_password,
 							 &nt_hashes[idx],
@@ -436,6 +457,13 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 			idx += 1;
 		}
 		if (info->older_password != NULL) {
+			if (idx >= ARRAY_SIZE(nt_hashes)) {
+				DEBUG(0, ("Too many passwords for domain %s, "
+					  "idx=%u >= %zu\n",
+					  domain, idx, ARRAY_SIZE(nt_hashes)));
+				TALLOC_FREE(frame);
+				return NT_STATUS_INTERNAL_ERROR;
+			}
 			status = extract_nt_hash_and_pwd(frame,
 							 info->older_password,
 							 &nt_hashes[idx],
@@ -461,10 +489,24 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 	case SEC_CHAN_DNS_DOMAIN:
 	case SEC_CHAN_DOMAIN:
 		idx_current = idx;
+		if (idx >= ARRAY_SIZE(nt_hashes)) {
+			DEBUG(0, ("Too many passwords for domain %s, "
+				  "idx=%u >= %zu\n",
+				  domain, idx, ARRAY_SIZE(nt_hashes)));
+			TALLOC_FREE(frame);
+			return NT_STATUS_INTERNAL_ERROR;
+		}
 		nt_hashes[idx] = current_nt_hash;
 		passwords[idx] = cli_credentials_get_password(creds);
 		idx += 1;
 		if (previous_nt_hash != NULL) {
+			if (idx >= ARRAY_SIZE(nt_hashes)) {
+				DEBUG(0, ("Too many passwords for domain %s, "
+					  "idx=%u >= %zu\n",
+					  domain, idx, ARRAY_SIZE(nt_hashes)));
+				TALLOC_FREE(frame);
+				return NT_STATUS_INTERNAL_ERROR;
+			}
 			nt_hashes[idx] = previous_nt_hash;
 			passwords[idx] = cli_credentials_get_old_password(creds);
 			idx += 1;
