@@ -799,15 +799,21 @@ static bool init_sam_from_ldap(struct ldapsam_privates *ldap_state,
 			if (pdb_nds_get_password(ldap_state->smbldap_state, user_dn, &pwd_len, clear_text_pw) == LDAP_SUCCESS) {
 				nt_lm_owf_gen(clear_text_pw, smbntpwd, smblmpwd);
 				if (!pdb_set_lanman_passwd(sampass, smblmpwd, PDB_SET)) {
+					/* Clear sensitive password data before returning */
+					memset(clear_text_pw, 0, sizeof(clear_text_pw));
 					TALLOC_FREE(user_dn);
 					return False;
 				}
 				ZERO_STRUCT(smblmpwd);
 				if (!pdb_set_nt_passwd(sampass, smbntpwd, PDB_SET)) {
+					/* Clear sensitive password data before returning */
+					memset(clear_text_pw, 0, sizeof(clear_text_pw));
 					TALLOC_FREE(user_dn);
 					return False;
 				}
 				ZERO_STRUCT(smbntpwd);
+				/* Clear sensitive password data after successful use */
+				memset(clear_text_pw, 0, sizeof(clear_text_pw));
 				use_samba_attrs = False;
 			}
 
