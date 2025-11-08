@@ -24,6 +24,7 @@
 #include "includes.h"
 #include "auth/auth.h"
 #include "libcli/auth/libcli_auth.h"
+#include "libcli/auth/ntlm_check.h"
 #include "param/param.h"
 #include "auth/ntlm/auth_proto.h"
 #include "librpc/gen_ndr/drsuapi.h"
@@ -45,6 +46,14 @@ NTSTATUS encrypt_user_info(TALLOC_CTX *mem_ctx, struct auth4_context *auth_conte
 	int rc;
 	NTSTATUS nt_status;
 	struct auth_usersupplied_info *user_info_temp;
+	enum ntlm_auth_level ntlm_auth_level;
+
+	/* Check if NTLM authentication is disabled to prevent use of weak cryptography */
+	ntlm_auth_level = lpcfg_ntlm_auth(auth_context->lp_ctx);
+	if (ntlm_auth_level == NTLM_AUTH_DISABLED) {
+		DBG_WARNING("NTLM authentication disabled, refusing to use weak cryptographic functions.\n");
+		return NT_STATUS_NTLM_BLOCKED;
+	}
 	switch (to_state) {
 	case AUTH_PASSWORD_RESPONSE:
 		switch (user_info_in->password_state) {
@@ -149,14 +158,23 @@ NTSTATUS encrypt_user_info(TALLOC_CTX *mem_ctx, struct auth4_context *auth_conte
 			*user_info_temp = *user_info_in;
 			user_info_temp->password_state = to_state;
 			
-			if (E_deshash(user_info_in->password.plaintext, lanman.hash)) {
+			/* Additional check: Warn about LM hash usage (DES-based, very weak) */
+			if (ntlm_auth_level == NTLM_AUTH_NTLMV2_ONLY || 
+			    ntlm_auth_level == NTLM_AUTH_MSCHAPv2_NTLMV2_ONLY) {
+				/* Don't generate LM hash for stronger auth levels */
+				user_info_temp->password.hash.lanman = NULL;
+				DBG_INFO("LM hash generation skipped due to stronger NTLM auth level.\n");
+			} else if (E_deshash(user_info_in->password.plaintext, lanman.hash)) {
 				user_info_temp->password.hash.lanman = talloc(user_info_temp,
 									      struct samr_Password);
 				*user_info_temp->password.hash.lanman = lanman;
+				DBG_WARNING("Using weak LM hash (DES-based) - consider upgrading to NTLMv2 only.\n");
 			} else {
 				user_info_temp->password.hash.lanman = NULL;
 			}
 			
+			/* Warn about NT hash usage (MD4-based, weak) */
+			DBG_WARNING("Using weak NT hash (MD4-based) - consider upgrading to NTLMv2 only.\n");
 			E_md4hash(user_info_in->password.plaintext, nt.hash);
 			user_info_temp->password.hash.nt = talloc(user_info_temp,
 								   struct samr_Password);
