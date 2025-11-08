@@ -395,6 +395,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 	if(fp == NULL) {
 		DEBUG(0,("getsmbfilepwent: Bad password file pointer.\n"));
+		/* Clear sensitive password data from memory before returning */
+		memset(smbpwd, 0, 16);
+		memset(smbntpwd, 0, 16);
 		return NULL;
 	}
 
@@ -410,6 +413,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear sensitive password data from memory before returning */
+			memset(smbpwd, 0, 16);
+			memset(smbntpwd, 0, 16);
 			return NULL;
 		}
 
@@ -601,10 +607,16 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 			}
 		}
 
+		/* Clear sensitive password data from memory before returning */
+		memset(smbpwd, 0, 16);
+		memset(smbntpwd, 0, 16);
 		return pw_buf;
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	/* Clear sensitive password data from memory before returning */
+	memset(smbpwd, 0, 16);
+	memset(smbntpwd, 0, 16);
 	return NULL;
 }
 
