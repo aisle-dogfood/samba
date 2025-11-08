@@ -1254,6 +1254,10 @@ enum idmap_error_code offset_murmurhash3(void *pvt, uint32_t range_size,
         return IDMAP_ERROR;
     }
 
+    if (range_size == 0) {
+        return IDMAP_ERROR;
+    }
+
     if (pvt != NULL) {
         offset_murmurhash3_data = (struct offset_murmurhash3_data *) pvt;
     } else {
