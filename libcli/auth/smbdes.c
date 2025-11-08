@@ -22,9 +22,44 @@
 
 #include "includes.h"
 #include "libcli/auth/libcli_auth.h"
+#include "lib/util/debug.h"
 
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
+
+/* 
+ * SECURITY WARNING: This file implements DES encryption which is 
+ * cryptographically weak and should only be used for legacy SMB 
+ * protocol compatibility. DES has a 56-bit effective key size 
+ * which is vulnerable to brute force attacks.
+ *
+ * To disable weak DES encryption for enhanced security, set the
+ * environment variable: SAMBA_ALLOW_WEAK_CRYPTO=no
+ *
+ * Note: Disabling weak crypto may break compatibility with older
+ * SMB clients that require DES-based authentication.
+ */
+
+/*
+ * Check if weak cryptography is allowed. This can be controlled
+ * via environment variable to enhance security in environments where
+ * legacy compatibility is not required.
+ */
+static bool samba_weak_crypto_allowed(void)
+{
+	static bool checked = false;
+	static bool allowed = true;
+	
+	if (!checked) {
+		const char *env = getenv("SAMBA_ALLOW_WEAK_CRYPTO");
+		if (env != NULL && strcmp(env, "no") == 0) {
+			allowed = false;
+		}
+		checked = true;
+	}
+	
+	return allowed;
+}
 
 static void str_to_key(const uint8_t *str,uint8_t *key)
 {
@@ -47,6 +82,24 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       const uint8_t key_in[7],
 		       enum samba_gnutls_direction encrypt)
 {
+	/*
+	 * SECURITY WARNING: This function uses DES encryption which is 
+	 * cryptographically weak (56-bit effective key size) and vulnerable
+	 * to brute force attacks. It should only be used for legacy SMB
+	 * protocol compatibility.
+	 */
+	
+	/* Check if weak cryptography is allowed */
+	if (!samba_weak_crypto_allowed()) {
+		DEBUG(0, ("DES encryption is disabled due to security policy. "
+			  "Set SAMBA_ALLOW_WEAK_CRYPTO=yes to enable legacy compatibility.\n"));
+		return GNUTLS_E_UNWANTED_ALGORITHM;
+	}
+	
+	/* Log warning about weak encryption usage */
+	DEBUG(3, ("WARNING: Using weak DES encryption. Consider upgrading to "
+		  "stronger encryption methods if possible.\n"));
+	
 	/*
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
@@ -102,6 +155,13 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 	const uint8_t sp8[8] = {0x4b, 0x47, 0x53, 0x21, 0x40, 0x23, 0x24, 0x25};
 	int ret;
 
+	/* 
+	 * SECURITY WARNING: E_P16 uses weak DES encryption for SMB LM hash
+	 * computation. This is cryptographically weak and should only be used
+	 * for legacy compatibility with older SMB clients.
+	 */
+	DEBUG(5, ("E_P16: Using weak DES encryption for LM hash computation\n"));
+
 	ret = des_crypt56_gnutls(p16, sp8, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
 		return ret;
@@ -113,6 +173,13 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 {
 	int ret;
+
+	/* 
+	 * SECURITY WARNING: E_P24 uses weak DES encryption for SMB challenge/response
+	 * computation. This is cryptographically weak and should only be used
+	 * for legacy compatibility with older SMB clients.
+	 */
+	DEBUG(5, ("E_P24: Using weak DES encryption for challenge/response computation\n"));
 
 	ret = des_crypt56_gnutls(p24, c8, p21, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
@@ -131,6 +198,13 @@ int E_old_pw_hash( uint8_t *p14, const uint8_t *in, uint8_t *out)
 {
 	int ret;
 
+	/* 
+	 * SECURITY WARNING: E_old_pw_hash uses weak DES encryption for SMB 
+	 * password hash computation. This is cryptographically weak and should 
+	 * only be used for legacy compatibility with older SMB clients.
+	 */
+	DEBUG(5, ("E_old_pw_hash: Using weak DES encryption for password hash computation\n"));
+
         ret = des_crypt56_gnutls(out, in, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
 		return ret;
@@ -144,6 +218,13 @@ int des_crypt128(uint8_t out[8], const uint8_t in[8], const uint8_t key[16])
 {
 	uint8_t buf[8];
 	int ret;
+
+	/* 
+	 * SECURITY WARNING: des_crypt128 uses weak DES encryption in double 
+	 * encryption mode. While using a 128-bit key, it's still based on DES 
+	 * which is cryptographically weak.
+	 */
+	DEBUG(5, ("des_crypt128: Using weak DES-based encryption\n"));
 
 	ret = des_crypt56_gnutls(buf, in, key, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
@@ -159,6 +240,13 @@ int des_crypt112(uint8_t out[8], const uint8_t in[8], const uint8_t key[14],
 {
 	uint8_t buf[8];
 	int ret;
+
+	/* 
+	 * SECURITY WARNING: des_crypt112 uses weak DES encryption in double 
+	 * encryption mode. While using a 112-bit key, it's still based on DES 
+	 * which is cryptographically weak.
+	 */
+	DEBUG(5, ("des_crypt112: Using weak DES-based encryption\n"));
 
 	if (encrypt == SAMBA_GNUTLS_ENCRYPT) {
 		ret = des_crypt56_gnutls(buf, in, key, SAMBA_GNUTLS_ENCRYPT);
@@ -183,6 +271,13 @@ int des_crypt112_16(uint8_t out[16], const uint8_t in[16], const uint8_t key[14]
 {
 	int ret;
 
+	/* 
+	 * SECURITY WARNING: des_crypt112_16 uses weak DES encryption. 
+	 * This is cryptographically weak and should only be used for 
+	 * legacy compatibility.
+	 */
+	DEBUG(5, ("des_crypt112_16: Using weak DES-based encryption\n"));
+
 	ret = des_crypt56_gnutls(out, in, key, encrypt);
 	if (ret != 0) {
 		return ret;
@@ -199,6 +294,13 @@ int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 {
 	uint8_t s[14];
 	int ret;
+
+	/* 
+	 * SECURITY WARNING: sam_rid_crypt uses weak DES encryption for SAM 
+	 * password hash operations. This is cryptographically weak and should 
+	 * only be used for legacy compatibility.
+	 */
+	DEBUG(5, ("sam_rid_crypt: Using weak DES encryption for SAM operations\n"));
 
 	s[0] = s[4] = s[8] = s[12] = (uint8_t)(rid & 0xFF);
 	s[1] = s[5] = s[9] = s[13] = (uint8_t)((rid >> 8) & 0xFF);
