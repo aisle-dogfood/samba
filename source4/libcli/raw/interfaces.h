@@ -256,7 +256,7 @@ union smb_tcon {
 
 		struct {
 			const char *service;
-			const char *password;
+			DATA_BLOB password;
 			const char *dev;
 		} in;
 		struct {
