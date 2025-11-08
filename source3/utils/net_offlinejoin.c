@@ -527,12 +527,17 @@ int net_offlinejoin_composeodj(struct net_context *c,
 	ok = dom_sid_parse(domain_sid_str, &domain_sid);
 	if (!ok) {
 		d_fprintf(stderr, _("Failed to parse domain SID\n"));
+		ZERO_STRUCT(domain_sid);
+		ZERO_ARRAY(dc_address);
 		return -1;
 	}
 
 	ntstatus = GUID_from_string(domain_guid_str, &domain_guid);
 	if (NT_STATUS_IS_ERR(ntstatus)) {
 		d_fprintf(stderr, _("Failed to parse domain GUID\n"));
+		ZERO_STRUCT(domain_sid);
+		ZERO_STRUCT(domain_guid);
+		ZERO_ARRAY(dc_address);
 		return -1;
 	}
 
@@ -552,6 +557,9 @@ int net_offlinejoin_composeodj(struct net_context *c,
 	if (status != 0) {
 		d_printf("Failed to compose offline domain join blob: %s\n",
 			libnetapi_get_error_string(c->netapi_ctx, status));
+		ZERO_STRUCT(domain_sid);
+		ZERO_STRUCT(domain_guid);
+		ZERO_ARRAY(dc_address);
 		return status;
 	}
 
@@ -565,6 +573,9 @@ int net_offlinejoin_composeodj(struct net_context *c,
 		 */
 		ok = push_reg_sz(c, &ucs2_blob, provision_text_data);
 		if (!ok) {
+			ZERO_STRUCT(domain_sid);
+			ZERO_STRUCT(domain_guid);
+			ZERO_ARRAY(dc_address);
 			return -1;
 		}
 
@@ -573,6 +584,9 @@ int net_offlinejoin_composeodj(struct net_context *c,
 		if (blob.data == NULL) {
 			d_printf("Failed to allocate blob: %s\n",
 				 strerror(errno));
+			ZERO_STRUCT(domain_sid);
+			ZERO_STRUCT(domain_guid);
+			ZERO_ARRAY(dc_address);
 			return -1;
 		}
 
@@ -585,6 +599,10 @@ int net_offlinejoin_composeodj(struct net_context *c,
 		if (!ok) {
 			d_printf("Failed to save %s: %s\n", savefile,
 					strerror(errno));
+			/* Securely clear sensitive data from memory before returning */
+			ZERO_STRUCT(domain_sid);
+			ZERO_STRUCT(domain_guid);
+			ZERO_ARRAY(dc_address);
 			return -1;
 		}
 	}
@@ -592,6 +610,11 @@ int net_offlinejoin_composeodj(struct net_context *c,
 	if (printblob) {
 		printf("%s\n", provision_text_data);
 	}
+
+	/* Securely clear sensitive data from memory */
+	ZERO_STRUCT(domain_sid);
+	ZERO_STRUCT(domain_guid);
+	ZERO_ARRAY(dc_address);
 
 	return 0;
 }
