@@ -1586,6 +1586,11 @@ static NTSTATUS make_new_session_info_anonymous(TALLOC_CTX *mem_ctx,
 		goto done;
 	}
 
+	/* Clear sensitive password information from memory */
+	if (pwd != NULL && pwd->pw_passwd != NULL) {
+		memset(pwd->pw_passwd, 0, strlen(pwd->pw_passwd));
+	}
+
 	/*
 	 * In future we may want to remove
 	 * AUTH_SESSION_INFO_DEFAULT_GROUPS.
@@ -1612,6 +1617,10 @@ static NTSTATUS make_new_session_info_anonymous(TALLOC_CTX *mem_ctx,
 	}
 
 done:
+	/* Clear sensitive password information from memory before cleanup */
+	if (pwd != NULL && pwd->pw_passwd != NULL) {
+		memset(pwd->pw_passwd, 0, strlen(pwd->pw_passwd));
+	}
 	TALLOC_FREE(frame);
 	return status;
 }
