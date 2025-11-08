@@ -400,6 +400,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 	pdb_init_smb(pw_buf);
 	pw_buf->acct_ctrl = ACB_NORMAL;
+	
+	/* Initialize password buffers to prevent information disclosure */
+	ZERO_STRUCT(smbpwd);
+	ZERO_STRUCT(smbntpwd);
 
 	/*
 	 * Scan the file, a line at a time and check if the name matches.
@@ -532,6 +536,8 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 				pw_buf->smb_passwd = smbpwd;
 			} else {
 				pw_buf->smb_passwd = NULL;
+				/* Clear buffer on failure to prevent information disclosure */
+				ZERO_STRUCT(smbpwd);
 				DEBUG(0, ("getsmbfilepwent: Malformed Lanman password entry for user %s \
 (non hex chars)\n", user_name));
 			}
@@ -547,6 +553,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 			if (*p != '*' && *p != 'X') {
 				if(pdb_gethexpwd((char *)p,smbntpwd)) {
 					pw_buf->smb_nt_passwd = smbntpwd;
+				} else {
+					/* Clear buffer on failure to prevent information disclosure */
+					ZERO_STRUCT(smbntpwd);
 				}
 			}
 			p += 33; /* Move to the first character of the line after the NT password. */
