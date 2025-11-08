@@ -412,7 +412,7 @@ static struct passwd *wb_aix_getpwuid(uid_t uid)
 		.length = 0,
 	};
 	NSS_STATUS ret;
-	struct passwd *pwd;
+	struct passwd *pwd = NULL;
 
 	logit("getpwuid '%d'\n", uid);
 
@@ -443,7 +443,7 @@ static struct passwd *wb_aix_getpwnam(const char *name)
 		.length = 0,
 	};
 	NSS_STATUS ret;
-	struct passwd *pwd;
+	struct passwd *pwd = NULL;
 
 	if (*name == WB_AIX_ENCODED) {
 		return wb_aix_getpwuid(decode_id(name));
