@@ -96,6 +96,7 @@ main(int argc,			/* I - Number of command-line arguments */
 	char            uri[1024],	/* URI */
 	               *sep,	/* Pointer to separator */
 	               *tmp, *tmp2;	/* Temp pointers to do escaping */
+	char            password_buf[256];	/* Password buffer */
 	const char     *password = NULL;	/* Password */
 	const char     *username = NULL;	/* Username */
 	char           *server,	/* Server name */
@@ -117,6 +118,9 @@ main(int argc,			/* I - Number of command-line arguments */
 	struct smb_transports ts = { .num_transports = 0, };
 	int cmp;
 	int len;
+
+	/* Initialize password buffer */
+	ZERO_ARRAY(password_buf);
 
 	if (argc == 1) {
 		/*
@@ -301,7 +305,16 @@ main(int argc,			/* I - Number of command-line arguments */
 
 		if ((tmp2 = strchr_m(tmp, ':')) != NULL) {
 			*tmp2++ = '\0';
-			password = uri_unescape_alloc(tmp2);
+			char *uri_password = uri_unescape_alloc(tmp2);
+			if (uri_password != NULL) {
+				/* Copy password to secure buffer */
+				strncpy(password_buf, uri_password, sizeof(password_buf) - 1);
+				password_buf[sizeof(password_buf) - 1] = '\0';
+				password = password_buf;
+				/* Clear the allocated password immediately */
+				memset_s(uri_password, strlen(uri_password), 0, strlen(uri_password));
+				TALLOC_FREE(uri_password);
+			}
 		}
 		username = uri_unescape_alloc(tmp);
 	} else {
@@ -312,7 +325,10 @@ main(int argc,			/* I - Number of command-line arguments */
 
 		env = getenv("AUTH_PASSWORD");
 		if (env != NULL && strlen(env) > 0) {
-			password = env;
+			/* Copy password from environment to secure buffer */
+			strncpy(password_buf, env, sizeof(password_buf) - 1);
+			password_buf[sizeof(password_buf) - 1] = '\0';
+			password = password_buf;
 		}
 
 		server = uri + 6;
@@ -449,6 +465,8 @@ main(int argc,			/* I - Number of command-line arguments */
          */
 
 done:
+	/* Clear password from memory before exit */
+	ZERO_ARRAY(password_buf);
 	gfree_all();
 	TALLOC_FREE(frame);
 	return (status);
