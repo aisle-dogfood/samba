@@ -312,7 +312,7 @@ main(int argc,			/* I - Number of command-line arguments */
 
 		env = getenv("AUTH_PASSWORD");
 		if (env != NULL && strlen(env) > 0) {
-			password = env;
+			password = SMB_STRDUP(env);
 		}
 
 		server = uri + 6;
@@ -449,6 +449,11 @@ main(int argc,			/* I - Number of command-line arguments */
          */
 
 done:
+	/* Securely clear password from memory */
+	if (password != NULL) {
+		memset((void *)password, '\0', strlen(password));
+		SAFE_FREE(password);
+	}
 	gfree_all();
 	TALLOC_FREE(frame);
 	return (status);
