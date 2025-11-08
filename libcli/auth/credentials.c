@@ -1181,6 +1181,14 @@ static NTSTATUS netlogon_creds_crypt_samlogon_validation(struct netlogon_creds_C
 		}
 	} else {
 		/*
+		 * Using DES to encrypt the session keys makes no sense,
+		 * but if the connection is encrypted we don't care...
+		 */
+		if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
+		/*
 		 * Don't crypt an all-zero key, it would give away
 		 * the NETLOGON pipe session key
 		 *
@@ -1328,6 +1336,14 @@ static NTSTATUS netlogon_creds_crypt_samlogon_logon(struct netlogon_creds_Creden
 				}
 			}
 		} else {
+			/*
+			 * Using DES to encrypt the password makes no sense,
+			 * but if the connection is encrypted we don't care...
+			 */
+			if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
+				return NT_STATUS_INVALID_PARAMETER;
+			}
+
 			struct samr_Password *p;
 
 			p = &logon->password->lmpassword;
@@ -1461,9 +1477,33 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * Use the strongest available encryption method based on negotiated flags
 	 */
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds,
+							  pass->hash,
+							  ARRAY_SIZE(pass->hash));
+		}
+
+		return netlogon_creds_aes_decrypt(creds,
+						  pass->hash,
+						  ARRAY_SIZE(pass->hash));
+	}
+
+	if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+		return netlogon_creds_arcfour_crypt(creds,
+						    pass->hash,
+						    ARRAY_SIZE(pass->hash));
+	}
+
+	/*
+	 * Using DES to encrypt the password makes no sense,
+	 * but if the connection is encrypted we don't care...
+	 */
+	if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
 
 	if (do_encrypt) {
 		return netlogon_creds_des_encrypt(creds, pass);
