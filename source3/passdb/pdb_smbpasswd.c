@@ -532,8 +532,8 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 				pw_buf->smb_passwd = smbpwd;
 			} else {
 				pw_buf->smb_passwd = NULL;
-				DEBUG(0, ("getsmbfilepwent: Malformed Lanman password entry for user %s \
-(non hex chars)\n", user_name));
+				DEBUG(0, ("getsmbfilepwent: Malformed Lanman password entry \
+(non hex chars)\n"));
 			}
 		}
 
