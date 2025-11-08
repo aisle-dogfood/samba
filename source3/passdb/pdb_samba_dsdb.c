@@ -2338,6 +2338,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		DEBUG(2, ("Failed to get trusted domain password for %s - %s "
 			  "It may not be a trusted domain.\n", domain,
 			  nt_errstr(status)));
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2346,6 +2348,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	if (netbios_domain == NULL) {
 		DEBUG(2, ("Trusted domain %s has to flatName defined.\n",
 			  domain));
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2356,6 +2360,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	if (!(trust_direction_flags & LSA_TRUST_DIRECTION_OUTBOUND)) {
 		DBG_WARNING("Trusted domain %s is not an outbound trust.\n",
 			    domain);
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2364,6 +2370,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	if (trust_type == LSA_TRUST_TYPE_MIT) {
 		DBG_WARNING("Trusted domain %s is not an AD trust "
 			    "(trustType == LSA_TRUST_TYPE_MIT).\n", domain);
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2372,6 +2380,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	if (password_val == NULL) {
 		DEBUG(2, ("Failed to get trusted domain password for %s, "
 			  "attribute trustAuthOutgoing not returned.\n", domain));
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2383,6 +2393,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 			  "attribute trustAuthOutgoing could not be parsed %s.\n",
 			  domain,
 			  ndr_map_error2string(ndr_err)));
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2449,6 +2461,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		DEBUG(0, ("Trusted domain %s does not have a "
 			  "clear-text nor nt password stored\n",
 			  domain));
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2459,23 +2473,31 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 
 	creds = cli_credentials_init(tmp_ctx);
 	if (creds == NULL) {
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
 
 	ok = cli_credentials_set_workstation(creds, my_netbios_name, CRED_SPECIFIED);
 	if (!ok) {
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
 
 	ok = cli_credentials_set_domain(creds, netbios_domain, CRED_SPECIFIED);
 	if (!ok) {
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
 	ok = cli_credentials_set_realm(creds, dns_domain, CRED_SPECIFIED);
 	if (!ok) {
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -2484,12 +2506,16 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		cli_credentials_set_secure_channel_type(creds, SEC_CHAN_DNS_DOMAIN);
 		account_name = talloc_asprintf(tmp_ctx, "%s.", my_dns_domain);
 		if (account_name == NULL) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
 		principal_name = talloc_asprintf(tmp_ctx, "%s$@%s", my_netbios_domain,
 						 cli_credentials_get_realm(creds));
 		if (principal_name == NULL) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2497,6 +2523,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		cli_credentials_set_secure_channel_type(creds, SEC_CHAN_DOMAIN);
 		account_name = talloc_asprintf(tmp_ctx, "%s$", my_netbios_domain);
 		if (account_name == NULL) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2505,6 +2533,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 
 	ok = cli_credentials_set_username(creds, account_name, CRED_SPECIFIED);
 	if (!ok) {
+		data_blob_clear(&password_utf16);
+		data_blob_clear(&old_password_utf16);
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -2513,6 +2543,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		ok = cli_credentials_set_principal(creds, principal_name,
 						   CRED_SPECIFIED);
 		if (!ok) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2521,6 +2553,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	if (old_password_nt != NULL) {
 		ok = cli_credentials_set_old_nt_hash(creds, old_password_nt);
 		if (!ok) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2530,6 +2564,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		ok = cli_credentials_set_old_utf16_password(creds,
 							    &old_password_utf16);
 		if (!ok) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2539,6 +2575,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		ok = cli_credentials_set_nt_hash(creds, password_nt,
 						 CRED_SPECIFIED);
 		if (!ok) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2549,6 +2587,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 							&password_utf16,
 							CRED_SPECIFIED);
 		if (!ok) {
+			data_blob_clear(&password_utf16);
+			data_blob_clear(&old_password_utf16);
 			TALLOC_FREE(tmp_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2574,6 +2614,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	}
 
 	*_creds = talloc_move(mem_ctx, &creds);
+	data_blob_clear(&password_utf16);
+	data_blob_clear(&old_password_utf16);
 	TALLOC_FREE(tmp_ctx);
 	return NT_STATUS_OK;
 }
