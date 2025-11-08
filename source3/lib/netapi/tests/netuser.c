@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include <netapi.h>
+#include "lib/replace/replace.h"
 
 #include "common.h"
 
@@ -199,7 +200,15 @@ NET_API_STATUS test_netuseradd(const char *hostname,
 	u1.usri1_flags = 0;
 	u1.usri1_script_path = NULL;
 
-	return NetUserAdd(hostname, 1, (uint8_t *)&u1, &parm_err);
+	NET_API_STATUS result = NetUserAdd(hostname, 1, (uint8_t *)&u1, &parm_err);
+
+	/* Securely clear password data from local structure to prevent heap inspection */
+	if (u1.usri1_password != NULL) {
+		size_t password_len = strlen(u1.usri1_password);
+		BURN_PTR_SIZE((char *)u1.usri1_password, password_len);
+	}
+
+	return result;
 }
 
 static NET_API_STATUS test_netusermodals(struct libnetapi_ctx *ctx,

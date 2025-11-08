@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include <netapi.h>
+#include "lib/replace/replace.h"
 
 #include "common.h"
 
@@ -93,6 +94,12 @@ int main(int argc, const char **argv)
 	if (status != 0) {
 		printf("NetUserAdd failed with: %s\n",
 			libnetapi_get_error_string(ctx, status));
+	}
+
+	/* Securely clear password data from local structure to prevent heap inspection */
+	if (info1.usri1_password != NULL) {
+		size_t password_len = strlen(info1.usri1_password);
+		BURN_PTR_SIZE((char *)info1.usri1_password, password_len);
 	}
 
  out:
