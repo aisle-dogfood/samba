@@ -553,10 +553,11 @@ static NTSTATUS cmd_netlogon_sam_logon(struct rpc_pipe_client *cli,
 					 validation,
 					 &info3);
 	if (!NT_STATUS_IS_OK(result)) {
-		return result;
+		goto done;
 	}
 
  done:
+	TALLOC_FREE(validation);
 	return result;
 }
 
