@@ -740,6 +740,7 @@ _PUBLIC_ bool cli_credentials_set_old_password(struct cli_credentials *cred,
 {
 	cred->old_password = talloc_strdup(cred, val);
 	if (cred->old_password) {
+		talloc_keep_secret(discard_const(cred->old_password));
 		/* Don't print the actual password in talloc memory dumps */
 		talloc_set_name_const(cred->old_password, "password set via cli_credentials_set_old_password");
 	}
