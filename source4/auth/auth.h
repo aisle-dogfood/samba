@@ -44,6 +44,7 @@ struct loadparm_context;
 /* version 4 - subsequent samba4 version - metze */
 /* version 0 - till samba4 is stable - metze */
 #define AUTH4_INTERFACE_VERSION 0
+#define AUTH_OPERATIONS_MAGIC 0x41555448  /* "AUTH" in hex */
 
 struct auth_method_context;
 struct auth4_context;
@@ -71,6 +72,9 @@ struct auth_operations {
 				const struct authn_audit_info **client_audit_info,
 				const struct authn_audit_info **server_audit_info,
 				bool *authoritative);
+	
+	/* Magic number to validate structure integrity */
+	uint32_t magic;
 };
 
 struct auth_method_context {
@@ -95,6 +99,9 @@ struct auth_critical_sizes {
 			   enum auth_password_state to_state,
 			   const struct auth_usersupplied_info *user_info_in,
 			   const struct auth_usersupplied_info **user_info_encrypted);
+
+/* Validate auth_operations structure integrity */
+bool auth_operations_validate(const struct auth_operations *ops);
 
 #include "auth/session.h"
 #include "auth/unix_token_proto.h"

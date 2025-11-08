@@ -210,6 +210,7 @@ static const struct auth_operations name_to_ntstatus_auth_ops = {
 	.want_check	= name_to_ntstatus_want_check,
 	.check_password_send	= name_to_ntstatus_check_password_send,
 	.check_password_recv	= name_to_ntstatus_check_password_recv,
+	.magic		= AUTH_OPERATIONS_MAGIC,
 };
 
 _PUBLIC_ NTSTATUS auth4_developer_init(TALLOC_CTX *ctx)
