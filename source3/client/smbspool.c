@@ -97,6 +97,7 @@ main(int argc,			/* I - Number of command-line arguments */
 	               *sep,	/* Pointer to separator */
 	               *tmp, *tmp2;	/* Temp pointers to do escaping */
 	const char     *password = NULL;	/* Password */
+	bool            password_allocated = false;	/* Track if password was allocated */
 	const char     *username = NULL;	/* Username */
 	char           *server,	/* Server name */
 	               *printer;/* Printer name */
@@ -302,6 +303,7 @@ main(int argc,			/* I - Number of command-line arguments */
 		if ((tmp2 = strchr_m(tmp, ':')) != NULL) {
 			*tmp2++ = '\0';
 			password = uri_unescape_alloc(tmp2);
+			password_allocated = true;
 		}
 		username = uri_unescape_alloc(tmp);
 	} else {
@@ -449,6 +451,15 @@ main(int argc,			/* I - Number of command-line arguments */
          */
 
 done:
+	/* Securely clear password from memory */
+	if (password != NULL) {
+		if (password_allocated) {
+			/* Password was allocated, securely clear and free it */
+			BURN_FREE_STR((char *)password);
+		}
+		password = NULL;
+	}
+	
 	gfree_all();
 	TALLOC_FREE(frame);
 	return (status);
