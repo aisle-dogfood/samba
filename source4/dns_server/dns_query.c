@@ -52,12 +52,14 @@ static WERROR add_response_rr(const char *name,
 			      struct dns_res_rec **answers)
 {
 	struct dns_res_rec *ans = *answers;
-	uint16_t ai = talloc_array_length(ans);
+	size_t array_len = talloc_array_length(ans);
 	enum ndr_err_code ndr_err;
 
-	if (ai == UINT16_MAX) {
+	if (array_len >= UINT16_MAX) {
 		return WERR_BUFFER_OVERFLOW;
 	}
+	
+	uint16_t ai = (uint16_t)array_len;
 
 	/*
 	 * "ans" is always non-NULL and thus its own talloc context
