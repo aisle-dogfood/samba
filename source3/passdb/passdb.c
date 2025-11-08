@@ -440,6 +440,11 @@ bool pdb_gethexpwd(const char *p, unsigned char *pwd)
 	if (!p)
 		return false;
 
+	/* Validate input length to prevent reading beyond string boundary */
+	if (strlen(p) < 32) {
+		return false;
+	}
+
 	for (i = 0; i < 32; i += 2) {
 		bool ok = hex_byte(p + i, &pwd[i / 2]);
 		if (!ok) {
@@ -475,8 +480,13 @@ bool pdb_gethexhours(const char *p, unsigned char *hours)
 		return (False);
 	}
 
+	/* Validate input length to prevent reading beyond string boundary */
+	if (strlen(p) < 42) {
+		return false;
+	}
+
 	for (i = 0; i < 42; i += 2) {
-		bool ok = hex_byte(p, (uint8_t *)&hours[i / 2]);
+		bool ok = hex_byte(p + i, (uint8_t *)&hours[i / 2]);
 		if (!ok) {
 			return false;
 		}
