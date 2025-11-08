@@ -19,6 +19,7 @@
 
 #include "replace.h"
 #include "../lib/crypto/md4.h"
+#include <assert.h>
 
 /* NOTE: This code makes no attempt to be fast! 
 
@@ -120,6 +121,9 @@ static void copy64(uint32_t *M, const uint8_t *in)
 
 static void copy4(uint8_t *out, uint32_t x)
 {
+	/* Ensure output buffer is valid - caller must provide at least 4 bytes */
+	assert(out != NULL);
+	
 	out[0] = x&0xFF;
 	out[1] = (x>>8)&0xFF;
 	out[2] = (x>>16)&0xFF;
@@ -136,6 +140,9 @@ _PUBLIC_ void mdfour(uint8_t *out, const uint8_t *in, int n)
 	uint32_t b = n * 8;
 	int i;
 	struct mdfour_state state;
+
+	/* Ensure output buffer is valid - must be at least MD4_DIGEST_LENGTH bytes */
+	assert(out != NULL);
 
 	state.A = 0x67452301;
 	state.B = 0xefcdab89;
