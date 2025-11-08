@@ -2345,11 +2345,15 @@ static NTSTATUS pdb_default_get_trusted_domain(struct pdb_methods *methods,
 	aia.AuthInfo.clear.size = strlen(pwd);
 	aia.AuthInfo.clear.password = (uint8_t *)talloc_memdup(tdom, pwd,
 							       aia.AuthInfo.clear.size);
+	/* Securely clear the original password from memory */
+	memset(pwd, 0, strlen(pwd));
 	SAFE_FREE(pwd);
 	if (aia.AuthInfo.clear.password == NULL) {
 		talloc_free(tdom);
 		return NT_STATUS_NO_MEMORY;
 	}
+	/* Ensure the copied password is securely wiped when freed */
+	talloc_keep_secret(aia.AuthInfo.clear.password);
 
 	taiob.previous.count = 0;
 	taiob.previous.array = NULL;
@@ -2420,12 +2424,18 @@ static NTSTATUS pdb_default_set_trusted_domain(struct pdb_methods *methods,
 	if (!pwd) {
 		return NT_STATUS_NO_MEMORY;
 	}
+	/* Ensure the password copy is securely wiped when freed */
+	talloc_keep_secret(pwd);
 
 	ok = pdb_set_trusteddom_pw(domain, pwd, &td->security_identifier);
 	if (!ok) {
+		/* Securely clear password before returning */
+		talloc_free(pwd);
 		return NT_STATUS_UNSUCCESSFUL;
 	}
 
+	/* Securely clear password before returning */
+	talloc_free(pwd);
 	return NT_STATUS_OK;
 }
 
