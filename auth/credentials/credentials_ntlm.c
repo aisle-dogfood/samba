@@ -385,6 +385,9 @@ _PUBLIC_ bool cli_credentials_set_utf16_password(struct cli_credentials *cred,
 	}
 
 	ok = cli_credentials_set_password(cred, password_talloc, obtained);
+	if (password_talloc != NULL) {
+		memset(password_talloc, 0, password_len);
+	}
 	TALLOC_FREE(password_talloc);
 	if (!ok) {
 		TALLOC_FREE(nt_hash);
@@ -432,6 +435,9 @@ _PUBLIC_ bool cli_credentials_set_old_utf16_password(struct cli_credentials *cre
 	}
 
 	ok = cli_credentials_set_old_password(cred, password_talloc, CRED_SPECIFIED);
+	if (password_talloc != NULL) {
+		memset(password_talloc, 0, password_len);
+	}
 	TALLOC_FREE(password_talloc);
 	if (!ok) {
 		TALLOC_FREE(nt_hash);
