@@ -824,6 +824,13 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 			return NULL;
 		}
 	} else {
+		/*
+		 * SECURITY WARNING: Using MD4 hash algorithm which is cryptographically
+		 * weak and vulnerable to collision attacks. This is required for
+		 * compatibility with Windows NT authentication protocols but should
+		 * be avoided in new implementations. Consider using stronger hash
+		 * algorithms where protocol compatibility allows.
+		 */
 		E_md4hash(password, nt_hash->hash);
 	}
 
@@ -876,6 +883,13 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_old_nt_hash(struct cli_creden
 		}
 		talloc_keep_secret(nt_hash);
 
+		/*
+		 * SECURITY WARNING: Using MD4 hash algorithm which is cryptographically
+		 * weak and vulnerable to collision attacks. This is required for
+		 * compatibility with Windows NT authentication protocols but should
+		 * be avoided in new implementations. Consider using stronger hash
+		 * algorithms where protocol compatibility allows.
+		 */
 		E_md4hash(old_password, nt_hash->hash);
 
 		return nt_hash;

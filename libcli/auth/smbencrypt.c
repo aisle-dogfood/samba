@@ -77,6 +77,12 @@ bool SMBencrypt(const char *passwd, const uint8_t *c8, uint8_t p24[24])
 
 /**
  * Creates the MD4 Hash of the users password in NT UNICODE.
+ * 
+ * SECURITY WARNING: This function uses the MD4 hash algorithm which is
+ * cryptographically weak and vulnerable to collision attacks. MD4 should
+ * not be used for new implementations. This function is maintained for
+ * compatibility with Windows NT authentication protocols only.
+ * 
  * @param passwd password in 'unix' charset.
  * @param p16 return password hashed with md4, caller allocated 16 byte buffer
  */
@@ -86,6 +92,12 @@ bool E_md4hash(const char *passwd, uint8_t p16[16])
 	size_t len;
 	smb_ucs2_t *wpwd;
 	bool ret;
+
+	/* Input validation: ensure passwd is not NULL */
+	if (passwd == NULL) {
+		memset(p16, 0, 16);
+		return false;
+	}
 
 	ret = push_ucs2_talloc(NULL, &wpwd, passwd, &len);
 	if (!ret || len < 2) {
