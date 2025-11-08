@@ -2133,6 +2133,11 @@ static bool pdb_samba_dsdb_new_rid(struct pdb_methods *m, uint32_t *rid)
 	return false;
 }
 
+/*
+ * Get trusted domain password. 
+ * SECURITY NOTE: The caller MUST securely free the returned password 
+ * using BURN_FREE_STR() to prevent credential exposure.
+ */
 static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 				      const char *domain, char** pwd,
 				      struct dom_sid *sid,
@@ -2272,6 +2277,10 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 		return false;
 	}
 	*pwd = SMB_STRNDUP(password_talloc, password_len);
+	
+	/* Securely clear the password from talloc memory before freeing */
+	memset_s(password_talloc, password_len, 0, password_len);
+	
 	if (pass_last_set_time) {
 		*pass_last_set_time = nt_time_to_unix(auth_array->array[i].LastUpdateTime);
 	}
