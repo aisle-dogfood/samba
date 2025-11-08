@@ -406,10 +406,13 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	 */
 	status = linebuf;
 	while (status && !feof(fp)) {
-		linebuf[0] = '\0';
+		/* Clear the buffer before each read to ensure no residual data */
+		memset(linebuf, 0, sizeof(linebuf));
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear sensitive data before returning */
+			memset(linebuf, 0, sizeof(linebuf));
 			return NULL;
 		}
 
@@ -458,11 +461,15 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		if (linebuf[0] == '#' || linebuf[0] == '\0') {
 			DEBUG(6, ("getsmbfilepwent: skipping comment or blank line\n"));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 		p = (unsigned char *) strchr_m(linebuf, ':');
 		if (p == NULL) {
 			DEBUG(0, ("getsmbfilepwent: malformed password entry (no :)\n"));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 
@@ -475,12 +482,16 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		if(*p == '-') {
 			DEBUG(0, ("getsmbfilepwent: user name %s has a negative uid.\n", user_name));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 
 		if (!isdigit(*p)) {
 			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (uid not number)\n",
 				user_name));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 
@@ -493,6 +504,8 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		if (*p != ':') {
 			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (no : after uid)\n",
 				user_name));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 
@@ -511,12 +524,16 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		if (linebuf_len < (PTR_DIFF(p, linebuf) + 33)) {
 			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (passwd too short)\n",
 				user_name ));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 
 		if (p[32] != ':') {
 			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (no terminating :)\n",
 				user_name));
+			/* Clear the buffer before continuing to next iteration */
+			memset(linebuf, 0, sizeof(linebuf));
 			continue;
 		}
 
@@ -601,10 +618,14 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 			}
 		}
 
+		/* Clear sensitive data from buffer before returning successful result */
+		memset(linebuf, 0, sizeof(linebuf));
 		return pw_buf;
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	/* Clear sensitive data from buffer before returning */
+	memset(linebuf, 0, sizeof(linebuf));
 	return NULL;
 }
 
