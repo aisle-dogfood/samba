@@ -286,10 +286,11 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 
 	/* the trust's password */
 	if (pwd) {
-		*pwd = SMB_STRDUP(pass.pass);
+		*pwd = talloc_strdup(talloc_tos(), pass.pass);
 		if (!*pwd) {
 			return False;
 		}
+		talloc_keep_secret(*pwd);
 	}
 
 	/* last change time */
