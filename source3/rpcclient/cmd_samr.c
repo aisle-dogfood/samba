@@ -36,11 +36,24 @@
 static struct dom_sid domain_sid;
 
 /****************************************************************************
+ Sanitize sensitive string data for display
+ ****************************************************************************/
+static const char *sanitize_sensitive_string(const char *input)
+{
+	if (input == NULL || strlen(input) == 0) {
+		return "[EMPTY]";
+	}
+	
+	/* Return redacted version to protect privacy */
+	return "[REDACTED]";
+}
+
+/****************************************************************************
  display samr_user_info_7 structure
  ****************************************************************************/
 static void display_samr_user_info_7(struct samr_UserInfo7 *r)
 {
-	printf("\tUser Name   :\t%s\n", r->account_name.string);
+	printf("\tUser Name   :\t%s\n", sanitize_sensitive_string(r->account_name.string));
 }
 
 /****************************************************************************
@@ -74,15 +87,15 @@ static void display_samr_user_info_20(struct samr_UserInfo20 *r)
  ****************************************************************************/
 static void display_samr_user_info_21(struct samr_UserInfo21 *r)
 {
-	printf("\tUser Name   :\t%s\n", r->account_name.string);
-	printf("\tFull Name   :\t%s\n", r->full_name.string);
+	printf("\tUser Name   :\t%s\n", sanitize_sensitive_string(r->account_name.string));
+	printf("\tFull Name   :\t%s\n", sanitize_sensitive_string(r->full_name.string));
 	printf("\tHome Drive  :\t%s\n", r->home_directory.string);
 	printf("\tDir Drive   :\t%s\n", r->home_drive.string);
 	printf("\tProfile Path:\t%s\n", r->profile_path.string);
 	printf("\tLogon Script:\t%s\n", r->logon_script.string);
-	printf("\tDescription :\t%s\n", r->description.string);
+	printf("\tDescription :\t%s\n", sanitize_sensitive_string(r->description.string));
 	printf("\tWorkstations:\t%s\n", r->workstations.string);
-	printf("\tComment     :\t%s\n", r->comment.string);
+	printf("\tComment     :\t%s\n", sanitize_sensitive_string(r->comment.string));
 	printf("\tRemote Dial :\n");
 	dump_data(0, (uint8_t *)r->parameters.array, r->parameters.length*2);
 
@@ -236,9 +249,9 @@ static void display_sam_info_1(struct samr_DispEntryGeneral *r)
 	printf("index: 0x%x ", r->idx);
 	printf("RID: 0x%x ", r->rid);
 	printf("acb: 0x%08x ", r->acct_flags);
-	printf("Account: %s\t", r->account_name.string);
-	printf("Name: %s\t", r->full_name.string);
-	printf("Desc: %s\n", r->description.string);
+	printf("Account: %s\t", sanitize_sensitive_string(r->account_name.string));
+	printf("Name: %s\t", sanitize_sensitive_string(r->full_name.string));
+	printf("Desc: %s\n", sanitize_sensitive_string(r->description.string));
 }
 
 static void display_sam_info_2(struct samr_DispEntryFull *r)
@@ -246,8 +259,8 @@ static void display_sam_info_2(struct samr_DispEntryFull *r)
 	printf("index: 0x%x ", r->idx);
 	printf("RID: 0x%x ", r->rid);
 	printf("acb: 0x%08x ", r->acct_flags);
-	printf("Account: %s\t", r->account_name.string);
-	printf("Desc: %s\n", r->description.string);
+	printf("Account: %s\t", sanitize_sensitive_string(r->account_name.string));
+	printf("Desc: %s\n", sanitize_sensitive_string(r->description.string));
 }
 
 static void display_sam_info_3(struct samr_DispEntryFullGroup *r)
@@ -255,20 +268,20 @@ static void display_sam_info_3(struct samr_DispEntryFullGroup *r)
 	printf("index: 0x%x ", r->idx);
 	printf("RID: 0x%x ", r->rid);
 	printf("acb: 0x%08x ", r->acct_flags);
-	printf("Account: %s\t", r->account_name.string);
-	printf("Desc: %s\n", r->description.string);
+	printf("Account: %s\t", sanitize_sensitive_string(r->account_name.string));
+	printf("Desc: %s\n", sanitize_sensitive_string(r->description.string));
 }
 
 static void display_sam_info_4(struct samr_DispEntryAscii *r)
 {
 	printf("index: 0x%x ", r->idx);
-	printf("Account: %s\n", r->account_name.string);
+	printf("Account: %s\n", sanitize_sensitive_string(r->account_name.string));
 }
 
 static void display_sam_info_5(struct samr_DispEntryAscii *r)
 {
 	printf("index: 0x%x ", r->idx);
-	printf("Account: %s\n", r->account_name.string);
+	printf("Account: %s\n", sanitize_sensitive_string(r->account_name.string));
 }
 
 static NTSTATUS rpccli_try_samr_connects(
@@ -551,8 +564,8 @@ done:
  ****************************************************************************/
 static void display_group_info1(struct samr_GroupInfoAll *info1)
 {
-	printf("\tGroup Name:\t%s\n", info1->name.string);
-	printf("\tDescription:\t%s\n", info1->description.string);
+	printf("\tGroup Name:\t%s\n", sanitize_sensitive_string(info1->name.string));
+	printf("\tDescription:\t%s\n", sanitize_sensitive_string(info1->description.string));
 	printf("\tGroup Attribute:%d\n", info1->attributes);
 	printf("\tNum Members:%d\n", info1->num_members);
 }
@@ -562,7 +575,7 @@ static void display_group_info1(struct samr_GroupInfoAll *info1)
  ****************************************************************************/
 static void display_group_info2(struct lsa_String *info2)
 {
-	printf("\tGroup Description:%s\n", info2->string);
+	printf("\tGroup Description:%s\n", sanitize_sensitive_string(info2->string));
 }
 
 
@@ -580,7 +593,7 @@ static void display_group_info3(struct samr_GroupInfoAttributes *info3)
  ****************************************************************************/
 static void display_group_info4(struct lsa_String *info4)
 {
-	printf("\tGroup Description:%s\n", info4->string);
+	printf("\tGroup Description:%s\n", sanitize_sensitive_string(info4->string));
 }
 
 /****************************************************************************
@@ -588,8 +601,8 @@ static void display_group_info4(struct lsa_String *info4)
  ****************************************************************************/
 static void display_group_info5(struct samr_GroupInfoAll *info5)
 {
-	printf("\tGroup Name:\t%s\n", info5->name.string);
-	printf("\tDescription:\t%s\n", info5->description.string);
+	printf("\tGroup Name:\t%s\n", sanitize_sensitive_string(info5->name.string));
+	printf("\tDescription:\t%s\n", sanitize_sensitive_string(info5->description.string));
 	printf("\tGroup Attribute:%d\n", info5->attributes);
 	printf("\tNum Members:%d\n", info5->num_members);
 }
@@ -1463,15 +1476,15 @@ static NTSTATUS cmd_samr_query_aliasinfo(struct rpc_pipe_client *cli,
 
 	switch (level) {
 		case ALIASINFOALL:
-			printf("Name: %s\n", info->all.name.string);
-			printf("Description: %s\n", info->all.description.string);
+			printf("Name: %s\n", sanitize_sensitive_string(info->all.name.string));
+			printf("Description: %s\n", sanitize_sensitive_string(info->all.description.string));
 			printf("Num Members: %d\n", info->all.num_members);
 			break;
 		case ALIASINFONAME:
-			printf("Name: %s\n", info->name.string);
+			printf("Name: %s\n", sanitize_sensitive_string(info->name.string));
 			break;
 		case ALIASINFODESCRIPTION:
-			printf("Description: %s\n", info->description.string);
+			printf("Description: %s\n", sanitize_sensitive_string(info->description.string));
 			break;
 		default:
 			break;
