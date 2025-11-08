@@ -674,12 +674,24 @@ void load_interfaces(void)
 	total_probed = get_interfaces(talloc_tos(), &ifaces);
 
 	if (total_probed > 0) {
-		probed_ifaces = (struct iface_struct *)smb_memdup(ifaces,
-				sizeof(ifaces[0])*total_probed);
+		size_t alloc_size;
+		
+		/* Check for integer overflow in size calculation */
+		if (total_probed > SIZE_MAX / sizeof(ifaces[0])) {
+			DEBUG(0,("ERROR: Too many interfaces, integer overflow risk\n"));
+			TALLOC_FREE(ifaces);
+			exit(1);
+		}
+		
+		alloc_size = sizeof(ifaces[0]) * (size_t)total_probed;
+		probed_ifaces = (struct iface_struct *)smb_memdup(ifaces, alloc_size);
 		if (!probed_ifaces) {
 			DEBUG(0,("ERROR: smb_memdup failed\n"));
 			exit(1);
 		}
+	} else if (total_probed < 0) {
+		DEBUG(0,("ERROR: get_interfaces failed\n"));
+		total_probed = 0;
 	}
 	TALLOC_FREE(ifaces);
 
