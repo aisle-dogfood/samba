@@ -244,7 +244,7 @@ NTSTATUS smb_krb5_fill_keytab_gmsa_keys(TALLOC_CTX *mem_ctx,
 
 	NTSTATUS status;
 	struct ldb_message *msg;
-	const struct ldb_val *managed_password_blob;
+	const struct ldb_val *managed_password_blob = NULL;
 	const char *managed_pw_utf8;
 	const char *previous_managed_pw_utf8;
 	const char *username;
