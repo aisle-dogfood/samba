@@ -64,6 +64,26 @@ int hexformat = 0;
 
 #define itoa(a) ((a) < 0xa?'0'+(a):'A' + (a-0xa))
 
+/* Check if a file path contains path traversal sequences */
+static bool is_safe_path(const char *path)
+{
+	if (path == NULL) {
+		return false;
+	}
+	
+	/* Reject paths containing ".." to prevent path traversal */
+	if (strstr(path, "..") != NULL) {
+		return false;
+	}
+	
+	/* Reject absolute paths starting with "/" */
+	if (path[0] == '/') {
+		return false;
+	}
+	
+	return true;
+}
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -345,6 +365,11 @@ int main(int argc, const char **argv)
 	infile = poptGetArg(pc);
 
 	if(infile) {
+		if (!is_safe_path(infile)) {
+			fprintf(stderr, "Error: Input file path contains invalid characters or path traversal sequences\n");
+			poptFreeContext(pc);
+			return 1;
+		}
 		in  = fopen(infile, "r");
 		if(!in) {
 			perror("fopen");
@@ -356,6 +381,11 @@ int main(int argc, const char **argv)
 	outfile = poptGetArg(pc);
 
 	if(outfile) {
+		if (!is_safe_path(outfile)) {
+			fprintf(stderr, "Error: Output file path contains invalid characters or path traversal sequences\n");
+			poptFreeContext(pc);
+			return 1;
+		}
 		out = fopen(outfile, "w+");
 		if(!out) {
 			perror("fopen");
