@@ -1432,13 +1432,17 @@ static void manage_squid_basic_request(enum stdio_helper_mode stdio_helper_mode,
 		if (end == NULL || (end - user) != strlen(user)) {
 			DEBUG(2, ("Badly rfc1738 encoded username: %s; "
 				  "denying access\n", user));
+			/* Clear the password from memory for security */
+			memset(pass, 0, strlen(pass));
 			printf("ERR\n");
 			return;
 		}
 		end = rfc1738_unescape(pass);
 		if (end == NULL || (end - pass) != strlen(pass)) {
-			DEBUG(2, ("Badly encoded password for %s; "
+			DEBUG(2, ("Badly encoded password for user %s; "
 				  "denying access\n", user));
+			/* Clear the password from memory for security */
+			memset(pass, 0, strlen(pass));
 			printf("ERR\n");
 			return;
 		}
@@ -1449,6 +1453,9 @@ static void manage_squid_basic_request(enum stdio_helper_mode stdio_helper_mode,
 	} else {
 		printf("ERR\n");
 	}
+	
+	/* Clear the password from memory for security */
+	memset(pass, 0, strlen(pass));
 }
 
 static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
