@@ -327,7 +327,10 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 		status = dbwrap_fetch(db_ctx, tmp_ctx, string_tdb_data(keystr_upper),
 				      &dbuf);
 		if (NT_STATUS_IS_OK(status)) {
-			secrets_tdb_password = (char *)dbuf.dptr;
+			secrets_tdb_password = talloc_strndup(tmp_ctx, (char *)dbuf.dptr, dbuf.dsize);
+			if (secrets_tdb_password != NULL) {
+				talloc_keep_secret(secrets_tdb_password);
+			}
 		}
 
 		keystr = talloc_asprintf(tmp_ctx, "%s/%s",
@@ -337,7 +340,10 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 		status = dbwrap_fetch(db_ctx, tmp_ctx, string_tdb_data(keystr_upper),
 				      &dbuf);
 		if (NT_STATUS_IS_OK(status)) {
-			secrets_tdb_old_password = (char *)dbuf.dptr;
+			secrets_tdb_old_password = talloc_strndup(tmp_ctx, (char *)dbuf.dptr, dbuf.dsize);
+			if (secrets_tdb_old_password != NULL) {
+				talloc_keep_secret(secrets_tdb_old_password);
+			}
 		}
 
 		keystr = talloc_asprintf(tmp_ctx, "%s/%s",
@@ -434,6 +440,10 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 								 lp_ctx,
 								 "secrets");
 			if (secrets_tdb_path == NULL) {
+				/* Clear sensitive data from memory before returning */
+				BURN_STR(secrets_tdb_password);
+				BURN_STR(secrets_tdb_old_password);
+				TALLOC_FREE(tmp_ctx);
 				return NT_STATUS_NO_MEMORY;
 			}
 
@@ -449,6 +459,10 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 		/* set anonymous as the fallback, if the machine account won't work */
 		cli_credentials_set_anonymous(cred);
 	}
+
+	/* Clear sensitive data from memory before freeing */
+	BURN_STR(secrets_tdb_password);
+	BURN_STR(secrets_tdb_old_password);
 
 	TALLOC_FREE(tmp_ctx);
 	return status;
