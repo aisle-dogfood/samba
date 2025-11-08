@@ -393,6 +393,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	size_t linebuf_len;
 	char *status;
 
+	/* Clear password buffers to ensure no stale credential data */
+	ZERO_STRUCT(smbpasswd_state->smbpwd);
+	ZERO_STRUCT(smbpasswd_state->smbntpwd);
+
 	if(fp == NULL) {
 		DEBUG(0,("getsmbfilepwent: Bad password file pointer.\n"));
 		return NULL;
@@ -410,6 +414,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear password buffers before returning on error */
+			ZERO_STRUCT(smbpasswd_state->smbpwd);
+			ZERO_STRUCT(smbpasswd_state->smbntpwd);
 			return NULL;
 		}
 
@@ -605,6 +612,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	/* Clear password buffers before returning */
+	ZERO_STRUCT(smbpasswd_state->smbpwd);
+	ZERO_STRUCT(smbpasswd_state->smbntpwd);
 	return NULL;
 }
 
@@ -1561,6 +1571,12 @@ static uint32_t smbpasswd_capabilities(struct pdb_methods *methods)
 static void free_private_data(void **vp)
 {
 	struct smbpasswd_privates **privates = (struct smbpasswd_privates**)vp;
+
+	/* Clear password buffers before freeing */
+	if (*privates) {
+		ZERO_STRUCT((*privates)->smbpwd);
+		ZERO_STRUCT((*privates)->smbntpwd);
+	}
 
 	endsmbfilepwent((*privates)->pw_file, &((*privates)->pw_file_lock_depth));
 
