@@ -64,6 +64,7 @@ static int load_proxy_info(struct ldb_module *module)
 	struct ldb_result *res = NULL;
 	int ret;
 	const char *olddn, *newdn, *url, *username, *password, *oldstr, *newstr;
+	char *password_copy = NULL;
 	struct cli_credentials *creds;
 	bool ok;
 
@@ -93,6 +94,13 @@ static int load_proxy_info(struct ldb_module *module)
 
 	if (url == NULL || olddn == NULL || newdn == NULL || username == NULL || password == NULL) {
 		ldb_debug(ldb, LDB_DEBUG_FATAL, "Need url, olddn, newdn, oldstr, newstr, username and password in @PROXYINFO\n");
+		goto failed;
+	}
+
+	/* Make a secure copy of the password for credential setting */
+	password_copy = talloc_strdup(proxy, password);
+	if (password_copy == NULL) {
+		ldb_oom(ldb);
 		goto failed;
 	}
 
@@ -139,7 +147,12 @@ static int load_proxy_info(struct ldb_module *module)
 	}
 
 	cli_credentials_set_username(creds, username, CRED_SPECIFIED);
-	cli_credentials_set_password(creds, password, CRED_SPECIFIED);
+	cli_credentials_set_password(creds, password_copy, CRED_SPECIFIED);
+
+	/* Clear password copy from memory immediately after use for security */
+	if (password_copy != NULL) {
+		memset(password_copy, 0, strlen(password_copy));
+	}
 
 	ldb_set_opaque(proxy->upstream, "credentials", creds);
 
@@ -156,6 +169,10 @@ static int load_proxy_info(struct ldb_module *module)
 	return LDB_SUCCESS;
 
 failed:
+	/* Clear password copy from memory on failure path as well */
+	if (password_copy != NULL) {
+		memset(password_copy, 0, strlen(password_copy));
+	}
 	talloc_free(res);
 	talloc_free(proxy->olddn);
 	talloc_free(proxy->newdn);
