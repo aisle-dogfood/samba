@@ -3633,6 +3633,10 @@ static void netlogon_creds_cli_ServerGetTrustInfo_cleanup(struct tevent_req *req
 		tevent_req_data(req,
 		struct netlogon_creds_cli_ServerGetTrustInfo_state);
 
+	/* Clear sensitive password data from memory */
+	ZERO_STRUCT(state->new_owf_password);
+	ZERO_STRUCT(state->old_owf_password);
+
 	if (state->creds == NULL) {
 		return;
 	}
@@ -3807,6 +3811,10 @@ NTSTATUS netlogon_creds_cli_ServerGetTrustInfo_recv(struct tevent_req *req,
 	if (trust_info != NULL) {
 		*trust_info = talloc_move(mem_ctx, &state->trust_info);
 	}
+
+	/* Clear sensitive password data from memory after copying to output */
+	ZERO_STRUCT(state->new_owf_password);
+	ZERO_STRUCT(state->old_owf_password);
 
 	tevent_req_received(req);
 	return NT_STATUS_OK;
