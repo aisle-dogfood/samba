@@ -32,6 +32,10 @@ static void disk_norm(uint64_t *bsize, uint64_t *dfree, uint64_t *dsize)
 	/* check if the disk is beyond the max disk size */
 	uint64_t maxdisksize = lp_max_disk_size();
 	if (maxdisksize) {
+		/* Prevent division by zero */
+		if ((*bsize) == 0) {
+			*bsize = 512;
+		}
 		/* convert to blocks - and don't overflow */
 		maxdisksize = ((maxdisksize*1024)/(*bsize))*1024;
 		if (*dsize > maxdisksize) {
@@ -137,6 +141,11 @@ static uint64_t sys_disk_free(connection_struct *conn,
 	if (disk_quotas(conn, fname, &bsize_q, &dfree_q, &dsize_q)) {
 		uint64_t min_bsize = MIN(*bsize, bsize_q);
 
+		/* Prevent division by zero */
+		if (min_bsize == 0) {
+			min_bsize = 512;
+		}
+
 		(*dfree) = (*dfree) * (*bsize) / min_bsize;
 		(*dsize) = (*dsize) * (*bsize) / min_bsize;
 		dfree_q = dfree_q * bsize_q / min_bsize;
@@ -166,6 +175,10 @@ dfree_done:
 	disk_norm(bsize, dfree, dsize);
 
 	if ((*bsize) < 1024) {
+		if ((*bsize) == 0) {
+			/* Prevent division by zero */
+			*bsize = 512;
+		}
 		dfree_retval = (*dfree)/(1024/(*bsize));
 	} else {
 		dfree_retval = ((*bsize)/1024)*(*dfree);
