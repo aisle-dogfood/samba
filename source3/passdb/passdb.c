@@ -45,6 +45,7 @@ static int samu_destroy(struct samu *user)
 {
 	data_blob_clear_free( &user->lm_pw );
 	data_blob_clear_free( &user->nt_pw );
+	data_blob_clear_free( &user->nt_pw_his );
 
 	if ( user->plaintext_pw )
 		BURN_STR(user->plaintext_pw);
