@@ -3060,10 +3060,9 @@ static PyObject *py_pdb_get_trusteddom_pw(PyObject *self, PyObject *args)
 	}
 
 	py_value = Py_BuildValue(
-		"{s:s, s:O, s:l}",
-		"pwd", pwd,
+		"{s:O, s:l}",
 		"sid", py_sid,
-		"last_set_tim", last_set_time);
+		"last_set_time", last_set_time);
 
 	Py_CLEAR(py_sid);
 	talloc_free(frame);
@@ -3727,7 +3726,7 @@ static PyMethodDef py_pdb_methods[] = {
 		Get a new rid." },
 	{ "get_trusteddom_pw", py_pdb_get_trusteddom_pw, METH_VARARGS,
 		"get_trusteddom_pw(domain) -> Mapping\n\n \
-		Get trusted domain password, sid and last set time in a dictionary." },
+		Get trusted domain sid and last set time in a dictionary." },
 	{ "set_trusteddom_pw", py_pdb_set_trusteddom_pw, METH_VARARGS,
 		"set_trusteddom_pw(domain, pwd, sid) -> None\n\n \
 		Set trusted domain password." },
