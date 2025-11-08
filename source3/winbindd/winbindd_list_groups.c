@@ -271,7 +271,11 @@ NTSTATUS winbindd_list_groups_recv(struct tevent_req *req,
 			num_entries++;
 		}
 	}
-	result[len-1] = '\0';
+	if (len > 0) {
+		result[len-1] = '\0';
+	} else {
+		result[0] = '\0';
+	}
 
 	response->data.num_entries = num_entries;
 	response->extra_data.data = result;
