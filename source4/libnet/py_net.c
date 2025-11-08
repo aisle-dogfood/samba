@@ -39,6 +39,7 @@
 #include "py_net.h"
 #include "librpc/rpc/pyrpc_util.h"
 #include "libcli/drsuapi/drsuapi.h"
+#include "lib/util/talloc_keep_secret.h"
 
 static void PyErr_SetDsExtendedError(enum drsuapi_DsExtendedError ext_err, const char *error_description)
 {
@@ -186,9 +187,6 @@ static PyObject *py_net_change_password(py_net_Object *self, PyObject *args, PyO
 		return NULL;
 	}
 
-	r.generic.in.newpassword = newpass;
-	r.generic.in.oldpassword = oldpass;
-
 	r.generic.level = LIBNET_CHANGE_PASSWORD_GENERIC;
 	if (r.generic.in.account_name == NULL) {
 		r.generic.in.account_name
@@ -213,6 +211,43 @@ static PyObject *py_net_change_password(py_net_Object *self, PyObject *args, PyO
 		PyMem_Free(discard_const_p(char, oldpass));
 		PyErr_NoMemory();
 		return NULL;
+	}
+
+	/* Create secure copies of passwords to prevent heap inspection */
+	if (newpass != NULL) {
+		r.generic.in.newpassword = talloc_strdup(mem_ctx, newpass);
+		if (r.generic.in.newpassword == NULL) {
+			PyMem_Free(discard_const_p(char, newpass));
+			PyMem_Free(discard_const_p(char, oldpass));
+			PyErr_NoMemory();
+			talloc_free(mem_ctx);
+			return NULL;
+		}
+		talloc_keep_secret(discard_const_p(char, r.generic.in.newpassword));
+	}
+	
+	if (oldpass != NULL) {
+		r.generic.in.oldpassword = talloc_strdup(mem_ctx, oldpass);
+		if (r.generic.in.oldpassword == NULL) {
+			PyMem_Free(discard_const_p(char, newpass));
+			PyMem_Free(discard_const_p(char, oldpass));
+			PyErr_NoMemory();
+			talloc_free(mem_ctx);
+			return NULL;
+		}
+		talloc_keep_secret(discard_const_p(char, r.generic.in.oldpassword));
+	} else if (r.generic.in.oldpassword != NULL) {
+		/* Secure copy of credential password */
+		const char *orig_oldpass = r.generic.in.oldpassword;
+		r.generic.in.oldpassword = talloc_strdup(mem_ctx, orig_oldpass);
+		if (r.generic.in.oldpassword == NULL) {
+			PyMem_Free(discard_const_p(char, newpass));
+			PyMem_Free(discard_const_p(char, oldpass));
+			PyErr_NoMemory();
+			talloc_free(mem_ctx);
+			return NULL;
+		}
+		talloc_keep_secret(discard_const_p(char, r.generic.in.oldpassword));
 	}
 
 	status = libnet_ChangePassword(self->libnet_ctx, mem_ctx, &r);
@@ -280,6 +315,15 @@ static PyObject *py_net_set_password(py_net_Object *self, PyObject *args, PyObje
 		PyErr_NoMemory();
 		return NULL;
 	}
+
+	/* Create secure copy of password to prevent heap inspection */
+	r.generic.in.newpassword = talloc_strdup(mem_ctx, r.generic.in.newpassword);
+	if (r.generic.in.newpassword == NULL) {
+		PyErr_NoMemory();
+		talloc_free(mem_ctx);
+		return NULL;
+	}
+	talloc_keep_secret(discard_const_p(char, r.generic.in.newpassword));
 
 	status = libnet_SetPassword(self->libnet_ctx, mem_ctx, &r);
 	if (NT_STATUS_IS_ERR(status)) {
