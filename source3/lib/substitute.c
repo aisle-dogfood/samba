@@ -355,18 +355,34 @@ char *talloc_sub_basic(TALLOC_CTX *mem_ctx,
 			pass = Get_Pwnam_alloc(tmp_ctx, r);
 			if (pass != NULL) {
 				char *group_name;
+				char *group_name_to_use;
 
 				group_name = gidtoname(pass->pw_gid);
+				if (group_name == NULL) {
+					goto error;
+				}
+				
 				if (is_domain_name) {
 					char *group_sep;
 					group_sep = strchr_m(group_name, *sep);
 					if (group_sep != NULL) {
-						group_name = group_sep + 1;
+						group_name_to_use = talloc_strdup(tmp_ctx, group_sep + 1);
+					} else {
+						group_name_to_use = talloc_strdup(tmp_ctx, group_name);
 					}
+				} else {
+					group_name_to_use = talloc_strdup(tmp_ctx, group_name);
 				}
+				
+				TALLOC_FREE(group_name);
+				
+				if (group_name_to_use == NULL) {
+					goto error;
+				}
+				
 				a_string = realloc_string_sub(a_string,
 							      "%G",
-							      group_name);
+							      group_name_to_use);
 			}
 			TALLOC_FREE(pass);
 			break;
