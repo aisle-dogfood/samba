@@ -34,12 +34,33 @@
 bool sock_clean(const char *sockpath)
 {
 	int ret;
+	char *resolved_path = NULL;
+	char resolved_buffer[PATH_MAX];
 
-	ret = unlink(sockpath);
+	if (sockpath == NULL) {
+		D_ERR("Invalid socket path: NULL\n");
+		return false;
+	}
+
+	/* Resolve the path to prevent path traversal attacks */
+	resolved_path = realpath(sockpath, resolved_buffer);
+	if (resolved_path == NULL) {
+		/* If realpath fails, the path might not exist yet, which is OK for socket cleanup.
+		 * However, we still need to validate that the path doesn't contain traversal sequences.
+		 */
+		if (strstr(sockpath, "..") != NULL || strstr(sockpath, "//") != NULL) {
+			D_ERR("Invalid socket path contains traversal sequences: %s\n", sockpath);
+			return false;
+		}
+		/* Use the original path if realpath fails but path looks safe */
+		resolved_path = (char *)sockpath;
+	}
+
+	ret = unlink(resolved_path);
 	if (ret == 0) {
-		D_WARNING("Removed stale socket %s\n", sockpath);
+		D_WARNING("Removed stale socket %s\n", resolved_path);
 	} else if (errno != ENOENT) {
-		D_ERR("Failed to remove stale socket %s\n", sockpath);
+		D_ERR("Failed to remove stale socket %s\n", resolved_path);
 		return false;
 	}
 
