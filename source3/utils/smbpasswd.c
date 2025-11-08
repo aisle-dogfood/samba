@@ -326,7 +326,8 @@ static int process_root(int local_flags)
 			new_passwd = prompt_for_new_password(stdin_passwd_get);
 			if (new_passwd == NULL) {
 				fprintf(stderr, "Failed to read new password!\n");
-				exit(1);
+				result = 1;
+				goto done;
 			}
 			fstrcpy(ldap_secret, new_passwd);
 		}
@@ -339,7 +340,8 @@ static int process_root(int local_flags)
 	/* Ensure passdb startup(). */
 	if(!initialize_password_db(False, NULL)) {
 		DEBUG(0, ("Failed to open passdb!\n"));
-		exit(1);
+		result = 1;
+		goto done;
 	}
 
 	/* Ensure we have a SAM sid. */
@@ -369,7 +371,8 @@ static int process_root(int local_flags)
 
 	if (!user_name[0]) {
 		fprintf(stderr,"You must specify a username\n");
-		exit(1);
+		result = 1;
+		goto done;
 	}
 
 	if (local_flags & LOCAL_TRUST_ACCOUNT) {
@@ -381,7 +384,8 @@ static int process_root(int local_flags)
 		} else {
 			if (user_name_len + 2 > sizeof(user_name)) {
 				fprintf(stderr, "machine name too long\n");
-				exit(1);
+				result = 1;
+				goto done;
 			}
 			user_name[user_name_len] = '$';
 			user_name[user_name_len + 1] = '\0';
@@ -398,7 +402,8 @@ static int process_root(int local_flags)
 			if (!strlower_m(new_passwd)) {
 				fprintf(stderr, "strlower_m %s failed\n",
 					new_passwd);
-				exit(1);
+				result = 1;
+				goto done;
 			}
 		}
 	} else if (local_flags & LOCAL_INTERDOM_ACCOUNT) {
@@ -407,7 +412,8 @@ static int process_root(int local_flags)
 		if (user_name[user_name_len - 1] != '$') {
 			if (user_name_len + 2 > sizeof(user_name)) {
 				fprintf(stderr, "machine name too long\n");
-				exit(1);
+				result = 1;
+				goto done;
 			}
 			user_name[user_name_len] = '$';
 			user_name[user_name_len + 1] = '\0';
@@ -420,7 +426,8 @@ static int process_root(int local_flags)
 			new_passwd = prompt_for_new_password(stdin_passwd_get);
 			if(!new_passwd) {
 				fprintf(stderr, "Unable to get newpassword.\n");
-				exit(1);
+				result = 1;
+				goto done;
 			}
 		}
 	} else {
@@ -429,7 +436,8 @@ static int process_root(int local_flags)
 			old_passwd = get_pass("Old SMB password:",stdin_passwd_get);
 			if(!old_passwd) {
 				fprintf(stderr, "Unable to get old password.\n");
-				exit(1);
+				result = 1;
+				goto done;
 			}
 		}
 
@@ -450,12 +458,15 @@ static int process_root(int local_flags)
 				sampass = samu_new( NULL );
 				if (!sampass) {
 					fprintf(stderr, "talloc fail for struct samu.\n");
-					exit(1);
+					result = 1;
+					goto done;
 				}
 				if (!pdb_getsampwnam(sampass, user_name)) {
 					fprintf(stderr, "Failed to find user %s in passdb backend.\n",
 						user_name );
-					exit(1);
+					TALLOC_FREE(sampass);
+					result = 1;
+					goto done;
 				}
 
 				if(pdb_get_nt_passwd(sampass) == NULL) {
@@ -470,7 +481,8 @@ static int process_root(int local_flags)
 			new_passwd = prompt_for_new_password(stdin_passwd_get);
 			if(!new_passwd) {
 				fprintf(stderr, "Unable to get new password.\n");
-				exit(1);
+				result = 1;
+				goto done;
 			}
 		}
 	}
@@ -491,13 +503,16 @@ static int process_root(int local_flags)
 		sampass = samu_new( NULL );
 		if (!sampass) {
 			fprintf(stderr, "talloc fail for struct samu.\n");
-			exit(1);
+			result = 1;
+			goto done;
 		}
 
 		if (!pdb_getsampwnam(sampass, user_name)) {
 			fprintf(stderr, "Failed to find user %s in passdb backend.\n",
 				user_name );
-			exit(1);
+			TALLOC_FREE(sampass);
+			result = 1;
+			goto done;
 		}
 
 		printf("Password changed for user %s.", user_name );
