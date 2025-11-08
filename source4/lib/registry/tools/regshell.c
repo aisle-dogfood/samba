@@ -434,7 +434,7 @@ static char **reg_complete_command(const char *text, int start, int end)
 	matches[0] = NULL;
 
 	len = strlen(text);
-	for (i=0;regshell_cmds[i].handle && count < MAX_COMPLETIONS-1;i++) {
+	for (i=0;regshell_cmds[i].handle && count < MAX_COMPLETIONS-2;i++) {
 		if (strncmp(text, regshell_cmds[i].name, len) == 0) {
 			matches[count] = strdup(regshell_cmds[i].name);
 			if (!matches[count])
@@ -489,7 +489,7 @@ static char **reg_complete_key(const char *text, int start, int end)
 	base = current_key;
 
 	len = strlen(text);
-	for(i = 0; j < MAX_COMPLETIONS-1; i++) {
+	for(i = 0; j < MAX_COMPLETIONS-2; i++) {
 		status = reg_key_get_subkey_by_index(mem_ctx, base, i,
 					     &subkeyname, NULL, NULL);
 		if(W_ERROR_IS_OK(status)) {
