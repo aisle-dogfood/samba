@@ -924,6 +924,18 @@ static int gmsa_create_update(TALLOC_CTX *mem_ctx,
 			DATA_BLOB found_pwd_id_data = {};
 			DATA_BLOB *found_pwd_id_blob = NULL;
 
+			/* Validate input blob before processing */
+			if (pwd_id_blob->data == NULL && pwd_id_blob->length > 0) {
+				ret = ldb_operr(ldb);
+				goto out;
+			}
+
+			/* Check for reasonable length bounds to prevent excessive memory allocation */
+			if (pwd_id_blob->length > 1024 * 1024) { /* 1MB limit */
+				ret = ldb_operr(ldb);
+				goto out;
+			}
+
 			found_pwd_id_blob = talloc(tmp_ctx, DATA_BLOB);
 			if (found_pwd_id_blob == NULL) {
 				ret = ldb_oom(ldb);
@@ -932,7 +944,15 @@ static int gmsa_create_update(TALLOC_CTX *mem_ctx,
 
 			found_pwd_id_data = data_blob_dup_talloc(
 				found_pwd_id_blob, *pwd_id_blob);
+			
+			/* Validate that duplication succeeded properly */
 			if (found_pwd_id_data.length != pwd_id_blob->length) {
+				ret = ldb_oom(ldb);
+				goto out;
+			}
+			
+			/* Additional validation: ensure data pointer is valid if length > 0 */
+			if (found_pwd_id_data.length > 0 && found_pwd_id_data.data == NULL) {
 				ret = ldb_oom(ldb);
 				goto out;
 			}
