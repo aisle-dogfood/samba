@@ -53,6 +53,22 @@ static int sesssetup_state_destructor(struct sesssetup_state *state)
 		state->req = NULL;
 	}
 
+	/* Clear sensitive password data from memory */
+	switch (state->setup.old.level) {
+	case RAW_SESSSETUP_OLD:
+		data_blob_clear_free(&state->setup.old.in.password);
+		break;
+	case RAW_SESSSETUP_NT1:
+		data_blob_clear_free(&state->setup.nt1.in.password1);
+		data_blob_clear_free(&state->setup.nt1.in.password2);
+		break;
+	case RAW_SESSSETUP_SPNEGO:
+		/* SPNEGO uses GENSEC, no direct password fields to clear */
+		break;
+	default:
+		break;
+	}
+
 	return 0;
 }
 
@@ -127,6 +143,7 @@ static void request_handler(struct smbcli_request *req)
 				}
 			}
 		}
+
 		if (!NT_STATUS_IS_OK(c->status)) {
 			composite_error(c, c->status);
 			return;
@@ -152,6 +169,7 @@ static void request_handler(struct smbcli_request *req)
 				}
 			}
 		}
+
 		if (!NT_STATUS_IS_OK(c->status)) {
 			composite_error(c, c->status);
 			return;
