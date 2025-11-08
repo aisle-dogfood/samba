@@ -676,9 +676,6 @@ int pdb_nds_get_password(
 
 	rc = nmasldap_get_password(ld, object_dn, pwd_len, (unsigned char *)pwd);
 	if (rc == LDAP_SUCCESS) {
-#ifdef DEBUG_PASSWORD
-		DEBUG(100,("nmasldap_get_password returned %s for %s\n", pwd, object_dn));
-#endif    
 		DEBUG(5, ("NDS Universal Password retrieved for %s\n", object_dn));
 	} else {
 		DEBUG(3, ("NDS Universal Password NOT retrieved for %s\n", object_dn));
@@ -687,13 +684,14 @@ int pdb_nds_get_password(
 	if (rc != LDAP_SUCCESS) {
 		rc = nmasldap_get_simple_pwd(ld, object_dn, *pwd_len, pwd);
 		if (rc == LDAP_SUCCESS) {
-#ifdef DEBUG_PASSWORD
-			DEBUG(100,("nmasldap_get_simple_pwd returned %s for %s\n", pwd, object_dn));
-#endif    
 			DEBUG(5, ("NDS Simple Password retrieved for %s\n", object_dn));
 		} else {
 			/* We couldn't get the password */
 			DEBUG(3, ("NDS Simple Password NOT retrieved for %s\n", object_dn));
+			/* Clear any partial password data before returning error */
+			if (pwd != NULL && *pwd_len > 0) {
+				memset(pwd, 0, *pwd_len);
+			}
 			return LDAP_INVALID_CREDENTIALS;
 		}
 	}
@@ -817,13 +815,15 @@ static NTSTATUS pdb_nds_update_login_attempts(struct pdb_methods *methods,
 			/* This is a long term key */
 			generate_secret_buffer((unsigned char *)clear_text_pw, 24);
 			clear_text_pw[24] = '\0';
-			DEBUG(5,("pdb_nds_update_login_attempts: using random password %s\n", clear_text_pw));
+			DEBUG(5,("pdb_nds_update_login_attempts: using random password\n"));
 		}
 
 		if((success != True) || (got_clear_text_pw == True)) {
 			
 			rc = smbldap_setup_full_conn(&ld, ldap_state->location);
 			if (rc) {
+				/* Clear sensitive password data before returning */
+				memset(clear_text_pw, 0, sizeof(clear_text_pw));
 				TALLOC_FREE(dn);
 				return NT_STATUS_INVALID_CONNECTION;
 			}
@@ -852,9 +852,13 @@ static NTSTATUS pdb_nds_update_login_attempts(struct pdb_methods *methods,
 					default:
 						break;
 				}
+				/* Clear sensitive password data before returning */
+				memset(clear_text_pw, 0, sizeof(clear_text_pw));
 				return nt_status;
 			}
 		}
+		/* Clear sensitive password data after use */
+		memset(clear_text_pw, 0, sizeof(clear_text_pw));
 		TALLOC_FREE(dn);
 	}
 	
