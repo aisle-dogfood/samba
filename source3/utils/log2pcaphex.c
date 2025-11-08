@@ -213,8 +213,11 @@ static void read_log_msg(FILE *in, unsigned char **_buffer,
 	unsigned char *buffer;
 	int tmp; long i;
 	assert(fscanf(in, " size=%hu\n", buffersize)); line_num++;
-	buffer = (unsigned char *)malloc(*buffersize+4); /* +4 for NBSS Header */
-	memset(buffer, 0, *buffersize+4);
+	/* Ensure buffer is large enough for NBSS header (4 bytes) and minimum SMB packet */
+	size_t min_size = NBT_HDR_SIZE + MIN_SMB_SIZE;
+	size_t alloc_size = (*buffersize + NBT_HDR_SIZE > min_size) ? *buffersize + NBT_HDR_SIZE : min_size;
+	buffer = (unsigned char *)malloc(alloc_size);
+	memset(buffer, 0, alloc_size);
 	/* NetBIOS Session Service */
 	buffer[0] = 0x00;
 	buffer[1] = 0x00;
