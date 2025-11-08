@@ -1219,10 +1219,12 @@ wbcErr wbcCtxLogonUser(struct wbcContext *ctx,
 	strncpy(request.data.auth.user,
 		params->username,
 		sizeof(request.data.auth.user)-1);
+	request.data.auth.user[sizeof(request.data.auth.user)-1] = '\0';
 
 	strncpy(request.data.auth.pass,
 		params->password,
 		sizeof(request.data.auth.pass)-1);
+	request.data.auth.pass[sizeof(request.data.auth.pass)-1] = '\0';
 
 	for (i=0; i<params->num_blobs; i++) {
 
@@ -1231,6 +1233,7 @@ wbcErr wbcCtxLogonUser(struct wbcContext *ctx,
 				strncpy(request.data.auth.krb5_cc_type,
 					(const char *)params->blobs[i].blob.data,
 					sizeof(request.data.auth.krb5_cc_type) - 1);
+				request.data.auth.krb5_cc_type[sizeof(request.data.auth.krb5_cc_type) - 1] = '\0';
 			}
 			continue;
 		}
@@ -1263,6 +1266,7 @@ wbcErr wbcCtxLogonUser(struct wbcContext *ctx,
 				strncpy(request.data.auth.require_membership_of_sid,
 					(const char *)params->blobs[i].blob.data,
 					sizeof(request.data.auth.require_membership_of_sid) - 1);
+				request.data.auth.require_membership_of_sid[sizeof(request.data.auth.require_membership_of_sid) - 1] = '\0';
 			}
 			continue;
 		}
