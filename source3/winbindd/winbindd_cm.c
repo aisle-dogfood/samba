@@ -484,8 +484,11 @@ static NTSTATUS cm_get_ipc_credentials(TALLOC_CTX *mem_ctx,
 	status = NT_STATUS_OK;
  fail:
 	TALLOC_FREE(creds);
+	BURN_STR(username);
 	SAFE_FREE(username);
+	BURN_STR(netbios_domain);
 	SAFE_FREE(netbios_domain);
+	BURN_STR(password);
 	SAFE_FREE(password);
 	TALLOC_FREE(frame);
 	return status;
@@ -522,8 +525,11 @@ static bool cm_is_ipc_credentials(struct cli_credentials *creds)
 
 	ret = true;
  done:
+	BURN_STR(ipc_account);
 	SAFE_FREE(ipc_account);
+	BURN_STR(ipc_domain);
 	SAFE_FREE(ipc_domain);
+	BURN_STR(ipc_password);
 	SAFE_FREE(ipc_password);
 	TALLOC_FREE(frame);
 	return ret;
