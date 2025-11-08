@@ -209,7 +209,6 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 	const char *account_principal = NULL;
 	const char *explicit_kdc = NULL;
 	char *cache_name = NULL;
-	const char *check_password = NULL;
 	NTSTATUS status;
 	bool ok;
 
@@ -807,20 +806,18 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 		return NT_STATUS_TRUSTED_RELATIONSHIP_FAILURE;
 	}
 
-	check_password = cli_credentials_get_password(creds);
-	if (check_password == NULL) {
-		DEBUG(0, ("cli_credentials_get_password failed for domain %s!\n",
-			  domain));
-		TALLOC_FREE(frame);
-		return NT_STATUS_TRUSTED_RELATIONSHIP_FAILURE;
-	}
+	/*
+	 * We don't need to get the cleartext password for security reasons.
+	 * Both kerberos_kinit_passwords_ext() and netlogon_creds_cli_lck_auth()
+	 * can work with just NT hashes when passwords[i] is NULL.
+	 */
 
 	/*
 	 * Now we verify the new password.
 	 */
 	idx = 0;
 	nt_hashes[idx] = current_nt_hash;
-	passwords[idx] = check_password;
+	passwords[idx] = NULL;  /* Use NT hash instead of cleartext password */
 	idx += 1;
 	num_passwords = idx;
 	if (ncreds->authenticate_kerberos) {
