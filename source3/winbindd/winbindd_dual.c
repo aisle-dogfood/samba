@@ -1297,7 +1297,7 @@ static bool calculate_next_machine_pwd_change(const char *domain,
 		return false;
 	}
 
-	SAFE_FREE(pw);
+	BURN_FREE_STR(pw);
 
 	timeout = get_machine_password_timeout();
 	if (timeout == 0) {
