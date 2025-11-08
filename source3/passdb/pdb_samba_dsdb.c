@@ -3528,6 +3528,10 @@ static NTSTATUS delete_trust_user(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_OK;
 	}
 
+	if (msgs == NULL || msgs[0] == NULL) {
+		return NT_STATUS_INTERNAL_DB_CORRUPTION;
+	}
+
 	uac = ldb_msg_find_attr_as_uint(msgs[0],
 					"userAccountControl",
 					0);
