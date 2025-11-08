@@ -698,10 +698,12 @@ static NTSTATUS sam_name_to_sid(struct winbindd_domain *domain,
 		}
 		ok = sid_compose(&sid, &global_sid_Unix_Users, pwd->pw_uid);
 		if (!ok) {
+			TALLOC_FREE(pwd);
 			status = NT_STATUS_INTERNAL_ERROR;
 			goto fail;
 		}
 		type = SID_NAME_USER;
+		TALLOC_FREE(pwd);
 		goto done;
 	}
 
