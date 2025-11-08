@@ -874,7 +874,7 @@ static attrlist_t **wb_aix_attrlist(void)
 */
 static int wb_aix_normalize(char *longname, char *shortname)
 {
-	struct passwd *pwd;
+	struct passwd *pwd = NULL;
 
 	logit("normalize '%s'\n", longname);
 
