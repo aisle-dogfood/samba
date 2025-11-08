@@ -284,14 +284,14 @@ bool ber_write_OID_String(TALLOC_CTX *mem_ctx, DATA_BLOB *blob, const char *OID)
 
 	if (!isdigit(*p)) return false;
 	v = smb_strtoul(p, &newp, 10, &error, SMB_STR_STANDARD);
-	if (newp[0] != '.' || error != 0) {
+	if (newp == NULL || newp < p || newp[0] != '.' || error != 0) {
 		return false;
 	}
 	p = newp + 1;
 
 	if (!isdigit(*p)) return false;
 	v2 = smb_strtoul(p, &newp, 10, &error, SMB_STR_STANDARD);
-	if (newp[0] != '.' || error != 0) {
+	if (newp == NULL || newp < p || newp[0] != '.' || error != 0) {
 		return false;
 	}
 	p = newp + 1;
@@ -306,7 +306,11 @@ bool ber_write_OID_String(TALLOC_CTX *mem_ctx, DATA_BLOB *blob, const char *OID)
 	while (*p) {
 		if (!isdigit(*p)) return false;
 		v = smb_strtoul(p, &newp, 10, &error, SMB_STR_STANDARD);
-		if (newp[0] == '.' || error != 0) {
+		if (newp == NULL || newp < p || error != 0) {
+			data_blob_free(blob);
+			return false;
+		}
+		if (newp[0] == '.') {
 			p = newp + 1;
 			if (!*p) {
 				/* empty last component */
