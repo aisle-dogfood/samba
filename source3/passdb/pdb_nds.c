@@ -420,7 +420,14 @@ static int nmasldap_get_simple_pwd(
 	{
 		if (pwdBufLen !=0)
 		{
-			pwdBuf[pwdBufLen] = 0;       /* null terminate */
+			/* Ensure we don't write beyond the allocated buffer bounds */
+			if (pwdBufLen < bufferLen) {
+				pwdBuf[pwdBufLen] = 0;       /* null terminate */
+			} else {
+				/* pwdBufLen exceeds allocated buffer size, truncate and null terminate */
+				pwdBuf[bufferLen-1] = 0;
+				pwdBufLen = bufferLen-1;
+			}
 
 			switch (pwdBuf[0])
 			{
