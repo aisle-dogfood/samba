@@ -212,36 +212,98 @@ static void read_log_msg(FILE *in, unsigned char **_buffer,
 {
 	unsigned char *buffer;
 	int tmp; long i;
+	unsigned short actual_buffersize;
+	unsigned short min_required_size;
+	
 	assert(fscanf(in, " size=%hu\n", buffersize)); line_num++;
-	buffer = (unsigned char *)malloc(*buffersize+4); /* +4 for NBSS Header */
-	memset(buffer, 0, *buffersize+4);
+	
+	/* Calculate minimum required size for SMB header */
+	min_required_size = smb_vwv + 2; /* smb_vwv offset + space for at least one word */
+	
+	/* Ensure buffer is large enough for SMB header structure */
+	actual_buffersize = (*buffersize < min_required_size) ? min_required_size : *buffersize;
+	
+	buffer = (unsigned char *)malloc(actual_buffersize+4); /* +4 for NBSS Header */
+	if (buffer == NULL) {
+		fprintf(stderr, "Memory allocation failed\n");
+		exit(1);
+	}
+	memset(buffer, 0, actual_buffersize+4);
+	
 	/* NetBIOS Session Service */
 	buffer[0] = 0x00;
 	buffer[1] = 0x00;
-	memcpy(buffer+2, &buffersize, 2); /* TODO: need to copy as little-endian regardless of platform */
+	/* Fix: copy the value of buffersize, not its address */
+	memcpy(buffer+2, buffersize, 2); /* TODO: need to copy as little-endian regardless of platform */
 	/* SMB Packet */
 	buffer[4] = 0xFF;
 	buffer[5] = 'S';
 	buffer[6] = 'M';
 	buffer[7] = 'B';
-	assert(fscanf(in, "  smb_com=0x%x\n", &tmp)); buffer[smb_com] = tmp; line_num++;
-	assert(fscanf(in, "  smb_rcls=%d\n", &tmp)); buffer[smb_rcls] = tmp; line_num++;
-	assert(fscanf(in, "  smb_reh=%d\n", &tmp)); buffer[smb_reh] = tmp; line_num++;
-	assert(fscanf(in, "  smb_err=%d\n", &tmp)); memcpy(buffer+smb_err, &tmp, 2); line_num++;
-	assert(fscanf(in, "  smb_flg=%d\n", &tmp)); buffer[smb_flg] = tmp; line_num++;
-	assert(fscanf(in, "  smb_flg2=%d\n", &tmp)); memcpy(buffer+smb_flg2, &tmp, 2); line_num++;
-	assert(fscanf(in, "  smb_tid=%d\n", &tmp)); memcpy(buffer+smb_tid, &tmp, 2); line_num++;
-	assert(fscanf(in, "  smb_pid=%d\n", &tmp)); memcpy(buffer+smb_pid, &tmp, 2); line_num++;
-	assert(fscanf(in, "  smb_uid=%d\n", &tmp)); memcpy(buffer+smb_uid, &tmp, 2); line_num++;
-	assert(fscanf(in, "  smb_mid=%d\n", &tmp)); memcpy(buffer+smb_mid, &tmp, 2); line_num++;
-	assert(fscanf(in, "  smt_wct=%d\n", &tmp)); buffer[smb_wct] = tmp; line_num++;
-	for(i = 0; i < buffer[smb_wct]; i++) {
+	
+	/* Bounds-checked buffer access for SMB header fields */
+	assert(fscanf(in, "  smb_com=0x%x\n", &tmp)); 
+	if (smb_com < actual_buffersize+4) buffer[smb_com] = tmp; 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_rcls=%d\n", &tmp)); 
+	if (smb_rcls < actual_buffersize+4) buffer[smb_rcls] = tmp; 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_reh=%d\n", &tmp)); 
+	if (smb_reh < actual_buffersize+4) buffer[smb_reh] = tmp; 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_err=%d\n", &tmp)); 
+	if (smb_err + 1 < actual_buffersize+4) memcpy(buffer+smb_err, &tmp, 2); 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_flg=%d\n", &tmp)); 
+	if (smb_flg < actual_buffersize+4) buffer[smb_flg] = tmp; 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_flg2=%d\n", &tmp)); 
+	if (smb_flg2 + 1 < actual_buffersize+4) memcpy(buffer+smb_flg2, &tmp, 2); 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_tid=%d\n", &tmp)); 
+	if (smb_tid + 1 < actual_buffersize+4) memcpy(buffer+smb_tid, &tmp, 2); 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_pid=%d\n", &tmp)); 
+	if (smb_pid + 1 < actual_buffersize+4) memcpy(buffer+smb_pid, &tmp, 2); 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_uid=%d\n", &tmp)); 
+	if (smb_uid + 1 < actual_buffersize+4) memcpy(buffer+smb_uid, &tmp, 2); 
+	line_num++;
+	
+	assert(fscanf(in, "  smb_mid=%d\n", &tmp)); 
+	if (smb_mid + 1 < actual_buffersize+4) memcpy(buffer+smb_mid, &tmp, 2); 
+	line_num++;
+	
+	assert(fscanf(in, "  smt_wct=%d\n", &tmp)); 
+	if (smb_wct < actual_buffersize+4) buffer[smb_wct] = tmp; 
+	line_num++;
+	
+	/* Bounds-checked access for variable word count */
+	for(i = 0; i < buffer[smb_wct] && smb_vwv+i*2+1 < actual_buffersize+4; i++) {
 		assert(fscanf(in, "  smb_vwv[%*3d]=%*5d (0x%X)\n", &tmp)); line_num++;
 		memcpy(buffer+smb_vwv+i*2, &tmp, 2);
 	}
+	
+	/* Skip any remaining vwv entries that don't fit in buffer */
+	for(; i < buffer[smb_wct]; i++) {
+		assert(fscanf(in, "  smb_vwv[%*3d]=%*5d (0x%X)\n", &tmp)); line_num++;
+	}
 
 	*data_offset = smb_vwv+buffer[smb_wct]*2;
-	assert(fscanf(in, "  smb_bcc=%ld\n", data_length)); buffer[(*data_offset)] = *data_length; line_num++;
+	assert(fscanf(in, "  smb_bcc=%ld\n", data_length)); 
+	/* Bounds check for data_offset access */
+	if (*data_offset < actual_buffersize+4) {
+		buffer[(*data_offset)] = *data_length; 
+	}
+	line_num++;
 	(*data_offset)+=2;
 	*_buffer = buffer;
 }
