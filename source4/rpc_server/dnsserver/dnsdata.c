@@ -730,6 +730,11 @@ static struct dns_tree *dns_tree_find(struct dns_tree *tree, int ncount, char **
 
 	*match_count = -1;
 
+	/* Check for invalid ncount to prevent buffer underflow */
+	if (ncount <= 0) {
+		return NULL;
+	}
+
 	if (strcmp(tree->name, "@") == 0) {
 		start = 0;
 	} else {
