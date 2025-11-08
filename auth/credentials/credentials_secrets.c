@@ -326,8 +326,8 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 		keystr_upper = strupper_talloc(tmp_ctx, keystr);
 		status = dbwrap_fetch(db_ctx, tmp_ctx, string_tdb_data(keystr_upper),
 				      &dbuf);
-		if (NT_STATUS_IS_OK(status)) {
-			secrets_tdb_password = (char *)dbuf.dptr;
+		if (NT_STATUS_IS_OK(status) && dbuf.dsize > 0) {
+			secrets_tdb_password = talloc_strndup(tmp_ctx, (char *)dbuf.dptr, dbuf.dsize);
 		}
 
 		keystr = talloc_asprintf(tmp_ctx, "%s/%s",
@@ -336,8 +336,8 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 		keystr_upper = strupper_talloc(tmp_ctx, keystr);
 		status = dbwrap_fetch(db_ctx, tmp_ctx, string_tdb_data(keystr_upper),
 				      &dbuf);
-		if (NT_STATUS_IS_OK(status)) {
-			secrets_tdb_old_password = (char *)dbuf.dptr;
+		if (NT_STATUS_IS_OK(status) && dbuf.dsize > 0) {
+			secrets_tdb_old_password = talloc_strndup(tmp_ctx, (char *)dbuf.dptr, dbuf.dsize);
 		}
 
 		keystr = talloc_asprintf(tmp_ctx, "%s/%s",
