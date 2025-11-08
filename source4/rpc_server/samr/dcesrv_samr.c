@@ -2179,6 +2179,11 @@ static NTSTATUS dcesrv_samr_LookupNames(struct dcesrv_call_state *dce_call, TALL
 			continue;
 		}
 
+		if (sid->num_auths == 0) {
+			status = STATUS_SOME_UNMAPPED;
+			continue;
+		}
+
 		r->out.rids->ids[i] = sid->sub_auths[sid->num_auths-1];
 		r->out.types->ids[i] = rtype;
 		num_mapped++;
