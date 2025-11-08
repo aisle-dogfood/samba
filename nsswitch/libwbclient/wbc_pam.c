@@ -1492,6 +1492,7 @@ wbcErr wbcCtxCredentialSave(struct wbcContext *ctx,
 {
 	struct winbindd_request request;
 	struct winbindd_response response;
+	wbcErr result;
 
 	ZERO_STRUCT(request);
 	ZERO_STRUCT(response);
@@ -1502,7 +1503,12 @@ wbcErr wbcCtxCredentialSave(struct wbcContext *ctx,
 		sizeof(request.data.ccache_save.pass)-1);
 	request.data.ccache_save.uid = getuid();
 
-	return wbcRequestResponse(ctx, WINBINDD_CCACHE_SAVE, &request, &response);
+	result = wbcRequestResponse(ctx, WINBINDD_CCACHE_SAVE, &request, &response);
+
+	/* Securely clear the password from memory to prevent heap inspection */
+	BURN_PTR_SIZE(request.data.ccache_save.pass, sizeof(request.data.ccache_save.pass));
+
+	return result;
 }
 
 _PUBLIC_
