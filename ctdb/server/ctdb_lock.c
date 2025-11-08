@@ -571,11 +571,27 @@ static void ctdb_lock_timeout_handler(struct tevent_context *ev,
 
 lock_debug:
 
+	/* Safely get CTDB_BASE with validation to prevent environment variable injection */
+	const char *ctdb_base = getenv("CTDB_BASE");
+	if (ctdb_base != NULL) {
+		/* Validate CTDB_BASE to prevent path injection attacks */
+		if (strlen(ctdb_base) == 0 ||
+		    strstr(ctdb_base, "..") != NULL ||
+		    strstr(ctdb_base, "//") != NULL ||
+		    ctdb_base[0] != '/' ||
+		    strpbrk(ctdb_base, ";&|`$(){}[]<>*?'\"\\") != NULL) {
+			DBG_WARNING("Invalid CTDB_BASE environment variable, using default\n");
+			ctdb_base = CTDB_ETCDIR;
+		}
+	} else {
+		ctdb_base = CTDB_ETCDIR;
+	}
+
 	ok = ctdb_set_helper("lock debugging helper",
 			     debug_locks,
 			     sizeof(debug_locks),
 			     "CTDB_DEBUG_LOCKS",
-			     getenv("CTDB_BASE"),
+			     ctdb_base,
 			     "debug_locks.sh");
 	if (!ok) {
 		DBG_WARNING("Unable to setup lock debugging\n");
