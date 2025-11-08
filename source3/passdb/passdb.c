@@ -45,9 +45,7 @@ static int samu_destroy(struct samu *user)
 {
 	data_blob_clear_free( &user->lm_pw );
 	data_blob_clear_free( &user->nt_pw );
-
-	if ( user->plaintext_pw )
-		BURN_STR(user->plaintext_pw);
+	data_blob_clear_free( &user->plaintext_pw );
 
 	return 0;
 }
@@ -102,7 +100,7 @@ struct samu *samu_new( TALLOC_CTX *ctx )
 	user->comment = "";
 	user->munged_dial = "";
 
-	user->plaintext_pw = NULL;
+	user->plaintext_pw = data_blob_null;
 
 	/* Unless we know otherwise have a Account Control Bit
 	   value of 'normal user'.  This helps User Manager, which
