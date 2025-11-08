@@ -421,7 +421,7 @@ static NTSTATUS netlogon_creds_des_decrypt_LMKey(struct netlogon_creds_Credentia
 }
 
 /*
-  DES encrypt a 16 byte password buffer using the session key
+  Encrypt a 16 byte password buffer using the session key (prefer AES over DES)
 */
 NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds,
 				    struct samr_Password *pass)
@@ -429,6 +429,17 @@ NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds
 	struct samr_Password tmp;
 	int rc;
 
+	/* Use AES encryption when supported for better security */
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		tmp = *pass;
+		NTSTATUS status = netlogon_creds_aes_encrypt(creds, tmp.hash, sizeof(tmp.hash));
+		if (NT_STATUS_IS_OK(status)) {
+			*pass = tmp;
+		}
+		return status;
+	}
+
+	/* Fall back to DES for compatibility with older systems */
 	rc = des_crypt112_16(tmp.hash, pass->hash, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
 	if (rc < 0) {
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
@@ -439,7 +450,7 @@ NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds
 }
 
 /*
-  DES decrypt a 16 byte password buffer using the session key
+  Decrypt a 16 byte password buffer using the session key (prefer AES over DES)
 */
 NTSTATUS netlogon_creds_des_decrypt(struct netlogon_creds_CredentialState *creds,
 				    struct samr_Password *pass)
@@ -447,6 +458,17 @@ NTSTATUS netlogon_creds_des_decrypt(struct netlogon_creds_CredentialState *creds
 	struct samr_Password tmp;
 	int rc;
 
+	/* Use AES decryption when supported for better security */
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		tmp = *pass;
+		NTSTATUS status = netlogon_creds_aes_decrypt(creds, tmp.hash, sizeof(tmp.hash));
+		if (NT_STATUS_IS_OK(status)) {
+			*pass = tmp;
+		}
+		return status;
+	}
+
+	/* Fall back to DES for compatibility with older systems */
 	rc = des_crypt112_16(tmp.hash, pass->hash, creds->session_key, SAMBA_GNUTLS_DECRYPT);
 	if (rc < 0) {
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
@@ -1461,10 +1483,17 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * Use AES encryption when supported, fall back to DES for compatibility
 	 */
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds, pass->hash, sizeof(pass->hash));
+		} else {
+			return netlogon_creds_aes_decrypt(creds, pass->hash, sizeof(pass->hash));
+		}
+	}
 
+	/* Fall back to DES for older systems that don't support AES */
 	if (do_encrypt) {
 		return netlogon_creds_des_encrypt(creds, pass);
 	}
