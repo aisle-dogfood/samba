@@ -1426,6 +1426,13 @@ static void manage_squid_basic_request(enum stdio_helper_mode stdio_helper_mode,
 	}
 	*pass='\0';
 	pass++;
+	
+	/* Ensure pass pointer doesn't exceed buffer boundaries */
+	if (pass >= buf + length) {
+		DEBUG(2, ("Password field extends beyond buffer. Denying access\n"));
+		printf("ERR\n");
+		return;
+	}
 
 	if (state->helper_mode == SQUID_2_5_BASIC) {
 		char *end = rfc1738_unescape(user);
