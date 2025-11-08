@@ -2268,10 +2268,20 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 		DEBUG(0, ("FIXME: Could not convert password for trusted domain %s"
 			  " to UTF8. This may be a password set from Windows.\n",
 			  domain));
+		/* Clear any sensitive data that might have been partially processed */
+		if (password_talloc != NULL) {
+			memset(password_talloc, 0, password_len);
+		}
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
 	*pwd = SMB_STRNDUP(password_talloc, password_len);
+	
+	/* Clear sensitive password data from memory before freeing */
+	if (password_talloc != NULL) {
+		memset(password_talloc, 0, password_len);
+	}
+	
 	if (pass_last_set_time) {
 		*pass_last_set_time = nt_time_to_unix(auth_array->array[i].LastUpdateTime);
 	}
