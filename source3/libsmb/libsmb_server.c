@@ -363,6 +363,7 @@ SMBC_server_internal(TALLOC_CTX *ctx,
         int is_ipc = (share != NULL && strcmp(share, "IPC$") == 0);
 	uint32_t fs_attrs = 0;
 	const char *username_used = NULL;
+	char *password_used_copy = NULL;
 	const char *password_used = NULL;
  	NTSTATUS status;
 	char *newserver, *newshare;
@@ -611,7 +612,18 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	}
 
 	username_used = *pp_username;
-	password_used = *pp_password;
+	/* Create a local copy of the password for secure handling */
+	if (*pp_password != NULL) {
+		password_used_copy = talloc_strdup(ctx, *pp_password);
+		if (password_used_copy == NULL) {
+			cli_shutdown(c);
+			errno = ENOMEM;
+			return NULL;
+		}
+		password_used = password_used_copy;
+	} else {
+		password_used = NULL;
+	}
 
 	creds = SMBC_auth_credentials(c,
 				      context,
@@ -621,6 +633,11 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	if (creds == NULL) {
 		cli_shutdown(c);
 		errno = ENOMEM;
+		/* Clear password copy before returning */
+		if (password_used_copy != NULL) {
+			memset(password_used_copy, 0, strlen(password_used_copy));
+			TALLOC_FREE(password_used_copy);
+		}
 		return NULL;
 	}
 
@@ -628,6 +645,11 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	if (!NT_STATUS_IS_OK(status)) {
 
                 /* Failed.  Try an anonymous login, if allowed by flags. */
+		/* Clear the password copy before switching to anonymous */
+		if (password_used_copy != NULL) {
+			memset(password_used_copy, 0, strlen(password_used_copy));
+			TALLOC_FREE(password_used_copy);
+		}
 		username_used = "";
 		password_used = "";
 
@@ -652,6 +674,11 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 				&newserver, &newshare,
 				creds)) {
 		cli_shutdown(c);
+		/* Clear password copy before recursive call */
+		if (password_used_copy != NULL) {
+			memset(password_used_copy, 0, strlen(password_used_copy));
+			TALLOC_FREE(password_used_copy);
+		}
 		srv = SMBC_server_internal(ctx, context, connect_if_not_found,
 				newserver, &ats, newshare, pp_workgroup,
 				pp_username, pp_password, in_cache);
@@ -666,6 +693,11 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	if (!NT_STATUS_IS_OK(status)) {
 		cli_shutdown(c);
 		errno = map_errno_from_nt_status(status);
+		/* Clear password copy before returning */
+		if (password_used_copy != NULL) {
+			memset(password_used_copy, 0, strlen(password_used_copy));
+			TALLOC_FREE(password_used_copy);
+		}
 		return NULL;
 	}
 
@@ -716,6 +748,11 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	if (!srv) {
 		cli_shutdown(c);
 		errno = ENOMEM;
+		/* Clear password copy before returning */
+		if (password_used_copy != NULL) {
+			memset(password_used_copy, 0, strlen(password_used_copy));
+			TALLOC_FREE(password_used_copy);
+		}
 		return NULL;
 	}
 
@@ -727,6 +764,12 @@ SMBC_server_internal(TALLOC_CTX *ctx,
         srv->no_nt_session = False;
 
 done:
+	/* Clear the password copy before function exit */
+	if (password_used_copy != NULL) {
+		memset(password_used_copy, 0, strlen(password_used_copy));
+		TALLOC_FREE(password_used_copy);
+	}
+
 	if (!pp_workgroup || !*pp_workgroup || !**pp_workgroup) {
 		workgroup = talloc_strdup(ctx, smbc_getWorkgroup(context));
 	} else {
