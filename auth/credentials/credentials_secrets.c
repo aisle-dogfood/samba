@@ -109,12 +109,18 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 	whenChanged = ldb_msg_find_ldb_val(msg, "whenChanged");
 	if (!whenChanged || ldb_val_to_time(whenChanged, &lct) != LDB_SUCCESS) {
 		/* This attribute is mandatory */
+		if (password != NULL) {
+			BURN_PTR_SIZE(discard_const(password), strlen(password));
+		}
 		talloc_free(mem_ctx);
 		return NT_STATUS_NOT_FOUND;
 	}
 
 	/* Don't set secrets.ldb info if the secrets.tdb entry was more recent */
 	if (lct < secrets_tdb_last_change_time) {
+		if (password != NULL) {
+			BURN_PTR_SIZE(discard_const(password), strlen(password));
+		}
 		talloc_free(mem_ctx);
 		return NT_STATUS_NOT_FOUND;
 	}
@@ -123,6 +129,9 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 	    (secrets_tdb_password != NULL) &&
 	    (password != NULL) &&
 	    (strcmp(password, secrets_tdb_password) != 0)) {
+		if (password != NULL) {
+			BURN_PTR_SIZE(discard_const(password), strlen(password));
+		}
 		talloc_free(mem_ctx);
 		return NT_STATUS_NOT_FOUND;
 	}
@@ -142,6 +151,9 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 								"'servicePrincipalName' or "
 								"'ldapBindDn' in secrets record: %s",
 								ldb_dn_get_linearized(msg->dn));
+				if (password != NULL) {
+					BURN_PTR_SIZE(discard_const(password), strlen(password));
+				}
 				talloc_free(mem_ctx);
 				return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 			} else {
@@ -199,6 +211,12 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 		cli_credentials_set_keytab_name(cred, lp_ctx, keytab, CRED_SPECIFIED);
 		talloc_free(keytab);
 	}
+
+	/* Securely clear password from memory to prevent heap inspection attacks */
+	if (password != NULL) {
+		BURN_PTR_SIZE(discard_const(password), strlen(password));
+	}
+
 	talloc_free(mem_ctx);
 
 	return NT_STATUS_OK;
