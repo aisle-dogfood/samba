@@ -89,9 +89,9 @@ bool E_md4hash(const char *passwd, uint8_t p16[16])
 
 	ret = push_ucs2_talloc(NULL, &wpwd, passwd, &len);
 	if (!ret || len < 2) {
-		/* We don't want to return fixed data, as most callers
-		 * don't check */
-		mdfour(p16, (const uint8_t *)passwd, strlen(passwd));
+		/* UCS2 conversion failed - zero out the output buffer
+		 * and return failure to prevent use of weak hash data */
+		memset(p16, 0, 16);
 		return false;
 	}
 
