@@ -96,11 +96,11 @@ main(int argc,			/* I - Number of command-line arguments */
 	char            uri[1024],	/* URI */
 	               *sep,	/* Pointer to separator */
 	               *tmp, *tmp2;	/* Temp pointers to do escaping */
-	const char     *password = NULL;	/* Password */
-	const char     *username = NULL;	/* Username */
+	char           *password = NULL;	/* Password */
+	char           *username = NULL;	/* Username */
 	char           *server,	/* Server name */
 	               *printer;/* Printer name */
-	const char     *workgroup;	/* Workgroup */
+	char           *workgroup;	/* Workgroup */
 	FILE           *fp;	/* File to print */
 	int             status = 1;	/* Status of LPD job */
 	NTSTATUS nt_status = NT_STATUS_UNSUCCESSFUL;
@@ -449,6 +449,23 @@ main(int argc,			/* I - Number of command-line arguments */
          */
 
 done:
+	/* Free dynamically allocated strings */
+	if (password != NULL && password != getenv("AUTH_PASSWORD")) {
+		free(password);
+	}
+	if (username != NULL && username != getenv("AUTH_USERNAME")) {
+		free(username);
+	}
+	if (server != NULL) {
+		free(server);
+	}
+	if (printer != NULL) {
+		free(printer);
+	}
+	if (workgroup != NULL) {
+		free(workgroup);
+	}
+	
 	gfree_all();
 	TALLOC_FREE(frame);
 	return (status);
