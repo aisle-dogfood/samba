@@ -380,6 +380,11 @@ static bool guest_user_info( struct samu *user )
 	NTSTATUS result;
 	const char *guestname = lp_guest_account();
 
+	if (guestname == NULL) {
+		DEBUG(0,("guest_user_info: lp_guest_account() returned NULL!\n"));
+		return False;
+	}
+
 	pwd = Get_Pwnam_alloc(talloc_tos(), guestname);
 	if (pwd == NULL) {
 		DEBUG(0,("guest_user_info: Unable to locate guest account [%s]!\n",
