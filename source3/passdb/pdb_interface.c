@@ -991,9 +991,9 @@ static NTSTATUS pdb_default_add_groupmem(struct pdb_methods *methods,
 	struct samu *account = NULL;
 	GROUP_MAP *map;
 	struct group *grp;
-	struct passwd *pwd;
-	const char *group_name;
-	uid_t uid;
+	struct passwd *pwd = NULL;
+	const char *group_name = NULL;
+	uid_t uid = (uid_t)-1;
 
 	map = talloc_zero(mem_ctx, GROUP_MAP);
 	if (!map) {
