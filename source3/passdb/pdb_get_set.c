@@ -839,7 +839,10 @@ bool pdb_set_nt_passwd(struct samu *sampass, const uint8_t pwd[NT_HASH_LEN], enu
 
        if (pwd) {
                sampass->nt_pw =
-		       data_blob_talloc(sampass, pwd, NT_HASH_LEN);
+		       data_blob_talloc_zero(sampass, NT_HASH_LEN);
+               if (sampass->nt_pw.data != NULL) {
+                       memcpy(sampass->nt_pw.data, pwd, NT_HASH_LEN);
+               }
        } else {
                sampass->nt_pw = data_blob_null;
        }
@@ -858,7 +861,10 @@ bool pdb_set_lanman_passwd(struct samu *sampass, const uint8_t pwd[LM_HASH_LEN],
 	/* on keep the password if we are allowing LANMAN authentication */
 
 	if (pwd && (flag != PDB_CHANGED || lp_lanman_auth())) {
-		sampass->lm_pw = data_blob_talloc(sampass, pwd, LM_HASH_LEN);
+		sampass->lm_pw = data_blob_talloc_zero(sampass, LM_HASH_LEN);
+		if (sampass->lm_pw.data != NULL) {
+			memcpy(sampass->lm_pw.data, pwd, LM_HASH_LEN);
+		}
 	} else {
 		sampass->lm_pw = data_blob_null;
 	}
@@ -878,10 +884,12 @@ bool pdb_set_pw_history(struct samu *sampass, const uint8_t *pwd, uint32_t histo
 	DATA_BLOB new_nt_pw_his = {};
 
 	if (historyLen && pwd){
-		new_nt_pw_his = data_blob_talloc(sampass,
-						 pwd, historyLen*PW_HISTORY_ENTRY_LEN);
+		new_nt_pw_his = data_blob_talloc_zero(sampass, historyLen*PW_HISTORY_ENTRY_LEN);
+		if (new_nt_pw_his.data != NULL) {
+			memcpy(new_nt_pw_his.data, pwd, historyLen*PW_HISTORY_ENTRY_LEN);
+		}
 		if (new_nt_pw_his.length == 0) {
-			DEBUG(0, ("pdb_set_pw_history: data_blob_talloc() failed!\n"));
+			DEBUG(0, ("pdb_set_pw_history: data_blob_talloc_zero() failed!\n"));
 			return False;
 		}
 	}
