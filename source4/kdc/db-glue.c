@@ -2595,6 +2595,20 @@ static krb5_error_code samba_kdc_trust_message2entry(krb5_context context,
 		goto out;
 	}
 
+	/* Validate password_val data to prevent heap inspection vulnerabilities */
+	if (password_val->data == NULL) {
+		krb5_clear_error_message(context);
+		ret = SDB_ERR_NOENTRY;
+		goto out;
+	}
+
+	/* Validate password_val length to prevent reading beyond allocated memory */
+	if (password_val->length == 0 || password_val->length > 1024 * 1024) {
+		krb5_clear_error_message(context);
+		ret = SDB_ERR_NOENTRY;
+		goto out;
+	}
+
 	ndr_err = ndr_pull_struct_blob(password_val, tmp_ctx, &password_blob,
 				       (ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
