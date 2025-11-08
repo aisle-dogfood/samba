@@ -577,6 +577,10 @@ static PyObject *py_creds_set_nt_hash(PyObject *self, PyObject *args)
 	}
 
 	pwd = pytalloc_get_ptr(py_cp);
+	if (pwd == NULL) {
+		/* pytalloc_get_ptr sets TypeError */
+		return NULL;
+	}
 
 	return PyBool_FromLong(cli_credentials_set_nt_hash(creds, pwd, obt));
 }
@@ -620,6 +624,10 @@ static PyObject *py_creds_set_old_nt_hash(PyObject *self, PyObject *args)
 	}
 
 	pwd = pytalloc_get_ptr(py_cp);
+	if (pwd == NULL) {
+		/* pytalloc_get_ptr sets TypeError */
+		return NULL;
+	}
 
 	return PyBool_FromLong(cli_credentials_set_old_nt_hash(creds, pwd));
 }
