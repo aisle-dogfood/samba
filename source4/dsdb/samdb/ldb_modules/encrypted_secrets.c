@@ -450,6 +450,8 @@ static struct ldb_val gnutls_encrypt_aead(int *err,
 					       "it is %zu bytes\n",
 					       key_size,
 					       key_blob.length);
+			/* Clear sensitive key material before exit */
+			ZERO_STRUCT(key_blob);
 			goto error_exit;
 		}
 		cipher_key = convert_from_data_blob(key_blob);
@@ -457,6 +459,9 @@ static struct ldb_val gnutls_encrypt_aead(int *err,
 		rc = gnutls_aead_cipher_init(&cipher_hnd,
 					     data->encryption_algorithm,
 					     &cipher_key);
+		/* Clear sensitive key material after use */
+		ZERO_STRUCT(cipher_key);
+		ZERO_STRUCT(key_blob);
 		if (rc !=0) {
 			ldb_asprintf_errstring(ldb,
 					       "gnutls_aead_cipher_init failed "
