@@ -56,7 +56,7 @@ int register_homes_share(const char *username)
 	const struct loadparm_substitution *lp_sub =
 		loadparm_s3_global_substitution();
 	int result;
-	struct passwd *pwd;
+	struct passwd *pwd = NULL;
 
 	result = lp_servicenumber(username);
 	if (result != -1) {
