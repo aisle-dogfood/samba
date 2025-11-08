@@ -1623,7 +1623,7 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 		(struct smbpasswd_privates*)methods->private_data;
 
 	struct smbpasswd_search_state *search_state;
-	struct smb_passwd *pwd;
+	struct smb_passwd *pwd = NULL;
 	FILE *fp;
 
 	search_state = talloc_zero(search, struct smbpasswd_search_state);
