@@ -26,6 +26,12 @@
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
 
+/*
+ * Global flag to control whether weak DES encryption is allowed.
+ * This can be set via configuration to enhance security.
+ */
+static bool allow_weak_des_encryption = true;
+
 static void str_to_key(const uint8_t *str,uint8_t *key)
 {
 	int i;
@@ -47,6 +53,23 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       const uint8_t key_in[7],
 		       enum samba_gnutls_direction encrypt)
 {
+	/*
+	 * WARNING: This function uses DES encryption which is cryptographically weak.
+	 * DES should be avoided in favor of stronger encryption algorithms like AES.
+	 * This function is maintained for legacy SMB protocol compatibility only.
+	 */
+	
+	/* Check if weak DES encryption is disabled */
+	if (!allow_weak_des_encryption) {
+		DBG_ERR("DES encryption is disabled due to security policy. "
+			"DES is cryptographically weak and should not be used.\n");
+		return GNUTLS_E_UNWANTED_ALGORITHM;
+	}
+	
+	/* Log warning about weak encryption usage */
+	DBG_WARNING("Using weak DES encryption. Consider upgrading to stronger "
+		    "encryption algorithms like AES for better security.\n");
+
 	/*
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
@@ -102,6 +125,16 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 	const uint8_t sp8[8] = {0x4b, 0x47, 0x53, 0x21, 0x40, 0x23, 0x24, 0x25};
 	int ret;
 
+	/*
+	 * SECURITY WARNING: This function uses weak DES encryption.
+	 * Consider using stronger encryption algorithms for better security.
+	 */
+	
+	if (!allow_weak_des_encryption) {
+		DBG_ERR("E_P16: DES encryption is disabled due to security policy.\n");
+		return GNUTLS_E_UNWANTED_ALGORITHM;
+	}
+
 	ret = des_crypt56_gnutls(p16, sp8, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
 		return ret;
@@ -113,6 +146,23 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 {
 	int ret;
+
+	/*
+	 * SECURITY WARNING: This function uses weak DES encryption for SMB authentication.
+	 * DES is cryptographically weak and vulnerable to attacks. This function should
+	 * only be used for legacy compatibility with older SMB clients/servers.
+	 * Consider upgrading to stronger authentication methods when possible.
+	 */
+	
+	/* Additional security check for E_P24 specifically */
+	if (!allow_weak_des_encryption) {
+		DBG_ERR("E_P24: DES-based SMB authentication is disabled due to security policy. "
+			"DES encryption is cryptographically weak and should be avoided.\n");
+		return GNUTLS_E_UNWANTED_ALGORITHM;
+	}
+
+	DBG_WARNING("E_P24: Using weak DES encryption for SMB authentication. "
+		    "This is cryptographically weak and should be replaced with stronger methods.\n");
 
 	ret = des_crypt56_gnutls(p24, c8, p21, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
@@ -130,6 +180,16 @@ int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 int E_old_pw_hash( uint8_t *p14, const uint8_t *in, uint8_t *out)
 {
 	int ret;
+
+	/*
+	 * SECURITY WARNING: This function uses weak DES encryption for password hashing.
+	 * DES is cryptographically weak and should be avoided.
+	 */
+	
+	if (!allow_weak_des_encryption) {
+		DBG_ERR("E_old_pw_hash: DES encryption is disabled due to security policy.\n");
+		return GNUTLS_E_UNWANTED_ALGORITHM;
+	}
 
         ret = des_crypt56_gnutls(out, in, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
@@ -210,4 +270,17 @@ int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 		return ret;
 	}
 	return des_crypt56_gnutls(out+8, in+8, s+7, encrypt);
+}
+
+/*
+ * Function to set the policy for allowing weak DES encryption.
+ * This can be called from configuration parsing code to disable
+ * weak encryption based on security policies.
+ */
+void samba_des_set_weak_encryption_allowed(bool allowed)
+{
+	allow_weak_des_encryption = allowed;
+	if (!allowed) {
+		DBG_NOTICE("Weak DES encryption has been disabled for security.\n");
+	}
 }
