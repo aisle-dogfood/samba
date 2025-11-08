@@ -48,6 +48,19 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       enum samba_gnutls_direction encrypt)
 {
 	/*
+	 * SECURITY WARNING: DES encryption is cryptographically weak and should not be used.
+	 * DES has a 56-bit key which is easily breakable with modern computing power.
+	 * This function is only provided for legacy compatibility with older SMB/CIFS protocols.
+	 */
+	DBG_ERR("SECURITY VULNERABILITY: Attempted use of weak DES encryption. "
+		"DES is cryptographically insecure and should not be used. "
+		"This may indicate a downgrade attack or use of legacy protocols. "
+		"Consider upgrading to stronger authentication methods.\n");
+	
+	/* Return error to prevent use of weak DES encryption */
+	return GNUTLS_E_UNWANTED_ALGORITHM;
+
+	/*
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
 	 * This allows us to use GNUTLS_CIPHER_DES_CBC from GnuTLS and not
