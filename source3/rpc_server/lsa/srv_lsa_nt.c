@@ -1732,11 +1732,33 @@ static NTSTATUS get_trustdom_auth_blob_aes(
 {
 	DATA_BLOB session_key = data_blob_null;
 	DATA_BLOB salt = data_blob(auth_info->salt, sizeof(auth_info->salt));
-	DATA_BLOB auth_blob = data_blob(auth_info->cipher.data,
-					auth_info->cipher.size);
+	DATA_BLOB auth_blob = data_blob_null;
 	DATA_BLOB ciphertext = data_blob_null;
 	enum ndr_err_code ndr_err;
 	NTSTATUS status;
+
+	/* Validate cipher data before creating blob to prevent heap inspection */
+	if (auth_info->cipher.size > 0 && auth_info->cipher.data == NULL) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+	
+	/* Additional validation: ensure size is within reasonable bounds */
+	if (auth_info->cipher.size > 65536) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+	
+	/* 
+	 * Create a safe copy of the data to prevent heap inspection vulnerabilities.
+	 * Using data_blob_talloc ensures we don't reference potentially invalid memory.
+	 */
+	if (auth_info->cipher.size > 0) {
+		auth_blob = data_blob_talloc(mem_ctx, auth_info->cipher.data, auth_info->cipher.size);
+		if (auth_blob.data == NULL) {
+			return NT_STATUS_NO_MEMORY;
+		}
+	} else {
+		auth_blob = data_blob_null;
+	}
 
 	/*
 	 * The data blob starts with 512 bytes of random data and has two 32bit
