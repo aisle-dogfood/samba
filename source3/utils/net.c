@@ -1443,11 +1443,10 @@ static struct functable net_func[] = {
 
  	argv_new = (const char **)poptGetArgs(pc);
 
-	argc_new = argc;
-	for (i=0; i<argc; i++) {
-		if (argv_new[i] == NULL) {
-			argc_new = i;
-			break;
+	argc_new = 0;
+	if (argv_new != NULL) {
+		while (argv_new[argc_new] != NULL) {
+			argc_new++;
 		}
 	}
 
