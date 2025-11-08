@@ -267,6 +267,12 @@ static NTSTATUS msrpc_name_to_sid(struct winbindd_domain *domain,
 	if (!NT_STATUS_IS_OK(result))
 		return result;
 
+	/* Validate that we received the expected results */
+	if (domains == NULL || sids == NULL || types == NULL) {
+		DEBUG(2,("msrpc_name_to_sid: lookup returned NULL arrays\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
 	/* Return rid and type if lookup successful */
 
 	if (pdom_name != NULL) {
@@ -322,6 +328,11 @@ static NTSTATUS msrpc_sid_to_name(struct winbindd_domain *domain,
 		return result;
 	}
 
+	/* Validate that we received the expected results */
+	if (domains == NULL || names == NULL || types == NULL) {
+		DEBUG(2,("msrpc_sid_to_name: lookup returned NULL arrays\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
 
 	*type = (enum lsa_SidType)types[0];
 	*domain_name = domains[0];
