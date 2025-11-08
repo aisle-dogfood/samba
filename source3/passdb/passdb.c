@@ -2518,10 +2518,14 @@ bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
 	ok = get_trust_pw_hash2(domain, account_name, channel,
 				&current_nt_hash, NULL, NULL);
 	if (!ok) {
+		/* Clear sensitive hash data from memory */
+		ZERO_STRUCT(current_nt_hash);
 		return false;
 	}
 
 	memcpy(ret_pwd, current_nt_hash.hash, sizeof(current_nt_hash.hash));
+	/* Clear sensitive hash data from memory */
+	ZERO_STRUCT(current_nt_hash);
 	return true;
 }
 
@@ -2728,6 +2732,8 @@ NTSTATUS pdb_get_trust_credentials(const char *netbios_domain,
 	TALLOC_FREE(creds);
 	SAFE_FREE(cur_pw);
 	SAFE_FREE(prev_pw);
+	/* Clear sensitive hash data from memory */
+	ZERO_STRUCT(cur_nt_hash);
 	TALLOC_FREE(frame);
 	return status;
 }
