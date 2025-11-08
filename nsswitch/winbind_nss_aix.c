@@ -155,6 +155,12 @@ static void replace_commas(char *s)
 static unsigned decode_id(const char *name)
 {
 	unsigned id;
+	
+	/* Validate input to prevent heap inspection vulnerability */
+	if (!name || strlen(name) < 2 || name[0] != WB_AIX_ENCODED) {
+		return 0;
+	}
+	
 	sscanf(name+1, "%u", &id);
 	return id;
 }
@@ -166,6 +172,11 @@ static char *decode_user(const char *name)
 	struct passwd *pwd;
 	unsigned id;
 	char *ret;
+
+	/* Validate input to prevent heap inspection vulnerability */
+	if (!name || strlen(name) < 2 || name[0] != WB_AIX_ENCODED) {
+		return NULL;
+	}
 
 	sscanf(name+1, "%u", &id);
 	pwd = wb_aix_getpwuid(id);
