@@ -378,6 +378,7 @@ static NTSTATUS session_setup_nt1(struct composite_context *c,
 	} else if (session->options.plaintext_auth) {
 		const char *password = cli_credentials_get_password(io->in.credentials);
 		state->setup.nt1.in.password1 = data_blob_talloc(state, password, strlen(password));
+		talloc_keep_secret(state->setup.nt1.in.password1.data);
 		state->setup.nt1.in.password2 = data_blob(NULL, 0);
 	} else {
 		/* could match windows client and return 'cannot logon from this workstation', but it just confuses everybody */
@@ -479,6 +480,7 @@ static NTSTATUS session_setup_old(struct composite_context *c,
 		}
 	} else if (session->options.plaintext_auth) {
 		state->setup.old.in.password = data_blob_talloc(state, password, strlen(password));
+		talloc_keep_secret(state->setup.old.in.password.data);
 	} else {
 		/* could match windows client and return 'cannot logon from this workstation', but it just confuses everybody */
 		return NT_STATUS_INVALID_PARAMETER;

@@ -136,8 +136,10 @@ NTSTATUS smbcli_tconX(struct smbcli_state *cli, const char *sharename,
 			return NT_STATUS_INVALID_PARAMETER;
 		}
 		SMBencrypt(password, cli->transport->negotiate.secblob.data, tcon.tconx.in.password.data);
+		talloc_keep_secret(tcon.tconx.in.password.data);
 	} else {
 		tcon.tconx.in.password = data_blob_talloc(mem_ctx, password, strlen(password)+1);
+		talloc_keep_secret(tcon.tconx.in.password.data);
 	}
 	tcon.tconx.in.path = sharename;
 	tcon.tconx.in.device = devtype;
