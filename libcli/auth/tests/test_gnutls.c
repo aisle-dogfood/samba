@@ -440,6 +440,35 @@ static void torture_gnutls_sam_rid_crypt(void **state)
 	assert_memory_equal(decrypt, clear, 16);
 }
 
+static void torture_gnutls_sam_rid_crypt_secure(void **state)
+{
+	static const uint8_t clear[16] = {
+		0x02, 0xFA, 0x3B, 0xEE, 0xE8, 0xBA, 0x06, 0x01,
+		0x3F, 0x49, 0x5B, 0x20, 0xA7, 0x84, 0xC2, 0x34
+	};
+
+	uint8_t crypt[16];
+	uint8_t decrypt[16];
+	int rid = 500;
+	int rc;
+
+	/* Test AES encryption/decryption */
+	rc = sam_rid_crypt_secure(rid, clear, crypt, SAMBA_GNUTLS_ENCRYPT);
+	assert_int_equal(rc, 0);
+
+	rc = sam_rid_crypt_secure(rid, crypt, decrypt, SAMBA_GNUTLS_DECRYPT);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(decrypt, clear, 16);
+
+	/* Verify that AES produces different output than DES */
+	uint8_t des_crypt[16];
+	rc = sam_rid_crypt(rid, clear, des_crypt, SAMBA_GNUTLS_ENCRYPT);
+	assert_int_equal(rc, 0);
+	
+	/* AES and DES should produce different ciphertext */
+	assert_memory_not_equal(crypt, des_crypt, 16);
+}
+
 static void torture_gnutls_SMBsesskeygen_lm_sess_key(void **state)
 {
 	static const uint8_t lm_hash[16] = {
@@ -509,6 +538,7 @@ int main(int argc, char *argv[])
 		cmocka_unit_test(torture_gnutls_des_crypt112),
 		cmocka_unit_test(torture_gnutls_des_crypt112_16),
 		cmocka_unit_test(torture_gnutls_sam_rid_crypt),
+		cmocka_unit_test(torture_gnutls_sam_rid_crypt_secure),
 		cmocka_unit_test(torture_gnutls_SMBsesskeygen_lm_sess_key),
 		cmocka_unit_test(torture_gnutls_sess_crypt_blob),
 	};
