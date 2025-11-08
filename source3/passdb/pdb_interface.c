@@ -2422,6 +2422,12 @@ static NTSTATUS pdb_default_set_trusted_domain(struct pdb_methods *methods,
 	}
 
 	ok = pdb_set_trusteddom_pw(domain, pwd, &td->security_identifier);
+	
+	/* Clear the password from memory for security */
+	if (pwd) {
+		memset(pwd, 0, strlen(pwd));
+	}
+	
 	if (!ok) {
 		return NT_STATUS_UNSUCCESSFUL;
 	}
