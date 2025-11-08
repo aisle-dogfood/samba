@@ -677,7 +677,7 @@ int pdb_nds_get_password(
 	rc = nmasldap_get_password(ld, object_dn, pwd_len, (unsigned char *)pwd);
 	if (rc == LDAP_SUCCESS) {
 #ifdef DEBUG_PASSWORD
-		DEBUG(100,("nmasldap_get_password returned %s for %s\n", pwd, object_dn));
+		DEBUG(100,("nmasldap_get_password succeeded for %s\n", object_dn));
 #endif    
 		DEBUG(5, ("NDS Universal Password retrieved for %s\n", object_dn));
 	} else {
@@ -688,7 +688,7 @@ int pdb_nds_get_password(
 		rc = nmasldap_get_simple_pwd(ld, object_dn, *pwd_len, pwd);
 		if (rc == LDAP_SUCCESS) {
 #ifdef DEBUG_PASSWORD
-			DEBUG(100,("nmasldap_get_simple_pwd returned %s for %s\n", pwd, object_dn));
+			DEBUG(100,("nmasldap_get_simple_pwd succeeded for %s\n", object_dn));
 #endif    
 			DEBUG(5, ("NDS Simple Password retrieved for %s\n", object_dn));
 		} else {
