@@ -2170,7 +2170,7 @@ static PyObject *py_netlogon_creds_client_init(PyObject *module,
 						     "netr_Credential",
 						     initial_credential,
 						     initial_credential);
-	if (py_ncreds == NULL) {
+	if (py_initial_credential == NULL) {
 		Py_DECREF(py_ncreds);
 		TALLOC_FREE(initial_credential);
 		return NULL;
