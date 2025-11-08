@@ -328,6 +328,7 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 				      &dbuf);
 		if (NT_STATUS_IS_OK(status)) {
 			secrets_tdb_password = (char *)dbuf.dptr;
+			talloc_keep_secret(secrets_tdb_password);
 		}
 
 		keystr = talloc_asprintf(tmp_ctx, "%s/%s",
@@ -338,6 +339,7 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 				      &dbuf);
 		if (NT_STATUS_IS_OK(status)) {
 			secrets_tdb_old_password = (char *)dbuf.dptr;
+			talloc_keep_secret(secrets_tdb_old_password);
 		}
 
 		keystr = talloc_asprintf(tmp_ctx, "%s/%s",
