@@ -198,12 +198,38 @@ int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 		  enum samba_gnutls_direction encrypt)
 {
 	uint8_t s[14];
+	uint8_t rid_bytes[4];
+	gnutls_datum_t key_datum;
+	gnutls_datum_t salt_datum;
+	/* Fixed salt for deterministic key derivation */
+	static const uint8_t salt[] = {
+		0x53, 0x41, 0x4D, 0x42, 0x41, 0x5F, 0x52, 0x49,
+		0x44, 0x5F, 0x53, 0x41, 0x4C, 0x54, 0x5F, 0x56
+	}; /* "SAMBA_RID_SALT_V" in hex */
 	int ret;
 
-	s[0] = s[4] = s[8] = s[12] = (uint8_t)(rid & 0xFF);
-	s[1] = s[5] = s[9] = s[13] = (uint8_t)((rid >> 8) & 0xFF);
-	s[2] = s[6] = s[10]        = (uint8_t)((rid >> 16) & 0xFF);
-	s[3] = s[7] = s[11]        = (uint8_t)((rid >> 24) & 0xFF);
+	/* Convert RID to bytes for PBKDF2 input */
+	rid_bytes[0] = (uint8_t)(rid & 0xFF);
+	rid_bytes[1] = (uint8_t)((rid >> 8) & 0xFF);
+	rid_bytes[2] = (uint8_t)((rid >> 16) & 0xFF);
+	rid_bytes[3] = (uint8_t)((rid >> 24) & 0xFF);
+
+	/* Set up PBKDF2 parameters */
+	key_datum.data = rid_bytes;
+	key_datum.size = sizeof(rid_bytes);
+	salt_datum.data = (uint8_t *)salt;
+	salt_datum.size = sizeof(salt);
+
+	/* Derive key using PBKDF2 with SHA-256 and 4096 iterations */
+	ret = gnutls_pbkdf2(GNUTLS_MAC_SHA256,
+			    &key_datum,
+			    &salt_datum,
+			    4096,
+			    s,
+			    sizeof(s));
+	if (ret != 0) {
+		return ret;
+	}
 
 	ret = des_crypt56_gnutls(out, in, s, encrypt);
 	if (ret != 0) {
