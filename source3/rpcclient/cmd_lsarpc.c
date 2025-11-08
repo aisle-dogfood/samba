@@ -1403,8 +1403,8 @@ static void display_trust_dom_info_4(struct lsa_TrustDomainInfoPassword *p,
 	pwd 	= sess_decrypt_string(talloc_tos(), &data, &session_key);
 	pwd_old = sess_decrypt_string(talloc_tos(), &data_old, &session_key);
 
-	d_printf("Password:\t%s\n", pwd);
-	d_printf("Old Password:\t%s\n", pwd_old);
+	d_printf("Password:\t[REDACTED]\n");
+	d_printf("Old Password:\t[REDACTED]\n");
 
 	talloc_free(pwd);
 	talloc_free(pwd_old);

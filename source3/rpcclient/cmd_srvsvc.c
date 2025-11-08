@@ -234,7 +234,7 @@ static void display_share_info_2(struct srvsvc_NetShareInfo2 *r)
 	printf("netname: %s\n", r->name);
 	printf("\tremark:\t%s\n", r->comment);
 	printf("\tpath:\t%s\n", r->path);
-	printf("\tpassword:\t%s\n", r->password);
+	printf("\tpassword:\t[REDACTED]\n");
 }
 
 static void display_share_info_502(struct srvsvc_NetShareInfo502 *r)
@@ -242,7 +242,7 @@ static void display_share_info_502(struct srvsvc_NetShareInfo502 *r)
 	printf("netname: %s\n", r->name);
 	printf("\tremark:\t%s\n", r->comment);
 	printf("\tpath:\t%s\n", r->path);
-	printf("\tpassword:\t%s\n", r->password);
+	printf("\tpassword:\t[REDACTED]\n");
 
 	printf("\ttype:\t0x%x\n", r->type);
 	printf("\tperms:\t%d\n", r->permissions);
