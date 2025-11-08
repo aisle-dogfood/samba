@@ -1613,6 +1613,7 @@ NTSTATUS encode_rc4_passwd_buffer(const char *passwd,
 	 */
 	memcpy(&out_crypt_pwd->data[516], confounder.data, confounder.length);
 	ZERO_ARRAY(_confounder);
+	data_blob_clear(&pw_data);
 
 	return NT_STATUS_OK;
 }
