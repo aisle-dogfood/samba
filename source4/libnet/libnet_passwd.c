@@ -443,6 +443,13 @@ static NTSTATUS libnet_ChangePassword_samr(struct libnet_context *ctx, TALLOC_CT
 		goto disconnect;
 	}
 
+	/*
+	 * Don't use RC4 based SAMR if weak crypto is not allowed.
+	 */
+	if (lpcfg_weak_crypto(ctx->lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		goto disconnect;
+	}
+
 	status = libnet_ChangePassword_samr_rc4(
 		mem_ctx,
 		c.out.dcerpc_pipe->binding_handle,
