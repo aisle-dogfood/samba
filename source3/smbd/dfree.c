@@ -137,14 +137,17 @@ static uint64_t sys_disk_free(connection_struct *conn,
 	if (disk_quotas(conn, fname, &bsize_q, &dfree_q, &dsize_q)) {
 		uint64_t min_bsize = MIN(*bsize, bsize_q);
 
-		(*dfree) = (*dfree) * (*bsize) / min_bsize;
-		(*dsize) = (*dsize) * (*bsize) / min_bsize;
-		dfree_q = dfree_q * bsize_q / min_bsize;
-		dsize_q = dsize_q * bsize_q / min_bsize;
+		/* Prevent divide by zero - if min_bsize is 0, skip quota calculations */
+		if (min_bsize > 0) {
+			(*dfree) = (*dfree) * (*bsize) / min_bsize;
+			(*dsize) = (*dsize) * (*bsize) / min_bsize;
+			dfree_q = dfree_q * bsize_q / min_bsize;
+			dsize_q = dsize_q * bsize_q / min_bsize;
 
-		(*bsize) = min_bsize;
-		(*dfree) = MIN(*dfree,dfree_q);
-		(*dsize) = MIN(*dsize,dsize_q);
+			(*bsize) = min_bsize;
+			(*dfree) = MIN(*dfree,dfree_q);
+			(*dsize) = MIN(*dsize,dsize_q);
+		}
 	}
 
 	/* FIXME : Any reason for this assumption ? */
