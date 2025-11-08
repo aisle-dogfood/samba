@@ -431,27 +431,14 @@ static NTSTATUS libnet_ChangePassword_samr(struct libnet_context *ctx, TALLOC_CT
 		   NT_STATUS_EQUAL(status, NT_STATUS_NOT_SUPPORTED) ||
 		   NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED)) {
 		/*
-		 * Don't fallback to RC4 based SAMR if weak crypto is not
-		 * allowed.
+		 * Don't fallback to RC4 based SAMR due to inadequate encryption strength.
+		 * RC4 is considered cryptographically weak and should not be used.
 		 */
-		if (lpcfg_weak_crypto(ctx->lp_ctx) ==
-		    SAMBA_WEAK_CRYPTO_DISALLOWED) {
-			goto disconnect;
-		}
+		r->samr.out.error_string = talloc_asprintf(mem_ctx,
+					"AES-based password change not supported and RC4 fallback disabled due to weak encryption");
+		goto disconnect;
 	} else {
 		/* libnet_ChangePassword_samr_aes is implemented and failed */
-		goto disconnect;
-	}
-
-	status = libnet_ChangePassword_samr_rc4(
-		mem_ctx,
-		c.out.dcerpc_pipe->binding_handle,
-		&server,
-		&account,
-		r->samr.in.oldpassword,
-		r->samr.in.newpassword,
-		&(r->samr.out.error_string));
-	if (!NT_STATUS_IS_OK(status)) {
 		goto disconnect;
 	}
 
