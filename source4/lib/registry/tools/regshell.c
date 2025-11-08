@@ -495,13 +495,13 @@ static char **reg_complete_key(const char *text, int start, int end)
 		if(W_ERROR_IS_OK(status)) {
 			if(!strncmp(text, subkeyname, len)) {
 				matches[j] = strdup(subkeyname);
-				j++;
 
 				if (j == 1)
 					samelen = strlen(matches[j]);
 				else
 					while (strncmp(matches[j], matches[j-1], samelen) != 0)
 						samelen--;
+				j++;
 			}
 		} else if(W_ERROR_EQUAL(status, WERR_NO_MORE_ITEMS)) {
 			break;
