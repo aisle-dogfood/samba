@@ -5253,7 +5253,7 @@ static NTSTATUS dcesrv_samr_ValidatePassword(struct dcesrv_call_state *dce_call,
 	struct samr_GetDomPwInfo r2 = {};
 	struct samr_PwInfo pwInfo = {};
 	const char *account = NULL;
-	DATA_BLOB password;
+	DATA_BLOB password = data_blob_null;
 	enum samr_ValidationStatus res;
 	NTSTATUS status;
 	enum dcerpc_transport_t transport =
