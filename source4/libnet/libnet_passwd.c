@@ -68,6 +68,10 @@ static NTSTATUS libnet_ChangePassword_samr_aes(TALLOC_CTX *mem_ctx,
 	NTSTATUS status;
 	int rc;
 
+	/*
+	 * NOTE: E_md4hash is used here only for backward compatibility to derive
+	 * the old NT key. The actual encryption uses strong PBKDF2 with SHA512.
+	 */
 	E_md4hash(old_password, old_nt_key_data);
 
 	generate_nonce_buffer(salt.data, salt.length);
@@ -153,6 +157,11 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	NTSTATUS status;
 	int rc;
 
+	/*
+	 * NOTE: E_md4hash is used here for protocol compatibility with older
+	 * systems. This function also uses additional RC4 encryption for
+	 * transport security.
+	 */
 	E_md4hash(old_password, old_nt_hash);
 	E_md4hash(new_password, new_nt_hash);
 
@@ -788,6 +797,17 @@ static NTSTATUS libnet_SetPassword_samr_handle_18(struct libnet_context *ctx, TA
 		return NT_STATUS_INVALID_PARAMETER_MIX;
 	}
 
+	/*
+	 * SECURITY WARNING: This function uses MD4 hash algorithm which is
+	 * cryptographically broken and should not be used for security-critical
+	 * operations. MD4 is vulnerable to collision attacks and other
+	 * cryptographic weaknesses. This implementation is maintained only for
+	 * backward compatibility with legacy systems. Use more secure password
+	 * setting methods (levels 26, 25, 24, 23) when possible.
+	 */
+	DBG_WARNING("Using insecure MD4-based password setting (level 18). "
+		    "Consider using more secure alternatives (levels 26, 25, 24, 23).\n");
+
 	/* prepare samr_SetUserInfo2 level 18 (nt_hash) */
 	ZERO_STRUCT(u_info);
 	E_md4hash(r->samr_handle.in.newpassword, ntpwd.hash);
@@ -1112,6 +1132,12 @@ NTSTATUS libnet_SetPassword(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, uni
 			status = libnet_SetPassword_samr_handle_23(ctx, mem_ctx, r);
 			break;
 		case LIBNET_SET_PASSWORD_SAMR_HANDLE_18:
+			/*
+			 * SECURITY WARNING: Level 18 uses MD4 which is cryptographically
+			 * broken. This should only be used for legacy compatibility.
+			 */
+			DBG_WARNING("Password setting level 18 uses insecure MD4 algorithm. "
+				    "Use levels 26, 25, 24, or 23 for better security.\n");
 			if (encryption_state == SMB_ENCRYPTION_REQUIRED) {
 				GNUTLS_FIPS140_SET_LAX_MODE();
 			}
