@@ -846,6 +846,12 @@ static int net_groupmap_listmem(struct net_context *c, int argc, const char **ar
 		return -1;
 	}
 
+	/* Check for root privileges to access sensitive SID information */
+	if (geteuid() != 0) {
+		d_fprintf(stderr, _("Access denied. This operation requires root privileges.\n"));
+		return -1;
+	}
+
 	members = NULL;
 	num = 0;
 
@@ -905,6 +911,12 @@ static int net_groupmap_memberships(struct net_context *c, int argc, const char 
 		d_printf("%s\n%s",
 			 _("Usage:"),
 			 _("net groupmap memberships sid\n"));
+		return -1;
+	}
+
+	/* Check for root privileges to access sensitive SID information */
+	if (geteuid() != 0) {
+		d_fprintf(stderr, _("Access denied. This operation requires root privileges.\n"));
 		return -1;
 	}
 
