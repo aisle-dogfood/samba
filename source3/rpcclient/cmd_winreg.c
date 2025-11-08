@@ -165,7 +165,7 @@ static WERROR cmd_winreg_querymultiplevalues_ex(struct rpc_pipe_client *cli,
 	uint32_t i;
 
 
-	if (argc < 2) {
+	if (argc < 3) {
 		printf("usage: %s [key] [value1] [value2] ...\n", argv[0]);
 		return WERR_OK;
 	}
@@ -198,7 +198,7 @@ static WERROR cmd_winreg_querymultiplevalues_ex(struct rpc_pipe_client *cli,
 		return werr;
 	}
 
-	num_values = argc-2;
+	num_values = (uint32_t)(argc - 2);
 
 	values_in = talloc_zero_array(mem_ctx, struct QueryMultipleValue, num_values);
 	if (values_in == NULL) {
@@ -211,6 +211,10 @@ static WERROR cmd_winreg_querymultiplevalues_ex(struct rpc_pipe_client *cli,
 	}
 
 	for (i=0; i < num_values; i++) {
+		/* Additional bounds check to prevent buffer overflow */
+		if ((i + 2) >= (uint32_t)argc) {
+			return WERR_INVALID_PARAMETER;
+		}
 
 		values_in[i].ve_valuename = talloc_zero(values_in, struct winreg_ValNameBuf);
 		if (values_in[i].ve_valuename == NULL) {
