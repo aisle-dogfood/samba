@@ -620,12 +620,32 @@ static int set_user_info(const char *username, const char *fullname,
 	}
 	if (str_hex_pwd) {
 		unsigned char  new_nt_p16[NT_HASH_LEN];
+		int i;
+		
+		/* Validate hex password string length and content */
 	        if(strlen(str_hex_pwd) != (NT_HASH_LEN *2)){
-			fprintf(stderr, "Invalid hash\n");
+			fprintf(stderr, "Invalid hash length\n");
+			return -1;
+		}
+		
+		/* Validate that all characters are valid hexadecimal digits */
+		for (i = 0; i < (NT_HASH_LEN * 2); i++) {
+			if (!isxdigit((unsigned char)str_hex_pwd[i])) {
+				fprintf(stderr, "Invalid hash: contains non-hexadecimal characters\n");
+				return -1;
+			}
+		}
+		
+		/* Ensure string is properly null-terminated at expected position */
+		if (str_hex_pwd[NT_HASH_LEN * 2] != '\0') {
+			fprintf(stderr, "Invalid hash: not properly terminated\n");
 			return -1;
 		}
 
-		pdb_gethexpwd(str_hex_pwd, new_nt_p16);
+		if (!pdb_gethexpwd(str_hex_pwd, new_nt_p16)) {
+			fprintf(stderr, "Failed to parse hex password\n");
+			return -1;
+		}
 
 		if (!pdb_set_nt_passwd (sam_pwent, new_nt_p16 , PDB_CHANGED)) {
 			fprintf(stderr, "Failed to set password from nt-hash\n");
