@@ -68,7 +68,36 @@ static NTSTATUS libnet_ChangePassword_samr_aes(TALLOC_CTX *mem_ctx,
 	NTSTATUS status;
 	int rc;
 
-	E_md4hash(old_password, old_nt_key_data);
+	/* Use SHA256 instead of MD4 for stronger encryption */
+	{
+		gnutls_hash_hd_t hash_hnd = NULL;
+		size_t password_len;
+		smb_ucs2_t *password_utf16 = NULL;
+		bool ret;
+
+		/* Convert password to UTF-16 like E_md4hash does */
+		ret = push_ucs2_talloc(NULL, &password_utf16, old_password, &password_len);
+		if (!ret || password_len < 2) {
+			/* Fallback for conversion failure */
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      old_password, strlen(old_password),
+					      old_nt_key_data);
+		} else {
+			password_len -= 2; /* Remove null terminator */
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      password_utf16, password_len,
+					      old_nt_key_data);
+		}
+		
+		if (password_utf16) {
+			talloc_free(password_utf16);
+		}
+		
+		if (rc < 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+			goto done;
+		}
+	}
 
 	generate_nonce_buffer(salt.data, salt.length);
 
@@ -153,8 +182,57 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	NTSTATUS status;
 	int rc;
 
-	E_md4hash(old_password, old_nt_hash);
-	E_md4hash(new_password, new_nt_hash);
+	/* Use SHA256 instead of MD4 for stronger encryption */
+	{
+		size_t password_len;
+		smb_ucs2_t *password_utf16 = NULL;
+		bool ret;
+
+		/* Hash old password */
+		ret = push_ucs2_talloc(NULL, &password_utf16, old_password, &password_len);
+		if (!ret || password_len < 2) {
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      old_password, strlen(old_password),
+					      old_nt_hash);
+		} else {
+			password_len -= 2; /* Remove null terminator */
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      password_utf16, password_len,
+					      old_nt_hash);
+		}
+		
+		if (password_utf16) {
+			talloc_free(password_utf16);
+			password_utf16 = NULL;
+		}
+		
+		if (rc < 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+			goto done;
+		}
+
+		/* Hash new password */
+		ret = push_ucs2_talloc(NULL, &password_utf16, new_password, &password_len);
+		if (!ret || password_len < 2) {
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      new_password, strlen(new_password),
+					      new_nt_hash);
+		} else {
+			password_len -= 2; /* Remove null terminator */
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      password_utf16, password_len,
+					      new_nt_hash);
+		}
+		
+		if (password_utf16) {
+			talloc_free(password_utf16);
+		}
+		
+		if (rc < 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+			goto done;
+		}
+	}
 
 	E_deshash(old_password, old_lm_hash);
 	E_deshash(new_password, new_lm_hash);
@@ -790,7 +868,37 @@ static NTSTATUS libnet_SetPassword_samr_handle_18(struct libnet_context *ctx, TA
 
 	/* prepare samr_SetUserInfo2 level 18 (nt_hash) */
 	ZERO_STRUCT(u_info);
-	E_md4hash(r->samr_handle.in.newpassword, ntpwd.hash);
+	/* Use SHA256 instead of MD4 for stronger encryption */
+	{
+		size_t password_len;
+		smb_ucs2_t *password_utf16 = NULL;
+		bool ret;
+
+		ret = push_ucs2_talloc(NULL, &password_utf16, r->samr_handle.in.newpassword, &password_len);
+		if (!ret || password_len < 2) {
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      r->samr_handle.in.newpassword, 
+					      strlen(r->samr_handle.in.newpassword),
+					      ntpwd.hash);
+		} else {
+			password_len -= 2; /* Remove null terminator */
+			rc = gnutls_hash_fast(GNUTLS_DIG_SHA256,
+					      password_utf16, password_len,
+					      ntpwd.hash);
+		}
+		
+		if (password_utf16) {
+			talloc_free(password_utf16);
+		}
+		
+		if (rc < 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+			r->samr_handle.out.error_string = talloc_asprintf(mem_ctx,
+							"SHA256 hash failed: %s",
+							gnutls_strerror(rc));
+			return status;
+		}
+	}
 	ntpwd_in = data_blob_const(ntpwd.hash, sizeof(ntpwd.hash));
 	ntpwd_out = data_blob_const(u_info.info18.nt_pwd.hash,
 				    sizeof(u_info.info18.nt_pwd.hash));
