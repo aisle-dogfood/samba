@@ -160,11 +160,12 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
 			return status;
 		}
 	} else {
-		rc = des_crypt112(out->data, in->data, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
-		if (rc != 0) {
-			return gnutls_error_to_ntstatus(rc,
-							NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-		}
+		/*
+		 * DES encryption is cryptographically weak and should not be used.
+		 * Refuse to fall back to DES when AES is not available to prevent
+		 * the use of inadequate encryption strength.
+		 */
+		return NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER;
 	}
 
 	return NT_STATUS_OK;
