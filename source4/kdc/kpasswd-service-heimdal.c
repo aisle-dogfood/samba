@@ -285,6 +285,7 @@ krb5_error_code kpasswd_handle_request(struct kdc_server *kdc,
 	case KRB5_KPASSWD_VERS_CHANGEPW: {
 		DATA_BLOB password = data_blob_null;
 		bool ok;
+		krb5_error_code ret;
 
 		ok = convert_string_talloc_handle(mem_ctx,
 						  lpcfg_iconv_handle(kdc->task->lp_ctx),
@@ -300,13 +301,18 @@ krb5_error_code kpasswd_handle_request(struct kdc_server *kdc,
 			return KRB5_KPASSWD_HARDERROR;
 		}
 
-		return kpasswd_change_password(kdc,
-					       mem_ctx,
-					       gensec_security,
-					       session_info,
-					       &password,
-					       kpasswd_reply,
-					       error_string);
+		ret = kpasswd_change_password(kdc,
+					      mem_ctx,
+					      gensec_security,
+					      session_info,
+					      &password,
+					      kpasswd_reply,
+					      error_string);
+
+		/* Clear sensitive password data from memory */
+		data_blob_clear_free(&password);
+
+		return ret;
 	}
 	case KRB5_KPASSWD_VERS_SETPW: {
 		return kpasswd_set_password(kdc,
