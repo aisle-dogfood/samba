@@ -290,6 +290,7 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 		if (!*pwd) {
 			return False;
 		}
+		talloc_keep_secret(*pwd);
 	}
 
 	/* last change time */
