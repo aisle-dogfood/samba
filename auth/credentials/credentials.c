@@ -231,7 +231,9 @@ _PUBLIC_ const char *cli_credentials_get_username(struct cli_credentials *cred)
 	if (cred->username_obtained == CRED_CALLBACK &&
 	    !cred->callback_running) {
 	    	cred->callback_running = true;
-		cred->username = cred->username_cb(cred);
+		if (cred->username_cb != NULL) {
+			cred->username = cred->username_cb(cred);
+		}
 	    	cred->callback_running = false;
 		if (cred->username_obtained == CRED_CALLBACK) {
 			cred->username_obtained = CRED_CALLBACK_RESULT;
@@ -382,7 +384,9 @@ _PUBLIC_ char *cli_credentials_get_principal_and_obtained(struct cli_credentials
 		const char *princ = NULL;
 
 	    	cred->callback_running = true;
-		princ = cred->principal_cb(cred);
+		if (cred->principal_cb != NULL) {
+			princ = cred->principal_cb(cred);
+		}
 	    	cred->callback_running = false;
 
 		cred->principal = NULL;
@@ -595,7 +599,9 @@ _PUBLIC_ const char *cli_credentials_get_password(struct cli_credentials *cred)
 	    !cred->callback_running &&
 	    !cred->password_will_be_nt_hash) {
 		cred->callback_running = true;
-		cred->password = cred->password_cb(cred);
+		if (cred->password_cb != NULL) {
+			cred->password = cred->password_cb(cred);
+		}
 		cred->callback_running = false;
 		if (cred->password_obtained == CRED_CALLBACK) {
 			cred->password_obtained = CRED_CALLBACK_RESULT;
@@ -918,7 +924,9 @@ _PUBLIC_ const char *cli_credentials_get_domain(struct cli_credentials *cred)
 	if (cred->domain_obtained == CRED_CALLBACK &&
 	    !cred->callback_running) {
 	    	cred->callback_running = true;
-		cred->domain = cred->domain_cb(cred);
+		if (cred->domain_cb != NULL) {
+			cred->domain = cred->domain_cb(cred);
+		}
 	    	cred->callback_running = false;
 		if (cred->domain_obtained == CRED_CALLBACK) {
 			cred->domain_obtained = CRED_CALLBACK_RESULT;
@@ -1003,7 +1011,9 @@ _PUBLIC_ const char *cli_credentials_get_realm(struct cli_credentials *cred)
 		const char *realm = NULL;
 
 	    	cred->callback_running = true;
-		realm = cred->realm_cb(cred);
+		if (cred->realm_cb != NULL) {
+			realm = cred->realm_cb(cred);
+		}
 	    	cred->callback_running = false;
 
 		cred->realm = NULL;
@@ -1087,7 +1097,9 @@ _PUBLIC_ const char *cli_credentials_get_workstation(struct cli_credentials *cre
 	if (cred->workstation_obtained == CRED_CALLBACK &&
 	    !cred->callback_running) {
 	    	cred->callback_running = true;
-		cred->workstation = cred->workstation_cb(cred);
+		if (cred->workstation_cb != NULL) {
+			cred->workstation = cred->workstation_cb(cred);
+		}
 	    	cred->callback_running = false;
 		if (cred->workstation_obtained == CRED_CALLBACK) {
 			cred->workstation_obtained = CRED_CALLBACK_RESULT;
