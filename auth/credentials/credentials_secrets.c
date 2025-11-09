@@ -121,10 +121,16 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 
 	if ((lct == secrets_tdb_last_change_time) &&
 	    (secrets_tdb_password != NULL) &&
-	    (password != NULL) &&
-	    (strcmp(password, secrets_tdb_password) != 0)) {
-		talloc_free(mem_ctx);
-		return NT_STATUS_NOT_FOUND;
+	    (password != NULL)) {
+		size_t password_len = strlen(password);
+		size_t secrets_tdb_password_len = strlen(secrets_tdb_password);
+		
+		/* Use constant-time comparison to prevent timing attacks */
+		if (password_len != secrets_tdb_password_len ||
+		    !mem_equal_const_time(password, secrets_tdb_password, password_len)) {
+			talloc_free(mem_ctx);
+			return NT_STATUS_NOT_FOUND;
+		}
 	}
 
 	cli_credentials_set_password_last_changed_time(cred, lct);
@@ -364,7 +370,18 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 	} else if (secrets_tdb_lct > cli_credentials_get_password_last_changed_time(cred)) {
 		secrets_tdb_password_more_recent = true;
 	} else if (secrets_tdb_lct == cli_credentials_get_password_last_changed_time(cred)) {
-		secrets_tdb_password_more_recent = strcmp(secrets_tdb_password, cli_credentials_get_password(cred)) != 0;
+		const char *current_password = cli_credentials_get_password(cred);
+		if (secrets_tdb_password != NULL && current_password != NULL) {
+			size_t secrets_tdb_password_len = strlen(secrets_tdb_password);
+			size_t current_password_len = strlen(current_password);
+			
+			/* Use constant-time comparison to prevent timing attacks */
+			secrets_tdb_password_more_recent = (secrets_tdb_password_len != current_password_len ||
+			                                   !mem_equal_const_time(secrets_tdb_password, current_password, secrets_tdb_password_len));
+		} else {
+			/* If either password is NULL, consider them different */
+			secrets_tdb_password_more_recent = (secrets_tdb_password != current_password);
+		}
 	} else {
 		secrets_tdb_password_more_recent = false;
 	}
