@@ -37,6 +37,7 @@
 #include <gnutls/crypto.h>
 #include "gnutls_helpers.h"
 #include "lib/util/memory.h"
+#include "lib/util/genrand.h"
 
 int samba_gnutls_arcfour_confounded_md5(const DATA_BLOB *key_input1,
 					const DATA_BLOB *key_input2,
@@ -69,10 +70,20 @@ int samba_gnutls_arcfour_confounded_md5(const DATA_BLOB *key_input1,
 
 	gnutls_hash_deinit(hash_hnd, confounded_key);
 
+	/* Use AES-128-CBC instead of RC4 for stronger encryption */
+	uint8_t iv[16] = {0}; /* AES-128-CBC requires 16-byte IV */
+	gnutls_datum_t iv_datum = {
+		.data = iv,
+		.size = sizeof(iv),
+	};
+	
+	/* Generate a random IV for AES-CBC */
+	generate_random_buffer(iv, sizeof(iv));
+	
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&confounded_key_datum,
-				NULL);
+				&iv_datum);
 	if (rc < 0) {
 		return rc;
 	}

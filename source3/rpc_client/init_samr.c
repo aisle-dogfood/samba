@@ -25,6 +25,7 @@
 #include "lib/crypto/gnutls_helpers.h"
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
+#include "lib/util/genrand.h"
 
 /*************************************************************************
  inits a samr_CryptPasswordEx structure
@@ -47,9 +48,15 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 {
 	/* samr_CryptPassword */
 	gnutls_cipher_hd_t cipher_hnd = NULL;
+	uint8_t aes_key[16] = {0}; /* AES-128-CBC requires 16-byte key */
 	gnutls_datum_t sess_key = {
-		.data = session_key->data,
-		.size = session_key->length,
+		.data = aes_key,
+		.size = sizeof(aes_key),
+	};
+	uint8_t iv[16] = {0}; /* AES-128-CBC requires 16-byte IV */
+	gnutls_datum_t iv_datum = {
+		.data = iv,
+		.size = sizeof(iv),
 	};
 	bool ok;
 	int rc;
@@ -59,10 +66,22 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 		return NT_STATUS_INTERNAL_ERROR;
 	}
 
+	/* Derive AES key from session key using truncation/padding */
+	if (session_key->length >= 16) {
+		memcpy(aes_key, session_key->data, 16);
+	} else {
+		memcpy(aes_key, session_key->data, session_key->length);
+		/* Remaining bytes are already zero-initialized */
+	}
+
+	/* Generate a random IV for AES-CBC */
+	generate_random_buffer(iv, sizeof(iv));
+
+	/* Use AES-128-CBC instead of RC4 for stronger encryption */
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&sess_key,
-				NULL);
+				&iv_datum);
 	if (rc != 0) {
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
 	}
