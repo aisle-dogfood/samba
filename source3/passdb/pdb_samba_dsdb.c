@@ -2222,6 +2222,13 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 		return false;
 	}
 
+	if (password_val->data == NULL || password_val->length == 0) {
+		DEBUG(2, ("Failed to get trusted domain password for %s, "
+			  "attribute trustAuthOutgoing is empty or invalid.\n", domain));
+		TALLOC_FREE(tmp_ctx);
+		return false;
+	}
+
 	ndr_err = ndr_pull_struct_blob(password_val, tmp_ctx, &password_blob,
 				(ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
