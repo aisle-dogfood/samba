@@ -193,21 +193,56 @@ int des_crypt112_16(uint8_t out[16], const uint8_t in[16], const uint8_t key[14]
 
 /* Decode a sam password hash into a password.  The password hash is the
    same method used to store passwords in the NT registry.  The DES key
-   used is based on the RID of the user. */
+   used is based on the RID of the user. 
+   
+   SECURITY WARNING: This function implements a legacy protocol with inherently 
+   weak cryptography. The key derivation method repeats RID bytes in a highly
+   predictable pattern, making it extremely vulnerable to brute force attacks.
+   
+   - The effective key space is only 32 bits (the RID value)
+   - The key pattern is trivially predictable
+   - DES itself is considered cryptographically broken
+   
+   This function should only be used when required for compatibility with
+   legacy systems. Consider using stronger authentication methods when possible. */
 int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 		  enum samba_gnutls_direction encrypt)
 {
 	uint8_t s[14];
 	int ret;
 
+	/* Input validation to prevent some attack vectors */
+	if (in == NULL || out == NULL) {
+		return GNUTLS_E_INVALID_REQUEST;
+	}
+
+	/* Clear output buffer first for security */
+	memset(out, 0, 16);
+
+	/* Weak key derivation required for protocol compatibility.
+	 * This creates a predictable pattern that severely limits security. */
 	s[0] = s[4] = s[8] = s[12] = (uint8_t)(rid & 0xFF);
 	s[1] = s[5] = s[9] = s[13] = (uint8_t)((rid >> 8) & 0xFF);
 	s[2] = s[6] = s[10]        = (uint8_t)((rid >> 16) & 0xFF);
 	s[3] = s[7] = s[11]        = (uint8_t)((rid >> 24) & 0xFF);
 
+	/* Perform DES encryption/decryption with the weak key */
 	ret = des_crypt56_gnutls(out, in, s, encrypt);
 	if (ret != 0) {
+		/* Clear output on error for security */
+		memset(out, 0, 16);
 		return ret;
 	}
-	return des_crypt56_gnutls(out+8, in+8, s+7, encrypt);
+	
+	ret = des_crypt56_gnutls(out+8, in+8, s+7, encrypt);
+	if (ret != 0) {
+		/* Clear output on error for security */
+		memset(out, 0, 16);
+		return ret;
+	}
+
+	/* Clear sensitive key material */
+	memset(s, 0, sizeof(s));
+	
+	return ret;
 }
