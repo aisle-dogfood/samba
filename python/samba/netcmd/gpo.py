@@ -2215,7 +2215,13 @@ samba-tool gpo manage sudoers remove {31B2F340-016D-11D2-945F-00C04FB984F9} 'fak
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            # Create a secure XML parser that disables external entity processing
+            parser = ET.XMLParser()
+            parser.parser.DefaultHandler = lambda data: None
+            parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+            parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+            
+            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml), parser))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
