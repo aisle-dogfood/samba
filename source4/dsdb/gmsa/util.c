@@ -1470,6 +1470,18 @@ int gmsa_recalculate_managed_pwd(TALLOC_CTX *mem_ctx,
 	}
 
 out:
+	/* Securely clear sensitive password data before freeing memory */
+	if (previous_key.type == ROOT_KEY_OBTAINED && 
+	    previous_key.u.obtained.password != NULL) {
+		BURN_PTR_SIZE(previous_key.u.obtained.password,
+			      sizeof(struct gmsa_null_terminated_password));
+	}
+	if (current_key.type == ROOT_KEY_OBTAINED && 
+	    current_key.u.obtained.password != NULL) {
+		BURN_PTR_SIZE(current_key.u.obtained.password,
+			      sizeof(struct gmsa_null_terminated_password));
+	}
+	
 	TALLOC_FREE(tmp_ctx);
 	return ret;
 }
