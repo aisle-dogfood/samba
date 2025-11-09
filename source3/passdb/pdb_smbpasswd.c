@@ -398,6 +398,11 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		return NULL;
 	}
 
+	/* Clear sensitive buffers before use */
+	BURN_PTR_SIZE(smbpwd, 16);
+	BURN_PTR_SIZE(smbntpwd, 16);
+	BURN_PTR_SIZE(linebuf, sizeof(linebuf));
+
 	pdb_init_smb(pw_buf);
 	pw_buf->acct_ctrl = ACB_NORMAL;
 
@@ -410,6 +415,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear sensitive buffers before returning on error */
+			BURN_PTR_SIZE(smbpwd, 16);
+			BURN_PTR_SIZE(smbntpwd, 16);
+			BURN_PTR_SIZE(linebuf, sizeof(linebuf));
 			return NULL;
 		}
 
@@ -605,6 +614,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	/* Clear sensitive buffers before returning NULL */
+	BURN_PTR_SIZE(smbpwd, 16);
+	BURN_PTR_SIZE(smbntpwd, 16);
+	BURN_PTR_SIZE(linebuf, sizeof(linebuf));
 	return NULL;
 }
 
@@ -1563,6 +1576,10 @@ static void free_private_data(void **vp)
 	struct smbpasswd_privates **privates = (struct smbpasswd_privates**)vp;
 
 	endsmbfilepwent((*privates)->pw_file, &((*privates)->pw_file_lock_depth));
+
+	/* Clear sensitive password buffers before freeing */
+	BURN_PTR_SIZE((*privates)->smbpwd, 16);
+	BURN_PTR_SIZE((*privates)->smbntpwd, 16);
 
 	*privates = NULL;
 	/* No need to free any further, as it is talloc()ed */
