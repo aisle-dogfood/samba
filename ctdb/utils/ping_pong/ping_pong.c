@@ -215,6 +215,31 @@ done:
 	free(val);
 }
 
+static int is_safe_filename(const char *filename)
+{
+	/* Reject absolute paths */
+	if (filename[0] == '/') {
+		return 0;
+	}
+	
+	/* Reject filenames containing path traversal sequences */
+	if (strstr(filename, "../") != NULL) {
+		return 0;
+	}
+	
+	/* Reject filenames starting with ../ */
+	if (strncmp(filename, "../", 3) == 0) {
+		return 0;
+	}
+	
+	/* Reject filenames that are exactly ".." */
+	if (strcmp(filename, "..") == 0) {
+		return 0;
+	}
+	
+	return 1;
+}
+
 static void usage(void)
 {
 	printf("ping_pong -rwmc <file> <num_locks>\n");
@@ -265,6 +290,11 @@ int main(int argc, char *argv[])
 	}
 
 	fname = argv[0];
+
+	if (!is_safe_filename(fname)) {
+		printf("Error: Invalid filename. Path traversal attempts are not allowed.\n");
+		exit(1);
+	}
 
 	fd = open(fname, O_CREAT|O_RDWR, 0600);
 	if (fd == -1) {
