@@ -97,6 +97,7 @@ main(int argc,			/* I - Number of command-line arguments */
 	               *sep,	/* Pointer to separator */
 	               *tmp, *tmp2;	/* Temp pointers to do escaping */
 	const char     *password = NULL;	/* Password */
+	bool           password_allocated = false;	/* Track if password was allocated */
 	const char     *username = NULL;	/* Username */
 	char           *server,	/* Server name */
 	               *printer;/* Printer name */
@@ -302,6 +303,7 @@ main(int argc,			/* I - Number of command-line arguments */
 		if ((tmp2 = strchr_m(tmp, ':')) != NULL) {
 			*tmp2++ = '\0';
 			password = uri_unescape_alloc(tmp2);
+			password_allocated = true;
 		}
 		username = uri_unescape_alloc(tmp);
 	} else {
@@ -421,6 +423,19 @@ main(int argc,			/* I - Number of command-line arguments */
 	}
 
 	/*
+	 * Clear password from memory for security
+	 */
+	if (password != NULL) {
+		size_t password_len = strlen(password);
+		BURN_PTR_SIZE((char *)password, password_len);
+		if (password_allocated) {
+			SAFE_FREE(password);
+			password_allocated = false;
+		}
+		password = NULL;
+	}
+
+	/*
          * Now that we are connected to the server, ignore SIGTERM so that we
          * can finish out any page data the driver sends (e.g. to eject the
          * current page...  Only ignore SIGTERM if we are printing data from
@@ -449,6 +464,18 @@ main(int argc,			/* I - Number of command-line arguments */
          */
 
 done:
+	/*
+	 * Clear password from memory for security
+	 */
+	if (password != NULL) {
+		size_t password_len = strlen(password);
+		BURN_PTR_SIZE((char *)password, password_len);
+		if (password_allocated) {
+			SAFE_FREE(password);
+			password_allocated = false;
+		}
+		password = NULL;
+	}
 	gfree_all();
 	TALLOC_FREE(frame);
 	return (status);
