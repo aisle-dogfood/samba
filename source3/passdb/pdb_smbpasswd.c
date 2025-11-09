@@ -393,6 +393,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	size_t linebuf_len;
 	char *status;
 
+	/* Clear password buffers to prevent heap inspection vulnerabilities */
+	memset(smbpwd, 0, 16);
+	memset(smbntpwd, 0, 16);
+
 	if(fp == NULL) {
 		DEBUG(0,("getsmbfilepwent: Bad password file pointer.\n"));
 		return NULL;
