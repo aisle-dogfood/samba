@@ -105,6 +105,9 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 	}
 
 	password = ldb_msg_find_attr_as_string(msg, "secret", NULL);
+	if (password != NULL) {
+		talloc_keep_secret(password);
+	}
 
 	whenChanged = ldb_msg_find_ldb_val(msg, "whenChanged");
 	if (!whenChanged || ldb_val_to_time(whenChanged, &lct) != LDB_SUCCESS) {
@@ -121,10 +124,16 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 
 	if ((lct == secrets_tdb_last_change_time) &&
 	    (secrets_tdb_password != NULL) &&
-	    (password != NULL) &&
-	    (strcmp(password, secrets_tdb_password) != 0)) {
-		talloc_free(mem_ctx);
-		return NT_STATUS_NOT_FOUND;
+	    (password != NULL)) {
+		size_t password_len = strlen(password);
+		size_t secrets_tdb_password_len = strlen(secrets_tdb_password);
+		
+		/* Use constant-time comparison to prevent timing attacks */
+		if ((password_len != secrets_tdb_password_len) ||
+		    !mem_equal_const_time(password, secrets_tdb_password, password_len)) {
+			talloc_free(mem_ctx);
+			return NT_STATUS_NOT_FOUND;
+		}
 	}
 
 	cli_credentials_set_password_last_changed_time(cred, lct);
