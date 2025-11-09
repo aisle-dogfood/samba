@@ -398,6 +398,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		return NULL;
 	}
 
+	/* Clear sensitive password hash buffers before reuse */
+	memset_s(smbpwd, 16, 0, 16);
+	memset_s(smbntpwd, 16, 0, 16);
+
 	pdb_init_smb(pw_buf);
 	pw_buf->acct_ctrl = ACB_NORMAL;
 
@@ -1563,6 +1567,10 @@ static void free_private_data(void **vp)
 	struct smbpasswd_privates **privates = (struct smbpasswd_privates**)vp;
 
 	endsmbfilepwent((*privates)->pw_file, &((*privates)->pw_file_lock_depth));
+
+	/* Clear sensitive password hash buffers before freeing */
+	memset_s((*privates)->smbpwd, sizeof((*privates)->smbpwd), 0, sizeof((*privates)->smbpwd));
+	memset_s((*privates)->smbntpwd, sizeof((*privates)->smbntpwd), 0, sizeof((*privates)->smbntpwd));
 
 	*privates = NULL;
 	/* No need to free any further, as it is talloc()ed */
