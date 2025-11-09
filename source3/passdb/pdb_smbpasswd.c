@@ -410,6 +410,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear sensitive credential buffers on error */
+			ZERO_STRUCT(smbpasswd_state->smbpwd);
+			ZERO_STRUCT(smbpasswd_state->smbntpwd);
 			return NULL;
 		}
 
@@ -605,6 +608,11 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	
+	/* Clear sensitive credential buffers when no more entries */
+	ZERO_STRUCT(smbpasswd_state->smbpwd);
+	ZERO_STRUCT(smbpasswd_state->smbntpwd);
+	
 	return NULL;
 }
 
@@ -1563,6 +1571,10 @@ static void free_private_data(void **vp)
 	struct smbpasswd_privates **privates = (struct smbpasswd_privates**)vp;
 
 	endsmbfilepwent((*privates)->pw_file, &((*privates)->pw_file_lock_depth));
+
+	/* Clear sensitive credential buffers before freeing */
+	ZERO_STRUCT((*privates)->smbpwd);
+	ZERO_STRUCT((*privates)->smbntpwd);
 
 	*privates = NULL;
 	/* No need to free any further, as it is talloc()ed */
