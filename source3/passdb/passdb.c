@@ -2394,7 +2394,12 @@ static bool get_trust_pw_clear2(const char *domain,
 	if (pwd != NULL) {
 		struct timeval expire;
 
-		*cur_pw = pwd;
+		*cur_pw = strdup(pwd);
+		BURN_FREE_STR(pwd);
+
+		if (*cur_pw == NULL) {
+			return false;
+		}
 
 		if (account_name != NULL) {
 			*account_name = lp_netbios_name();
@@ -2418,7 +2423,12 @@ static bool get_trust_pw_clear2(const char *domain,
 
 		pwd = secrets_fetch_prev_machine_password(lp_workgroup());
 		if (pwd != NULL) {
-			*prev_pw = pwd;
+			*prev_pw = strdup(pwd);
+			BURN_FREE_STR(pwd);
+			if (*prev_pw == NULL) {
+				BURN_FREE_STR(*cur_pw);
+				return false;
+			}
 		}
 
 		return true;
