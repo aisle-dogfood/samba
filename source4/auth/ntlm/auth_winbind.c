@@ -136,6 +136,17 @@ static struct tevent_req *winbind_check_password_send(TALLOC_CTX *mem_ctx,
 			return tevent_req_post(req, ev);
 		}
 
+		if (user_info->password.hash.lanman == NULL) {
+			DEBUG(1, ("Missing LM password hash for interactive logon\n"));
+			tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
+			return tevent_req_post(req, ev);
+		}
+		if (user_info->password.hash.nt == NULL) {
+			DEBUG(1, ("Missing NT password hash for interactive logon\n"));
+			tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
+			return tevent_req_post(req, ev);
+		}
+
 		password_info->lmpassword = *user_info->password.hash.lanman;
 		password_info->ntpassword = *user_info->password.hash.nt;
 
