@@ -34,7 +34,57 @@ NTSTATUS init_samr_CryptPasswordEx(const char *pwd,
 				   DATA_BLOB *session_key,
 				   struct samr_CryptPasswordEx *pwd_buf)
 {
-	return encode_rc4_passwd_buffer(pwd, session_key, pwd_buf);
+	uint8_t _confounder[16] = {0};
+	DATA_BLOB confounder = data_blob_const(_confounder, 16);
+	DATA_BLOB pw_data = data_blob_const(pwd_buf->data, 516);
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t sess_key = {
+		.data = session_key->data,
+		.size = session_key->length,
+	};
+	gnutls_datum_t iv_datum = {
+		.data = _confounder,
+		.size = 16,
+	};
+	bool ok;
+	int rc;
+
+	ok = encode_pw_buffer(pw_data.data, pwd, STR_UNICODE);
+	if (!ok) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	generate_random_buffer(confounder.data, confounder.length);
+
+	/* Use AES-128-CBC instead of RC4 for better security */
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_128_CBC,
+				&sess_key,
+				&iv_datum);
+	if (rc != 0) {
+		ZERO_ARRAY(_confounder);
+		data_blob_clear(&pw_data);
+		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	}
+
+	rc = gnutls_cipher_encrypt(cipher_hnd, pw_data.data, pw_data.length);
+	gnutls_cipher_deinit(cipher_hnd);
+	if (rc != 0) {
+		ZERO_ARRAY(_confounder);
+		data_blob_clear(&pw_data);
+		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	}
+
+	/*
+	 * The packet format is the 516 byte AES encrypted
+	 * password followed by the 16 byte confounder
+	 * The confounder is used as IV and salt to prevent pre-computed hash attacks on the
+	 * database.
+	 */
+	memcpy(&pwd_buf->data[516], confounder.data, confounder.length);
+	ZERO_ARRAY(_confounder);
+
+	return NT_STATUS_OK;
 }
 
 /*************************************************************************
@@ -60,7 +110,7 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 	}
 
 	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
+				GNUTLS_CIPHER_AES_128_CBC,
 				&sess_key,
 				NULL);
 	if (rc != 0) {
