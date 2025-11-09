@@ -4599,6 +4599,16 @@ static ssize_t qwrap_sendmsg(int s, const struct msghdr *omsg, int flags)
 			return -1;
 		}
 
+		/* Validate crypto data length to prevent integer overflow */
+		if (omsg->msg_iov[0].iov_len > 65536) {
+			QWRAP_UNLOCK_SI(si);
+			QWRAP_LOG(QWRAP_LOG_WARN,
+				  "Crypto data length %zu exceeds maximum allowed size",
+				  omsg->msg_iov[0].iov_len);
+			errno = EINVAL;
+			return -1;
+		}
+
 		qwrap_call_ngtcp2_conn_read_pkt(si, "sendmsg_hs");
 		dump_data("hinfo in",
 			  omsg->msg_iov[0].iov_base,
