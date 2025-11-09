@@ -73,7 +73,11 @@ NTSTATUS read_fd_with_timeout(int fd, char *buf,
 		}
 
 		while (nread < mincnt) {
-			readret = sys_read(fd, buf + nread, maxcnt - nread);
+			size_t to_read = (nread < maxcnt) ? (maxcnt - nread) : 0;
+			if (to_read == 0) {
+				break;
+			}
+			readret = sys_read(fd, buf + nread, to_read);
 
 			if (readret == 0) {
 				DEBUG(5,("read_fd_with_timeout: "
@@ -114,7 +118,11 @@ NTSTATUS read_fd_with_timeout(int fd, char *buf,
 			return NT_STATUS_IO_TIMEOUT;
 		}
 
-		readret = sys_read(fd, buf+nread, maxcnt-nread);
+		size_t to_read = (nread < maxcnt) ? (maxcnt - nread) : 0;
+		if (to_read == 0) {
+			break;
+		}
+		readret = sys_read(fd, buf+nread, to_read);
 
 		if (readret == 0) {
 			/* we got EOF on the file descriptor */
