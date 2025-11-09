@@ -1090,7 +1090,10 @@ static NTSTATUS auth3_session_info_create(
 	}
 
 	if (need_getpwuid) {
-		struct passwd *pwd = NULL;
+		struct passwd *pwd;
+
+		/* Initialize pwd to NULL to prevent heap inspection attacks */
+		pwd = NULL;
 
 		/*
 		 * Ask the system for the primary gid
