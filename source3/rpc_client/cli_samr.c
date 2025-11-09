@@ -53,6 +53,24 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user\n"));
 
+	/* 
+	 * Security Warning: Using MD4 for NT hash generation due to NTLM protocol requirements.
+	 * MD4 is cryptographically weak and should be avoided when possible.
+	 * Consider using stronger authentication methods like Kerberos when available.
+	 */
+	if (oldpassword == NULL || newpassword == NULL) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user: NULL password provided\n"));
+		status = NT_STATUS_INVALID_PARAMETER;
+		goto done;
+	}
+
+	if (strlen(oldpassword) == 0 || strlen(newpassword) == 0) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user: Empty password provided\n"));
+		status = NT_STATUS_INVALID_PARAMETER;
+		goto done;
+	}
+
+	DEBUG(5, ("rpccli_samr_chgpasswd_user: Using MD4 hash for NTLM compatibility (weak cryptography)\n"));
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
@@ -167,6 +185,22 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 	init_lsa_String(&account, username);
 
 	/* Calculate the MD4 hash (NT compatible) of the password */
+	/* 
+	 * Security Warning: Using MD4 for NT hash generation due to NTLM protocol requirements.
+	 * MD4 is cryptographically weak and should be avoided when possible.
+	 * Consider using stronger authentication methods like Kerberos when available.
+	 */
+	if (oldpassword == NULL || newpassword == NULL) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user2: NULL password provided\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	if (strlen(oldpassword) == 0 || strlen(newpassword) == 0) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user2: Empty password provided\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	DEBUG(5, ("rpccli_samr_chgpasswd_user2: Using MD4 hash for NTLM compatibility (weak cryptography)\n"));
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
@@ -374,6 +408,22 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 	init_lsa_String(&account, username);
 
 	/* Calculate the MD4 hash (NT compatible) of the password */
+	/* 
+	 * Security Warning: Using MD4 for NT hash generation due to NTLM protocol requirements.
+	 * MD4 is cryptographically weak and should be avoided when possible.
+	 * Consider using stronger authentication methods like Kerberos when available.
+	 */
+	if (oldpassword == NULL || newpassword == NULL) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user3: NULL password provided\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	if (strlen(oldpassword) == 0 || strlen(newpassword) == 0) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user3: Empty password provided\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	DEBUG(5, ("rpccli_samr_chgpasswd_user3: Using MD4 hash for NTLM compatibility (weak cryptography)\n"));
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
@@ -512,6 +562,22 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 	generate_nonce_buffer(iv.data, iv.length);
 
 	/* Calculate the MD4 hash (NT compatible) of the password */
+	/* 
+	 * Security Warning: Using MD4 for NT hash generation due to NTLM protocol requirements.
+	 * MD4 is cryptographically weak and should be avoided when possible.
+	 * Consider using stronger authentication methods like Kerberos when available.
+	 */
+	if (oldpassword == NULL || newpassword == NULL) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user4: NULL password provided\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	if (strlen(oldpassword) == 0 || strlen(newpassword) == 0) {
+		DEBUG(0, ("rpccli_samr_chgpasswd_user4: Empty password provided\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	DEBUG(5, ("rpccli_samr_chgpasswd_user4: Using MD4 hash for NTLM compatibility (weak cryptography)\n"));
 	E_md4hash(oldpassword, old_nt_key_data);
 
 	init_lsa_String(&server, srv_name_slash);
