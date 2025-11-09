@@ -2310,9 +2310,11 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	int trust_type;
 	int i;
 	DATA_BLOB password_utf16 = {};
+	struct samr_Password password_nt_buf = {};
 	struct samr_Password *password_nt = NULL;
 	uint32_t password_version = 0;
 	DATA_BLOB old_password_utf16 = {};
+	struct samr_Password old_password_nt_buf = {};
 	struct samr_Password *old_password_nt = NULL;
 	struct trustAuthInOutBlob password_blob;
 	enum ndr_err_code ndr_err;
@@ -2414,7 +2416,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 
 			last_set_time = nt_time_to_unix(a->LastUpdateTime);
 
-			password_nt = &a->AuthInfo.nt4owf.password;
+			password_nt_buf = a->AuthInfo.nt4owf.password;
+			password_nt = &password_nt_buf;
 			break;
 		}
 	}
@@ -2440,7 +2443,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 				break;
 			}
 
-			old_password_nt = &a->AuthInfo.nt4owf.password;
+			old_password_nt_buf = a->AuthInfo.nt4owf.password;
+			old_password_nt = &old_password_nt_buf;
 			break;
 		}
 	}
