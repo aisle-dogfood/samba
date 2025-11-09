@@ -53,37 +53,63 @@ static bool build_table(struct char_mappings **cmaps, int value)
 	return True;
 }
 
-static void set_tables(struct char_mappings **cmaps,
+static bool set_tables(struct char_mappings **cmaps,
 		       long unix_map,
 		       long windows_map)
 {
 	int i;
+	int unix_pick, windows_pick;
+
+	/* Validate indices to prevent buffer overflow */
+	unix_pick = T_PICK(unix_map);
+	windows_pick = T_PICK(windows_map);
+	
+	if (unix_pick >= MAP_NUM || windows_pick >= MAP_NUM) {
+		DEBUG(0, ("Invalid character mapping index: unix_pick=%d, windows_pick=%d, MAP_NUM=%d\n",
+			  unix_pick, windows_pick, MAP_NUM));
+		return false;
+	}
 
 	/* set unix -> windows */
 	i = T_OFFSET(unix_map);
-	cmaps[T_PICK(unix_map)]->entry[i][vfs_translate_to_windows] = windows_map;
+	cmaps[unix_pick]->entry[i][vfs_translate_to_windows] = windows_map;
 
 	/* set windows -> unix */
 	i = T_OFFSET(windows_map);
-	cmaps[T_PICK(windows_map)]->entry[i][vfs_translate_to_unix] = unix_map;
+	cmaps[windows_pick]->entry[i][vfs_translate_to_unix] = unix_map;
+	
+	return true;
 }
 
 static bool build_ranges(struct char_mappings **cmaps,
 			 long unix_map,
 			 long windows_map)
 {
+	int unix_pick, windows_pick;
 
-	if (!cmaps[T_PICK(unix_map)]) {
-		if (!build_table(&cmaps[T_PICK(unix_map)], unix_map))
+	/* Validate indices to prevent buffer overflow */
+	unix_pick = T_PICK(unix_map);
+	windows_pick = T_PICK(windows_map);
+	
+	if (unix_pick >= MAP_NUM || windows_pick >= MAP_NUM) {
+		DEBUG(0, ("Invalid character mapping index: unix_pick=%d, windows_pick=%d, MAP_NUM=%d\n",
+			  unix_pick, windows_pick, MAP_NUM));
+		return False;
+	}
+
+	if (!cmaps[unix_pick]) {
+		if (!build_table(&cmaps[unix_pick], unix_map))
 			return False;
 	}
 
-	if (!cmaps[T_PICK(windows_map)]) {
-		if (!build_table(&cmaps[T_PICK(windows_map)], windows_map))
+	if (!cmaps[windows_pick]) {
+		if (!build_table(&cmaps[windows_pick], windows_map))
 			return False;
 	}
 
-	set_tables(cmaps, unix_map, windows_map);
+	if (!set_tables(cmaps, unix_map, windows_map)) {
+		return False;
+	}
 
 	return True;
 }
@@ -155,13 +181,24 @@ int string_replace_allocate(connection_struct *conn,
 	}
 
 	for (ptr = tmpbuf; *ptr; ptr++) {
+		int pick_index;
+		
 		if (*ptr == 0) {
 			break;
 		}
 		if (cmaps == NULL) {
 			continue;
 		}
-		map = cmaps[T_PICK((*ptr))];
+		
+		/* Validate index to prevent buffer overflow */
+		pick_index = T_PICK((*ptr));
+		if (pick_index >= MAP_NUM) {
+			DEBUG(0, ("Invalid character mapping index: pick_index=%d, MAP_NUM=%d, char=0x%x\n",
+				  pick_index, MAP_NUM, *ptr));
+			continue;
+		}
+		
+		map = cmaps[pick_index];
 		if (map == NULL) {
 			/* nothing to do */
 			continue;
