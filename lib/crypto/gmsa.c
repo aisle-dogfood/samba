@@ -132,6 +132,9 @@ NTSTATUS gmsa_password_based_on_key_id(
 {
 	NTSTATUS status = NT_STATUS_OK;
 
+	/* Initialize the entire password buffer to prevent heap inspection */
+	memset(password, 0, GMSA_PASSWORD_NULL_TERMINATED_LEN);
+
 	/* Ensure that a specific seed key is being requested. */
 
 	if (!gkid_is_valid(gkid)) {
