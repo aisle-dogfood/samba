@@ -731,6 +731,28 @@ static int do_command(void)
 		return open_tdb(arg1);
 	case CMD_SYSTEM:
 		/* Shell command */
+		if (arg1 == NULL || strlen(arg1) == 0) {
+			terror("system command requires an argument\n");
+			return -1;
+		}
+		
+		/* Basic input validation to prevent command injection */
+		if (strstr(arg1, ";") != NULL || 
+		    strstr(arg1, "|") != NULL || 
+		    strstr(arg1, "&") != NULL || 
+		    strstr(arg1, "`") != NULL || 
+		    strstr(arg1, "$") != NULL || 
+		    strstr(arg1, "$(") != NULL || 
+		    strstr(arg1, "||") != NULL || 
+		    strstr(arg1, "&&") != NULL ||
+		    strstr(arg1, ">") != NULL ||
+		    strstr(arg1, "<") != NULL ||
+		    strstr(arg1, "\n") != NULL ||
+		    strstr(arg1, "\r") != NULL) {
+			terror("system command contains potentially dangerous characters\n");
+			return -1;
+		}
+		
 		ret = system(arg1);
 		if (ret != 0) {
 			terror("system() call failed\n");
