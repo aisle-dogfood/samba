@@ -345,24 +345,82 @@ int main(int argc, const char **argv)
 	infile = poptGetArg(pc);
 
 	if(infile) {
-		in  = fopen(infile, "r");
-		if(!in) {
-			perror("fopen");
+		char *clean_infile = NULL;
+		
+		/* Validate and sanitize the input file path to prevent path traversal attacks */
+		clean_infile = unix_clean_name(NULL, infile);
+		if (!clean_infile) {
+			fprintf(stderr, "Error: Invalid input file path\n");
 			poptFreeContext(pc);
 			return 1;
 		}
+		
+		/* Check for path traversal attempts */
+		if (strstr(clean_infile, "..") != NULL) {
+			fprintf(stderr, "Error: Path traversal detected in input file path\n");
+			talloc_free(clean_infile);
+			poptFreeContext(pc);
+			return 1;
+		}
+		
+		/* Prevent reading from absolute paths outside current directory */
+		if (clean_infile[0] == '/') {
+			fprintf(stderr, "Error: Absolute paths not allowed for input file\n");
+			talloc_free(clean_infile);
+			poptFreeContext(pc);
+			return 1;
+		}
+		
+		in = fopen(clean_infile, "r");
+		if(!in) {
+			perror("fopen");
+			talloc_free(clean_infile);
+			poptFreeContext(pc);
+			return 1;
+		}
+		
+		talloc_free(clean_infile);
 	} else in = stdin;
 
 	outfile = poptGetArg(pc);
 
 	if(outfile) {
-		out = fopen(outfile, "w+");
-		if(!out) {
-			perror("fopen");
-			fprintf(stderr, "Can't find %s, using stdout...\n", outfile);
+		char *clean_outfile = NULL;
+		
+		/* Validate and sanitize the output file path to prevent path traversal attacks */
+		clean_outfile = unix_clean_name(NULL, outfile);
+		if (!clean_outfile) {
+			fprintf(stderr, "Error: Invalid output file path\n");
 			poptFreeContext(pc);
 			return 1;
 		}
+		
+		/* Check for path traversal attempts */
+		if (strstr(clean_outfile, "..") != NULL) {
+			fprintf(stderr, "Error: Path traversal detected in output file path\n");
+			talloc_free(clean_outfile);
+			poptFreeContext(pc);
+			return 1;
+		}
+		
+		/* Prevent writing to absolute paths outside current directory */
+		if (clean_outfile[0] == '/') {
+			fprintf(stderr, "Error: Absolute paths not allowed for output file\n");
+			talloc_free(clean_outfile);
+			poptFreeContext(pc);
+			return 1;
+		}
+		
+		out = fopen(clean_outfile, "w+");
+		if(!out) {
+			perror("fopen");
+			fprintf(stderr, "Can't find %s, using stdout...\n", clean_outfile);
+			talloc_free(clean_outfile);
+			poptFreeContext(pc);
+			return 1;
+		}
+		
+		talloc_free(clean_outfile);
 	}
 
 	if(!outfile) out = stdout;
