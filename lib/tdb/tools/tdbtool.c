@@ -376,6 +376,7 @@ static bool parse_hex(const char *src, size_t srclen, uint8_t *dst)
 		}
 		src += 2;
 		dst += 1;
+		i += 2;
 	}
 
 	return true;
