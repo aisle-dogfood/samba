@@ -2345,6 +2345,7 @@ static NTSTATUS pdb_default_get_trusted_domain(struct pdb_methods *methods,
 	aia.AuthInfo.clear.size = strlen(pwd);
 	aia.AuthInfo.clear.password = (uint8_t *)talloc_memdup(tdom, pwd,
 							       aia.AuthInfo.clear.size);
+	BURN_STR(pwd);
 	SAFE_FREE(pwd);
 	if (aia.AuthInfo.clear.password == NULL) {
 		talloc_free(tdom);
