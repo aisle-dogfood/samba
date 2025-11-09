@@ -2428,9 +2428,11 @@ static krb5_error_code samba_kdc_fill_trust_keys(krb5_context context,
 
 	samba_kdc_sort_keys(p->skeys);
 
+	ZERO_STRUCT(_password_hash);
 	return 0;
 fail:
 	sdb_keys_free(p->skeys);
+	ZERO_STRUCT(_password_hash);
 	TALLOC_FREE(frame);
 	return ret;
 }
