@@ -160,11 +160,11 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
 			return status;
 		}
 	} else {
-		rc = des_crypt112(out->data, in->data, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
-		if (rc != 0) {
-			return gnutls_error_to_ntstatus(rc,
-							NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-		}
+		/*
+		 * DES encryption is cryptographically weak and should not be used.
+		 * Require AES support for secure communication.
+		 */
+		return NT_STATUS_NOT_SUPPORTED;
 	}
 
 	return NT_STATUS_OK;
@@ -1181,26 +1181,10 @@ static NTSTATUS netlogon_creds_crypt_samlogon_validation(struct netlogon_creds_C
 		}
 	} else {
 		/*
-		 * Don't crypt an all-zero key, it would give away
-		 * the NETLOGON pipe session key
-		 *
-		 * But for ServerAuthenticateKerberos we don't care
-		 * as we use a random key
+		 * DES encryption is cryptographically weak and should not be used.
+		 * Require AES or ARCFOUR support for secure communication.
 		 */
-		if (creds->authenticate_kerberos ||
-		    !all_zero(base->LMSessKey.key,
-			      sizeof(base->LMSessKey.key))) {
-			if (do_encrypt) {
-				status = netlogon_creds_des_encrypt_LMKey(creds,
-									  &base->LMSessKey);
-			} else {
-				status = netlogon_creds_des_decrypt_LMKey(creds,
-									  &base->LMSessKey);
-			}
-			if (!NT_STATUS_IS_OK(status)) {
-				return status;
-			}
-		}
+		return NT_STATUS_NOT_SUPPORTED;
 	}
 
 	return NT_STATUS_OK;
@@ -1461,15 +1445,29 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * Use AES encryption when available for better security.
+	 * Fall back to ARCFOUR if AES is not supported.
+	 * DES is no longer used due to cryptographic weakness.
 	 */
-
-	if (do_encrypt) {
-		return netlogon_creds_des_encrypt(creds, pass);
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds, 
+							  (uint8_t *)pass->hash,
+							  sizeof(pass->hash));
+		} else {
+			return netlogon_creds_aes_decrypt(creds,
+							  (uint8_t *)pass->hash,
+							  sizeof(pass->hash));
+		}
+	} else {
+		/*
+		 * Use ARCFOUR as fallback when AES is not available.
+		 * While not ideal, it's stronger than DES.
+		 */
+		return netlogon_creds_arcfour_crypt(creds,
+						    (uint8_t *)pass->hash,
+						    sizeof(pass->hash));
 	}
-
-	return netlogon_creds_des_decrypt(creds, pass);
 }
 
 NTSTATUS netlogon_creds_decrypt_samr_Password(struct netlogon_creds_CredentialState *creds,
