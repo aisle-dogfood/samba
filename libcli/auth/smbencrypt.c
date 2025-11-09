@@ -128,6 +128,7 @@ bool E_deshash(const char *passwd, uint8_t p16[16])
 		/* Too many callers don't check this result, we need to fill in the buffer with something */
 		strlcpy((char *)dospwd, passwd ? passwd : "", sizeof(dospwd));
 		E_P16(dospwd, p16);
+		ZERO_STRUCT(dospwd);
 		talloc_free(frame);
 		return false;
 	}
