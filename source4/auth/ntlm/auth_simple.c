@@ -100,6 +100,9 @@ _PUBLIC_ struct tevent_req *authenticate_ldap_simple_bind_send(TALLOC_CTX *mem_c
 		return tevent_req_post(req, ev);
 	}
 
+	/* Set destructor to clear sensitive password state information */
+	auth_usersupplied_info_set_secure_destructor(user_info);
+
 	user_info->flags = USER_INFO_CASE_INSENSITIVE_USERNAME |
 		USER_INFO_DONT_CHECK_UNIX_ACCOUNT;
 
