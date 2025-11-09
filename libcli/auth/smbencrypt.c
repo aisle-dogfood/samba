@@ -33,6 +33,25 @@
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
 
+/* WKSSVC AES-256-CBC-HMAC-SHA512 salt constants */
+#define WKSSVC_AES256_ENC_KEY_STRING \
+	"Microsoft WKSSVC encryption key AEAD-AES-256-CBC-HMAC-SHA512 16"
+#define WKSSVC_AES256_ENC_KEY_STRING_LEN 65 /* Including terminating null byte */
+
+#define WKSSVC_AES256_MAC_KEY_STRING \
+	"Microsoft WKSSVC MAC key AEAD-AES-256-CBC-HMAC-SHA512 16"
+#define WKSSVC_AES256_MAC_KEY_STRING_LEN 58 /* Including terminating null byte */
+
+static const DATA_BLOB wkssvc_aes256_enc_key_salt = {
+	.data = discard_const_p(uint8_t, WKSSVC_AES256_ENC_KEY_STRING),
+	.length = WKSSVC_AES256_ENC_KEY_STRING_LEN,
+};
+
+static const DATA_BLOB wkssvc_aes256_mac_key_salt = {
+	.data = discard_const_p(uint8_t, WKSSVC_AES256_MAC_KEY_STRING),
+	.length = WKSSVC_AES256_MAC_KEY_STRING_LEN,
+};
+
 int SMBencrypt_hash(const uint8_t lm_hash[16], const uint8_t *c8, uint8_t p24[24])
 {
 	uint8_t p21[21];
@@ -1741,11 +1760,13 @@ WERROR encode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 					  struct wkssvc_PasswordBuffer **out_pwd_buf)
 {
 	struct wkssvc_PasswordBuffer *pwd_buf = NULL;
-	uint8_t _confounder[8] = {0};
-	DATA_BLOB confounder = data_blob_const(_confounder, 8);
 	uint8_t pwbuf[516] = {0};
-	DATA_BLOB encrypt_pwbuf = data_blob_const(pwbuf, 516);
-	int rc;
+	DATA_BLOB plaintext = data_blob_const(pwbuf, 516);
+	DATA_BLOB ciphertext = {0};
+	DATA_BLOB iv = {0};
+	uint8_t iv_data[16] = {0};
+	uint8_t auth_tag[64] = {0};
+	NTSTATUS status;
 
 	pwd_buf = talloc_zero(mem_ctx, struct wkssvc_PasswordBuffer);
 	if (pwd_buf == NULL) {
@@ -1754,22 +1775,33 @@ WERROR encode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 
 	encode_pw_buffer(pwbuf, pwd, STR_UNICODE);
 
-	generate_random_buffer(_confounder, sizeof(_confounder));
+	/* Generate random IV for AES encryption */
+	generate_random_buffer(iv_data, sizeof(iv_data));
+	iv = data_blob_const(iv_data, sizeof(iv_data));
 
-	rc = samba_gnutls_arcfour_confounded_md5(session_key,
-						 &confounder,
-						 &encrypt_pwbuf,
-						 SAMBA_GNUTLS_ENCRYPT);
-	if (rc < 0) {
-		ZERO_ARRAY(_confounder);
+	status = samba_gnutls_aead_aes_256_cbc_hmac_sha512_encrypt(
+		mem_ctx,
+		&plaintext,
+		session_key,
+		&wkssvc_aes256_enc_key_salt,
+		&wkssvc_aes256_mac_key_salt,
+		&iv,
+		&ciphertext,
+		auth_tag);
+	ZERO_ARRAY(pwbuf);
+	if (!NT_STATUS_IS_OK(status)) {
 		TALLOC_FREE(pwd_buf);
-		return gnutls_error_to_werror(rc, WERR_CONTENT_BLOCKED);
+		return ntstatus_to_werror(status);
 	}
 
-	memcpy(&pwd_buf->data[0], confounder.data, confounder.length);
-	ZERO_ARRAY(_confounder);
-	memcpy(&pwd_buf->data[8], encrypt_pwbuf.data, encrypt_pwbuf.length);
-	ZERO_ARRAY(pwbuf);
+	/* Store IV at the beginning of the buffer */
+	memcpy(&pwd_buf->data[0], iv_data, sizeof(iv_data));
+	/* Store auth tag after IV */
+	memcpy(&pwd_buf->data[16], auth_tag, sizeof(auth_tag));
+	/* Store ciphertext after IV and auth tag */
+	memcpy(&pwd_buf->data[80], ciphertext.data, ciphertext.length);
+	
+	data_blob_free(&ciphertext);
 
 	*out_pwd_buf = pwd_buf;
 
@@ -1781,12 +1813,13 @@ WERROR decode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 					  DATA_BLOB *session_key,
 					  char **pwd)
 {
-	uint8_t _confounder[8] = { 0 };
-	DATA_BLOB confounder = data_blob_const(_confounder, 8);
-	uint8_t pwbuf[516] = {0};
-	DATA_BLOB decrypt_pwbuf = data_blob_const(pwbuf, 516);
+	uint8_t iv_data[16] = {0};
+	DATA_BLOB iv = data_blob_const(iv_data, 16);
+	DATA_BLOB ciphertext = {0};
+	DATA_BLOB plaintext = {0};
+	uint8_t auth_tag[64] = {0};
 	bool ok;
-	int rc;
+	NTSTATUS status;
 
 	if (pwd_buf == NULL) {
 		return WERR_INVALID_PASSWORD;
@@ -1799,25 +1832,34 @@ WERROR decode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 		return WERR_INVALID_PASSWORD;
 	}
 
-	confounder = data_blob_const(&pwd_buf->data[0], 8);
-	memcpy(&pwbuf, &pwd_buf->data[8], 516);
+	/* Extract IV from the beginning of the buffer */
+	memcpy(iv_data, &pwd_buf->data[0], 16);
+	
+	/* Extract auth tag (64 bytes at the end) */
+	memcpy(auth_tag, &pwd_buf->data[16], 64);
+	
+	/* Extract ciphertext (between IV and auth tag) */
+	ciphertext = data_blob_const(&pwd_buf->data[80], 516); /* After IV (16) + auth tag (64) */
 
-	rc = samba_gnutls_arcfour_confounded_md5(session_key,
-						 &confounder,
-						 &decrypt_pwbuf,
-						 SAMBA_GNUTLS_ENCRYPT);
-	if (rc < 0) {
-		ZERO_ARRAY(_confounder);
-		TALLOC_FREE(pwd_buf);
-		return gnutls_error_to_werror(rc, WERR_CONTENT_BLOCKED);
+	status = samba_gnutls_aead_aes_256_cbc_hmac_sha512_decrypt(
+		mem_ctx,
+		&ciphertext,
+		session_key,
+		&wkssvc_aes256_enc_key_salt,
+		&wkssvc_aes256_mac_key_salt,
+		&iv,
+		auth_tag,
+		&plaintext);
+	if (!NT_STATUS_IS_OK(status)) {
+		return ntstatus_to_werror(status);
 	}
 
 	ok = decode_pw_buffer(mem_ctx,
-			      decrypt_pwbuf.data,
+			      plaintext.data,
 			      pwd,
-			      &decrypt_pwbuf.length,
+			      &plaintext.length,
 			      CH_UTF16);
-	ZERO_ARRAY(pwbuf);
+	data_blob_clear_free(&plaintext);
 
 	if (!ok) {
 		return WERR_INVALID_PASSWORD;
