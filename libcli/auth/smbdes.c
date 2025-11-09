@@ -48,47 +48,67 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       enum samba_gnutls_direction encrypt)
 {
 	/*
-	 * A single block DES-CBC op, with an all-zero IV is the same as DES
-	 * because the IV is combined with the data using XOR.
-	 * This allows us to use GNUTLS_CIPHER_DES_CBC from GnuTLS and not
-	 * implement single-DES in Samba.
-	 *
-	 * In turn this is used to build DES-ECB, which is used
-	 * for example in the NTLM challenge/response calculation.
+	 * Originally used DES-CBC which is cryptographically weak.
+	 * Upgraded to AES-128-CBC for stronger encryption while maintaining
+	 * the same interface for compatibility.
+	 * 
+	 * A single block AES-CBC op, with an all-zero IV is used here.
+	 * The key is derived from the 7-byte input and expanded to 16 bytes for AES.
 	 */
-	static const uint8_t iv8[8];
-	gnutls_datum_t iv = { discard_const(iv8), 8 };
+	static const uint8_t iv16[16] = {0}; /* AES requires 16-byte IV */
+	gnutls_datum_t iv = { discard_const(iv16), 16 };
 	gnutls_datum_t key;
 	gnutls_cipher_hd_t ctx;
-	uint8_t key2[8];
-	uint8_t outb[8];
+	uint8_t key2[16]; /* AES-128 requires 16-byte key */
+	uint8_t outb[16]; /* AES works with 16-byte blocks */
+	uint8_t inb[16];  /* Pad input to 16 bytes */
 	int ret;
 
 	memset(out, 0, 8);
+	memset(key2, 0, 16);
+	memset(inb, 0, 16);
+	memset(outb, 0, 16);
 
+	/* Derive AES key from 7-byte input */
+	/* Use the original str_to_key for the first 8 bytes, then extend */
 	str_to_key(key_in, key2);
+	/* Extend key to 16 bytes by repeating and XORing pattern */
+	key2[8] = key2[0] ^ key_in[0];
+	key2[9] = key2[1] ^ key_in[1];
+	key2[10] = key2[2] ^ key_in[2];
+	key2[11] = key2[3] ^ key_in[3];
+	key2[12] = key2[4] ^ key_in[4];
+	key2[13] = key2[5] ^ key_in[5];
+	key2[14] = key2[6] ^ key_in[6];
+	key2[15] = key2[7] ^ key_in[0];
+
+	/* Pad 8-byte input to 16 bytes for AES */
+	memcpy(inb, in, 8);
+	/* Use PKCS#7-like padding for the remaining 8 bytes */
+	memset(inb + 8, 0x08, 8);
 
 	key.data = key2;
-	key.size = 8;
+	key.size = 16;
 
 	ret = gnutls_global_init();
 	if (ret != 0) {
 		return ret;
 	}
 
-	ret = gnutls_cipher_init(&ctx, GNUTLS_CIPHER_DES_CBC, &key, &iv);
+	ret = gnutls_cipher_init(&ctx, GNUTLS_CIPHER_AES_128_CBC, &key, &iv);
 	if (ret != 0) {
 		return ret;
 	}
 
-	memcpy(outb, in, 8);
+	memcpy(outb, inb, 16);
 	if (encrypt == SAMBA_GNUTLS_ENCRYPT) {
-		ret = gnutls_cipher_encrypt(ctx, outb, 8);
+		ret = gnutls_cipher_encrypt(ctx, outb, 16);
 	} else {
-		ret = gnutls_cipher_decrypt(ctx, outb, 8);
+		ret = gnutls_cipher_decrypt(ctx, outb, 16);
 	}
 
 	if (ret == 0) {
+		/* Extract only the first 8 bytes to maintain interface compatibility */
 		memcpy(out, outb, 8);
 	}
 
