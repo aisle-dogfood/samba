@@ -728,9 +728,10 @@ int pdb_nds_set_password(
 		SAFE_FREE(ld_error);
 	}
 
-	/* Set eDirectory Password */
-	smbldap_set_mod(&tmpmods, LDAP_MOD_REPLACE, "userPassword", pwd);
-	rc = smbldap_modify(ldap_state, object_dn, tmpmods);
+	/* The NDS Universal Password has been set above via nmasldap_set_password().
+	 * Do not set userPassword attribute directly as it would store the password
+	 * in plaintext, which is a security vulnerability.
+	 */
 
 	return rc;
 }
