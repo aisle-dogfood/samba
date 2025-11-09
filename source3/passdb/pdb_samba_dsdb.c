@@ -2309,10 +2309,10 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	int trust_direction_flags;
 	int trust_type;
 	int i;
-	DATA_BLOB password_utf16 = {};
+	DATA_BLOB password_utf16 = data_blob_null;
 	struct samr_Password *password_nt = NULL;
 	uint32_t password_version = 0;
-	DATA_BLOB old_password_utf16 = {};
+	DATA_BLOB old_password_utf16 = data_blob_null;
 	struct samr_Password *old_password_nt = NULL;
 	struct trustAuthInOutBlob password_blob;
 	enum ndr_err_code ndr_err;
