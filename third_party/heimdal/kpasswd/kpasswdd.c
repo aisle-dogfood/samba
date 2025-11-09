@@ -588,7 +588,7 @@ process (krb5_keytab keytab,
 	 struct sockaddr *sa,
 	 int sa_size,
 	 u_char *msg,
-	 int len)
+	 size_t len)
 {
     krb5_error_code ret;
     krb5_auth_context auth_context = NULL;
@@ -768,6 +768,12 @@ doit(krb5_keytab keytab, int port)
 			break;
 		    else
 			krb5_err(context, 1, errno, "recvfrom");
+		}
+		
+		/* Ensure retx is non-negative and within reasonable bounds */
+		if (retx <= 0 || retx > sizeof(buf)) {
+		    krb5_warnx(context, "Invalid message length: %lld", (long long)retx);
+		    continue;
 		}
 
 		process(keytab, sockets[i],
