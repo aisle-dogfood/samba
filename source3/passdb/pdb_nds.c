@@ -677,7 +677,7 @@ int pdb_nds_get_password(
 	rc = nmasldap_get_password(ld, object_dn, pwd_len, (unsigned char *)pwd);
 	if (rc == LDAP_SUCCESS) {
 #ifdef DEBUG_PASSWORD
-		DEBUG(100,("nmasldap_get_password returned %s for %s\n", pwd, object_dn));
+		DEBUG(100,("nmasldap_get_password succeeded for %s\n", object_dn));
 #endif    
 		DEBUG(5, ("NDS Universal Password retrieved for %s\n", object_dn));
 	} else {
@@ -688,7 +688,7 @@ int pdb_nds_get_password(
 		rc = nmasldap_get_simple_pwd(ld, object_dn, *pwd_len, pwd);
 		if (rc == LDAP_SUCCESS) {
 #ifdef DEBUG_PASSWORD
-			DEBUG(100,("nmasldap_get_simple_pwd returned %s for %s\n", pwd, object_dn));
+			DEBUG(100,("nmasldap_get_simple_pwd succeeded for %s\n", object_dn));
 #endif    
 			DEBUG(5, ("NDS Simple Password retrieved for %s\n", object_dn));
 		} else {
@@ -817,7 +817,7 @@ static NTSTATUS pdb_nds_update_login_attempts(struct pdb_methods *methods,
 			/* This is a long term key */
 			generate_secret_buffer((unsigned char *)clear_text_pw, 24);
 			clear_text_pw[24] = '\0';
-			DEBUG(5,("pdb_nds_update_login_attempts: using random password %s\n", clear_text_pw));
+			DEBUG(5,("pdb_nds_update_login_attempts: using random password\n"));
 		}
 
 		if((success != True) || (got_clear_text_pw == True)) {
