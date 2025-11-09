@@ -1461,15 +1461,23 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * Use stronger encryption when available, fallback to DES for compatibility
 	 */
-
-	if (do_encrypt) {
-		return netlogon_creds_des_encrypt(creds, pass);
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds, pass->hash, sizeof(pass->hash));
+		} else {
+			return netlogon_creds_aes_decrypt(creds, pass->hash, sizeof(pass->hash));
+		}
+	} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+		return netlogon_creds_arcfour_crypt(creds, pass->hash, sizeof(pass->hash));
+	} else {
+		/* Fallback to DES for legacy compatibility */
+		if (do_encrypt) {
+			return netlogon_creds_des_encrypt(creds, pass);
+		}
+		return netlogon_creds_des_decrypt(creds, pass);
 	}
-
-	return netlogon_creds_des_decrypt(creds, pass);
 }
 
 NTSTATUS netlogon_creds_decrypt_samr_Password(struct netlogon_creds_CredentialState *creds,
