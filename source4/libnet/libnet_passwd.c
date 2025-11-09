@@ -140,11 +140,27 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 	struct samr_Password nt_verifier, lm_verifier;
 	struct lsa_AsciiString a_server, a_account;
 	gnutls_cipher_hd_t cipher_hnd = NULL;
+	/* Strengthen session keys using PBKDF2 */
+	uint8_t strengthened_nt_key[16];
+	uint8_t strengthened_lm_key[16];
+	uint8_t salt[16];
 	gnutls_datum_t nt_session_key = {
+		.data = strengthened_nt_key,
+		.size = sizeof(strengthened_nt_key),
+	};
+	gnutls_datum_t lm_session_key = {
+		.data = strengthened_lm_key,
+		.size = sizeof(strengthened_lm_key),
+	};
+	gnutls_datum_t salt_datum = {
+		.data = salt,
+		.size = sizeof(salt),
+	};
+	gnutls_datum_t nt_key_input = {
 		.data = old_nt_hash,
 		.size = sizeof(old_nt_hash),
 	};
-	gnutls_datum_t lm_session_key = {
+	gnutls_datum_t lm_key_input = {
 		.data = old_lm_hash,
 		.size = sizeof(old_lm_hash),
 	};
@@ -158,6 +174,31 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 
 	E_deshash(old_password, old_lm_hash);
 	E_deshash(new_password, new_lm_hash);
+
+	/* Generate salt and strengthen session keys using PBKDF2 */
+	generate_nonce_buffer(salt, sizeof(salt));
+	
+	rc = gnutls_pbkdf2(GNUTLS_MAC_SHA256,
+			   &nt_key_input,
+			   &salt_datum,
+			   10000, /* iterations */
+			   strengthened_nt_key,
+			   sizeof(strengthened_nt_key));
+	if (rc < 0) {
+		status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto done;
+	}
+
+	rc = gnutls_pbkdf2(GNUTLS_MAC_SHA256,
+			   &lm_key_input,
+			   &salt_datum,
+			   10000, /* iterations */
+			   strengthened_lm_key,
+			   sizeof(strengthened_lm_key));
+	if (rc < 0) {
+		status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto done;
+	}
 
 	/* prepare samr_ChangePasswordUser3 */
 	encode_pw_buffer(lm_pass.data, new_password, STR_UNICODE);
@@ -379,6 +420,10 @@ static NTSTATUS libnet_ChangePassword_samr_rc4(TALLOC_CTX *mem_ctx,
 
 	status = NT_STATUS_OK;
 done:
+	/* Securely clear strengthened keys from memory */
+	BURN_DATA(strengthened_nt_key);
+	BURN_DATA(strengthened_lm_key);
+	BURN_DATA(salt);
 	return status;
 }
 
