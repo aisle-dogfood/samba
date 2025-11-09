@@ -53,6 +53,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user\n"));
 
+	/* Check if weak crypto is disallowed and transport is not encrypted */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED &&
+	    !dcerpc_binding_handle_transport_encrypted(h)) {
+		DEBUG(1, ("dcerpc_samr_chgpasswd_user: weak crypto disallowed and transport not encrypted\n"));
+		return NT_STATUS_ACCESS_DENIED;
+	}
+
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
@@ -162,6 +169,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 	DATA_BLOB session_key = data_blob_const(old_nt_hash, 16);
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user2\n"));
+
+	/* Check if weak crypto is disallowed and transport is not encrypted */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED &&
+	    !dcerpc_binding_handle_transport_encrypted(h)) {
+		DEBUG(1, ("dcerpc_samr_chgpasswd_user2: weak crypto disallowed and transport not encrypted\n"));
+		return NT_STATUS_ACCESS_DENIED;
+	}
 
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
@@ -370,6 +384,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user3\n"));
 
+	/* Check if weak crypto is disallowed and transport is not encrypted */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED &&
+	    !dcerpc_binding_handle_transport_encrypted(h)) {
+		DEBUG(1, ("dcerpc_samr_chgpasswd_user3: weak crypto disallowed and transport not encrypted\n"));
+		return NT_STATUS_ACCESS_DENIED;
+	}
+
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
 
@@ -510,6 +531,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 	int rc;
 
 	generate_nonce_buffer(iv.data, iv.length);
+
+	/* Check if weak crypto is disallowed and transport is not encrypted */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED &&
+	    !dcerpc_binding_handle_transport_encrypted(h)) {
+		DEBUG(1, ("dcerpc_samr_chgpasswd_user4: weak crypto disallowed and transport not encrypted\n"));
+		return NT_STATUS_ACCESS_DENIED;
+	}
 
 	/* Calculate the MD4 hash (NT compatible) of the password */
 	E_md4hash(oldpassword, old_nt_key_data);
