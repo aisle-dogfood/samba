@@ -511,7 +511,7 @@ static bool test_plaintext(enum ntlm_break break_which)
 	uint32_t flags = 0;
 	DATA_BLOB nt_response = data_blob_null;
 	DATA_BLOB lm_response = data_blob_null;
-	char *password;
+	char *password = NULL;
 	smb_ucs2_t *nt_response_ucs2;
 	size_t converted_size;
 	uint8_t authoritative = 1;
