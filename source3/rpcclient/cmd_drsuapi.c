@@ -146,7 +146,12 @@ static void display_domain_controller_info_01(struct drsuapi_DsGetDCConnection01
 	printf("unknown4:\t%d\n", r->unknown4);
 	printf("unknown5:\t%d\n", r->unknown5);
 	printf("unknown6:\t%d\n", r->unknown6);
-	printf("client_account:\t%s\n", r->client_account);
+	/* Mask client account for privacy protection */
+	if (r->client_account && strlen(r->client_account) > 0) {
+		printf("client_account:\t[REDACTED]\n");
+	} else {
+		printf("client_account:\t(null)\n");
+	}
 }
 
 static void display_domain_controller_info_1(struct drsuapi_DsGetDCInfo1 *r)
