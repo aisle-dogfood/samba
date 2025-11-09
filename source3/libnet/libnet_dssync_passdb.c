@@ -1126,15 +1126,15 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	const char *profilePath;
 	const char *description;
 	const char *userWorkstations;
-	DATA_BLOB userParameters;
+	DATA_BLOB userParameters = data_blob_null;
 	struct dom_sid objectSid;
 	uint32_t primaryGroupID;
 	uint32_t userAccountControl;
-	DATA_BLOB logonHours;
+	DATA_BLOB logonHours = data_blob_null;
 	uint32_t badPwdCount;
 	uint32_t logonCount;
-	DATA_BLOB unicodePwd;
-	DATA_BLOB dBCSPwd;
+	DATA_BLOB unicodePwd = data_blob_null;
+	DATA_BLOB dBCSPwd = data_blob_null;
 
 	uint32_t rid = 0;
 	uint32_t acct_flags;
