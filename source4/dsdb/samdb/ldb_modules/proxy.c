@@ -141,6 +141,11 @@ static int load_proxy_info(struct ldb_module *module)
 	cli_credentials_set_username(creds, username, CRED_SPECIFIED);
 	cli_credentials_set_password(creds, password, CRED_SPECIFIED);
 
+	/* Clear the password from memory to prevent heap inspection attacks */
+	if (password != NULL) {
+		memset((char *)password, '\0', strlen(password));
+	}
+
 	ldb_set_opaque(proxy->upstream, "credentials", creds);
 
 	ret = ldb_connect(proxy->upstream, url, 0, NULL);
@@ -156,6 +161,13 @@ static int load_proxy_info(struct ldb_module *module)
 	return LDB_SUCCESS;
 
 failed:
+	/* Clear password from memory if it was retrieved */
+	if (res != NULL && res->count > 0) {
+		const char *pwd = ldb_msg_find_attr_as_string(res->msgs[0], "password", NULL);
+		if (pwd != NULL) {
+			memset((char *)pwd, '\0', strlen(pwd));
+		}
+	}
 	talloc_free(res);
 	talloc_free(proxy->olddn);
 	talloc_free(proxy->newdn);
