@@ -53,8 +53,9 @@ static NTSTATUS fix_user(TALLOC_CTX *mem_ctx,
 	 * think this channel is secure enough. */
 	if (user->lm_password_present) {
 		if (!all_zero(user->lmpassword.hash, 16)) {
-			rc = sam_rid_crypt(rid, user->lmpassword.hash,
-					    lm_hash.hash, SAMBA_GNUTLS_DECRYPT);
+			/* Use secure encryption method that prefers AES over DES */
+			rc = sam_rid_crypt_secure(rid, user->lmpassword.hash,
+					    lm_hash.hash, SAMBA_GNUTLS_DECRYPT, true);
 			if (rc != 0) {
 				return gnutls_error_to_ntstatus(rc,
 								NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
@@ -67,8 +68,9 @@ static NTSTATUS fix_user(TALLOC_CTX *mem_ctx,
 
 	if (user->nt_password_present) {
 		if (!all_zero(user->ntpassword.hash, 16)) {
-			rc = sam_rid_crypt(rid, user->ntpassword.hash,
-					    nt_hash.hash, SAMBA_GNUTLS_DECRYPT);
+			/* Use secure encryption method that prefers AES over DES */
+			rc = sam_rid_crypt_secure(rid, user->ntpassword.hash,
+					    nt_hash.hash, SAMBA_GNUTLS_DECRYPT, true);
 			if (rc != 0) {
 				return gnutls_error_to_ntstatus(rc,
 								NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
@@ -111,9 +113,10 @@ static NTSTATUS fix_user(TALLOC_CTX *mem_ctx,
 		if (keys.keys.keys2.lmpassword.length == 16) {
 			if (!all_zero(keys.keys.keys2.lmpassword.pwd.hash,
 				      16)) {
-				rc = sam_rid_crypt(rid,
+				/* Use secure encryption method that prefers AES over DES */
+				rc = sam_rid_crypt_secure(rid,
 					           keys.keys.keys2.lmpassword.pwd.hash,
-					           lm_hash.hash, SAMBA_GNUTLS_DECRYPT);
+					           lm_hash.hash, SAMBA_GNUTLS_DECRYPT, true);
 				if (rc != 0) {
 					return gnutls_error_to_ntstatus(rc,
 									NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
@@ -127,9 +130,10 @@ static NTSTATUS fix_user(TALLOC_CTX *mem_ctx,
 		if (keys.keys.keys2.ntpassword.length == 16) {
 			if (!all_zero(keys.keys.keys2.ntpassword.pwd.hash,
 				      16)) {
-				rc = sam_rid_crypt(rid,
+				/* Use secure encryption method that prefers AES over DES */
+				rc = sam_rid_crypt_secure(rid,
 						   keys.keys.keys2.ntpassword.pwd.hash,
-						   nt_hash.hash, SAMBA_GNUTLS_DECRYPT);
+						   nt_hash.hash, SAMBA_GNUTLS_DECRYPT, true);
 				if (rc != 0) {
 					return gnutls_error_to_ntstatus(rc,
 									NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);

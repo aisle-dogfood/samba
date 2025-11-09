@@ -135,9 +135,10 @@ static WERROR drsuapi_decrypt_attribute_value(TALLOC_CTX *mem_ctx,
 		num_hashes = plain_buffer.length / 16;
 		for (i = 0; i < num_hashes; i++) {
 			uint32_t offset = i * 16;
-			rc = sam_rid_crypt(rid, checked_buffer.data + offset,
+			/* Use secure encryption method that prefers AES over DES */
+			rc = sam_rid_crypt_secure(rid, checked_buffer.data + offset,
 					   plain_buffer.data + offset,
-					   SAMBA_GNUTLS_DECRYPT);
+					   SAMBA_GNUTLS_DECRYPT, true);
 			if (rc != 0) {
 				result = gnutls_error_to_werror(rc, WERR_INTERNAL_ERROR);
 				goto out;
@@ -261,9 +262,10 @@ static WERROR drsuapi_encrypt_attribute_value(TALLOC_CTX *mem_ctx,
 		num_hashes = rid_crypt_out.length / 16;
 		for (i = 0; i < num_hashes; i++) {
 			uint32_t offset = i * 16;
-			rc = sam_rid_crypt(rid, in->data + offset,
+			/* Use secure encryption method that prefers AES over DES */
+			rc = sam_rid_crypt_secure(rid, in->data + offset,
 					   rid_crypt_out.data + offset,
-					   SAMBA_GNUTLS_ENCRYPT);
+					   SAMBA_GNUTLS_ENCRYPT, true);
 			if (rc != 0) {
 				result = gnutls_error_to_werror(rc, WERR_INTERNAL_ERROR);
 				goto out;
