@@ -516,8 +516,21 @@ static bool cm_is_ipc_credentials(struct cli_credentials *creds)
 		goto done;
 	}
 
-	if (!strcsequal(ipc_password, creds_password)) {
-		goto done;
+	if (ipc_password == NULL || creds_password == NULL) {
+		if (ipc_password != creds_password) {
+			goto done;
+		}
+	} else {
+		size_t ipc_len = strlen(ipc_password);
+		size_t creds_len = strlen(creds_password);
+		
+		if (ipc_len != creds_len) {
+			goto done;
+		}
+		
+		if (!mem_equal_const_time(ipc_password, creds_password, ipc_len)) {
+			goto done;
+		}
 	}
 
 	ret = true;
