@@ -64,6 +64,34 @@ static char fcntl_lock(const char *file, int *outfd)
 {
 	int fd;
 	int ret;
+	char *resolved_path = NULL;
+
+	/* Validate file path to prevent path traversal attacks */
+	if (file == NULL || strlen(file) == 0) {
+		fprintf(stderr, "%s: Invalid file path\n", progname);
+		return '3';
+	}
+
+	/* Check for path traversal sequences */
+	if (strstr(file, "..") != NULL) {
+		fprintf(stderr, "%s: Path traversal detected in file path: %s\n",
+			progname, file);
+		return '3';
+	}
+
+	/* Resolve the path to prevent symlink attacks and normalize it */
+	resolved_path = realpath(file, NULL);
+	if (resolved_path != NULL) {
+		/* Check if resolved path still contains traversal attempts */
+		if (strstr(resolved_path, "..") != NULL) {
+			fprintf(stderr, "%s: Path traversal detected in resolved path: %s\n",
+				progname, resolved_path);
+			free(resolved_path);
+			return '3';
+		}
+		free(resolved_path);
+	}
+	/* Note: realpath() may fail if file doesn't exist yet, which is OK for O_CREAT */
 
 	fd = open(file, O_RDWR|O_CREAT, 0600);
 	if (fd == -1) {
