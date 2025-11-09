@@ -456,6 +456,14 @@ static NTSTATUS libnet_ChangePassword_samr(struct libnet_context *ctx, TALLOC_CT
 	}
 
 disconnect:
+	/* clear sensitive password data from memory */
+	if (r->samr.in.oldpassword != NULL) {
+		memset((void *)r->samr.in.oldpassword, 0, strlen(r->samr.in.oldpassword));
+	}
+	if (r->samr.in.newpassword != NULL) {
+		memset((void *)r->samr.in.newpassword, 0, strlen(r->samr.in.newpassword));
+	}
+
 	/* close connection */
 	talloc_unlink(ctx, c.out.dcerpc_pipe);
 
@@ -476,6 +484,14 @@ static NTSTATUS libnet_ChangePassword_generic(struct libnet_context *ctx, TALLOC
 	status = libnet_ChangePassword(ctx, mem_ctx, &r2);
 
 	r->generic.out.error_string = r2.samr.out.error_string;
+
+	/* clear sensitive password data from memory */
+	if (r->generic.in.oldpassword != NULL) {
+		memset((void *)r->generic.in.oldpassword, 0, strlen(r->generic.in.oldpassword));
+	}
+	if (r->generic.in.newpassword != NULL) {
+		memset((void *)r->generic.in.newpassword, 0, strlen(r->generic.in.newpassword));
+	}
 
 	return status;
 }
@@ -1044,6 +1060,11 @@ static NTSTATUS libnet_SetPassword_samr(struct libnet_context *ctx, TALLOC_CTX *
 
 	r->generic.out.error_string = r2.samr_handle.out.error_string;
 
+	/* clear sensitive password data from memory */
+	if (r->samr.in.newpassword != NULL) {
+		memset((void *)r->samr.in.newpassword, 0, strlen(r->samr.in.newpassword));
+	}
+
 disconnect:
 	/* close connection */
 	talloc_unlink(ctx, c.out.dcerpc_pipe);
@@ -1067,6 +1088,11 @@ static NTSTATUS libnet_SetPassword_generic(struct libnet_context *ctx, TALLOC_CT
 	status = libnet_SetPassword(ctx, mem_ctx, &r2);
 
 	r->generic.out.error_string = r2.samr.out.error_string;
+
+	/* clear sensitive password data from memory */
+	if (r->generic.in.newpassword != NULL) {
+		memset((void *)r->generic.in.newpassword, 0, strlen(r->generic.in.newpassword));
+	}
 
 	return status;
 }
@@ -1125,6 +1151,29 @@ NTSTATUS libnet_SetPassword(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, uni
 			break;
 		case LIBNET_SET_PASSWORD_RAP:
 			status = NT_STATUS_NOT_IMPLEMENTED;
+			break;
+	}
+
+	/* clear sensitive password data from memory based on the level used */
+	switch (r->generic.level) {
+		case LIBNET_SET_PASSWORD_GENERIC:
+		case LIBNET_SET_PASSWORD_SAMR:
+		case LIBNET_SET_PASSWORD_KRB5:
+		case LIBNET_SET_PASSWORD_LDAP:
+		case LIBNET_SET_PASSWORD_RAP:
+			if (r->generic.in.newpassword != NULL) {
+				memset((void *)r->generic.in.newpassword, 0, strlen(r->generic.in.newpassword));
+			}
+			break;
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE:
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_26:
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_25:
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_24:
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_23:
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_18:
+			if (r->samr_handle.in.newpassword != NULL) {
+				memset((void *)r->samr_handle.in.newpassword, 0, strlen(r->samr_handle.in.newpassword));
+			}
 			break;
 	}
 
