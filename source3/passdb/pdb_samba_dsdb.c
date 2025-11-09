@@ -2376,6 +2376,23 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
 
+	/* Validate blob size to prevent heap inspection vulnerability */
+	if (password_val->length < 12) {
+		DEBUG(0, ("Failed to get trusted domain password for %s, "
+			  "trustAuthOutgoing blob too small (%zu bytes, minimum 12).\n",
+			  domain, password_val->length));
+		TALLOC_FREE(tmp_ctx);
+		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
+	}
+
+	if (password_val->length > (1024 * 1024)) {
+		DEBUG(0, ("Failed to get trusted domain password for %s, "
+			  "trustAuthOutgoing blob too large (%zu bytes, maximum 1MB).\n",
+			  domain, password_val->length));
+		TALLOC_FREE(tmp_ctx);
+		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
+	}
+
 	ndr_err = ndr_pull_struct_blob(password_val, tmp_ctx, &password_blob,
 				(ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
