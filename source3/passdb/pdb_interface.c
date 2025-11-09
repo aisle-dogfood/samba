@@ -2300,6 +2300,18 @@ NTSTATUS pdb_filter_hints(TALLOC_CTX *mem_ctx,
 				 p_local_functional_level);
 }
 
+/*
+ * Destructor to securely zero password memory when freed
+ */
+static int clear_password_destructor(uint8_t *password)
+{
+	size_t password_len = talloc_get_size(password);
+	if (password_len > 0) {
+		memset(password, 0, password_len);
+	}
+	return 0;
+}
+
 static NTSTATUS pdb_default_get_trusted_domain(struct pdb_methods *methods,
 					       TALLOC_CTX *mem_ctx,
 					       const char *domain,
@@ -2354,6 +2366,9 @@ static NTSTATUS pdb_default_get_trusted_domain(struct pdb_methods *methods,
 		talloc_free(tdom);
 		return NT_STATUS_NO_MEMORY;
 	}
+
+	/* Set destructor to securely zero password memory when freed */
+	talloc_set_destructor(aia.AuthInfo.clear.password, clear_password_destructor);
 
 	taiob.previous.count = 0;
 	taiob.previous.array = NULL;
