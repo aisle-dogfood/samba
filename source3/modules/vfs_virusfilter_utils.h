@@ -71,6 +71,10 @@ char *virusfilter_string_sub(
 	TALLOC_CTX *mem_ctx,
 	connection_struct *conn,
 	const char *str);
+char *virusfilter_string_sub_safe(
+	TALLOC_CTX *mem_ctx,
+	connection_struct *conn,
+	const char *str);
 int virusfilter_vfs_next_move(
 	vfs_handle_struct *handle,
 	const struct smb_filename *smb_fname_src,

@@ -48,6 +48,65 @@ char *virusfilter_string_sub(
 		str);
 }
 
+char *virusfilter_string_sub_safe(
+	TALLOC_CTX *mem_ctx,
+	connection_struct *conn,
+	const char *str)
+{
+	const struct loadparm_substitution *lp_sub =
+		loadparm_s3_global_substitution();
+	char *escaped_unix_name = NULL;
+	char *escaped_sanitized_username = NULL;
+	char *escaped_domain_name = NULL;
+	char *escaped_connectpath = NULL;
+	char *escaped_servicename = NULL;
+	char *result = NULL;
+
+	/* Escape user-controlled values to prevent command injection */
+	escaped_unix_name = escape_shell_string(conn->session_info->unix_info->unix_name);
+	if (escaped_unix_name == NULL) {
+		goto cleanup;
+	}
+
+	escaped_sanitized_username = escape_shell_string(conn->session_info->unix_info->sanitized_username);
+	if (escaped_sanitized_username == NULL) {
+		goto cleanup;
+	}
+
+	escaped_domain_name = escape_shell_string(conn->session_info->info->domain_name);
+	if (escaped_domain_name == NULL) {
+		goto cleanup;
+	}
+
+	escaped_connectpath = escape_shell_string(conn->connectpath);
+	if (escaped_connectpath == NULL) {
+		goto cleanup;
+	}
+
+	escaped_servicename = escape_shell_string(lp_servicename(mem_ctx, lp_sub, SNUM(conn)));
+	if (escaped_servicename == NULL) {
+		goto cleanup;
+	}
+
+	result = talloc_sub_full(mem_ctx,
+		escaped_servicename,
+		escaped_unix_name,
+		escaped_connectpath,
+		conn->session_info->unix_token->gid,
+		escaped_sanitized_username,
+		escaped_domain_name,
+		str);
+
+cleanup:
+	SAFE_FREE(escaped_unix_name);
+	SAFE_FREE(escaped_sanitized_username);
+	SAFE_FREE(escaped_domain_name);
+	SAFE_FREE(escaped_connectpath);
+	SAFE_FREE(escaped_servicename);
+
+	return result;
+}
+
 int virusfilter_vfs_next_move(
 	struct vfs_handle_struct *vfs_h,
 	const struct smb_filename *smb_fname_src,
