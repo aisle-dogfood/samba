@@ -878,6 +878,13 @@ bool pdb_set_pw_history(struct samu *sampass, const uint8_t *pwd, uint32_t histo
 	DATA_BLOB new_nt_pw_his = {};
 
 	if (historyLen && pwd){
+		/* Validate historyLen to prevent excessive memory allocation */
+		if (historyLen > MAX_PW_HISTORY_LEN) {
+			DEBUG(0, ("pdb_set_pw_history: historyLen (%u) exceeds maximum allowed (%u)\n", 
+				  historyLen, MAX_PW_HISTORY_LEN));
+			return False;
+		}
+		
 		new_nt_pw_his = data_blob_talloc(sampass,
 						 pwd, historyLen*PW_HISTORY_ENTRY_LEN);
 		if (new_nt_pw_his.length == 0) {
