@@ -490,9 +490,8 @@ cc_rc2_cbc_init(EVP_CIPHER_CTX *ctx,
 		const unsigned char * iv,
 		int encp)
 {
-    struct cc_key *cc = ctx->cipher_data;
-    return init_cc_key(encp, ctx->cipher->flags, kCCAlgorithmRC2,
-		       key, ctx->cipher->key_len, iv, &cc->href);
+    /* RC2 is considered a broken/risky cryptographic algorithm and has been disabled */
+    return 0;
 }
 #endif
 
@@ -508,28 +507,8 @@ cc_rc2_cbc_init(EVP_CIPHER_CTX *ctx,
 const EVP_CIPHER *
 EVP_cc_rc2_cbc(void)
 {
-#ifdef COMMONCRYPTO_SUPPORTS_RC2
-    static const EVP_CIPHER rc2_cbc = {
-	0,
-	kCCBlockSizeRC2,
-	16,
-	kCCBlockSizeRC2,
-	EVP_CIPH_CBC_MODE|EVP_CIPH_ALWAYS_CALL_INIT,
-	cc_rc2_cbc_init,
-	cc_do_cipher,
-	cc_cleanup,
-	sizeof(struct cc_key),
-	NULL,
-	NULL,
-	NULL,
-	NULL
-    };
-    return &rc2_cbc;
-#elif HCRYPTO_FALLBACK
-    return EVP_hcrypto_rc2_cbc();
-#else
+    /* RC2 is considered a broken/risky cryptographic algorithm and has been disabled */
     return NULL;
-#endif
 }
 
 /**
@@ -544,28 +523,8 @@ EVP_cc_rc2_cbc(void)
 const EVP_CIPHER *
 EVP_cc_rc2_40_cbc(void)
 {
-#ifdef COMMONCRYPTO_SUPPORTS_RC2
-    static const EVP_CIPHER rc2_40_cbc = {
-	0,
-	kCCBlockSizeRC2,
-	5,
-	kCCBlockSizeRC2,
-	EVP_CIPH_CBC_MODE|EVP_CIPH_ALWAYS_CALL_INIT,
-	cc_rc2_cbc_init,
-	cc_do_cipher,
-	cc_cleanup,
-	sizeof(struct cc_key),
-	NULL,
-	NULL,
-	NULL,
-	NULL
-    };
-    return &rc2_40_cbc;
-#elif HCRYPTO_FALLBACK
-    return EVP_hcrypto_rc2_40_cbc();
-#else
+    /* RC2 is considered a broken/risky cryptographic algorithm and has been disabled */
     return NULL;
-#endif
 }
 
 
@@ -581,28 +540,8 @@ EVP_cc_rc2_40_cbc(void)
 const EVP_CIPHER *
 EVP_cc_rc2_64_cbc(void)
 {
-#ifdef COMMONCRYPTO_SUPPORTS_RC2
-    static const EVP_CIPHER rc2_64_cbc = {
-	0,
-	kCCBlockSizeRC2,
-	8,
-	kCCBlockSizeRC2,
-	EVP_CIPH_CBC_MODE|EVP_CIPH_ALWAYS_CALL_INIT,
-	cc_rc2_cbc_init,
-	cc_do_cipher,
-	cc_cleanup,
-	sizeof(struct cc_key),
-	NULL,
-	NULL,
-	NULL,
-	NULL
-    };
-    return &rc2_64_cbc;
-#elif HCRYPTO_FALLBACK
-    return EVP_hcrypto_rc2_64_cbc();
-#else
+    /* RC2 is considered a broken/risky cryptographic algorithm and has been disabled */
     return NULL;
-#endif
 }
 
 
