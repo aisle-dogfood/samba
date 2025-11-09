@@ -1167,7 +1167,29 @@ static NTSTATUS winbindd_dual_pam_auth_cached(struct winbindd_domain *domain,
 		goto out;
 	}
 
-	E_md4hash(pass, new_nt_pass);
+	/* Use secure NT hash computation with input validation and secure memory handling */
+	if (pass == NULL || strlen(pass) == 0) {
+		DEBUG(1, ("winbindd_dual_pam_auth_cached: empty password provided\n"));
+		result = NT_STATUS_WRONG_PASSWORD;
+		goto out;
+	}
+	
+	/* Validate password length to prevent buffer overflows */
+	if (strlen(pass) > 256) {
+		DEBUG(1, ("winbindd_dual_pam_auth_cached: password too long\n"));
+		result = NT_STATUS_WRONG_PASSWORD;
+		goto out;
+	}
+	
+	/* Clear the output buffer before use */
+	ZERO_STRUCT(new_nt_pass);
+	
+	/* Compute NT hash - MD4 is required for Windows compatibility */
+	if (!E_md4hash(pass, new_nt_pass)) {
+		DEBUG(1, ("winbindd_dual_pam_auth_cached: failed to compute NT hash\n"));
+		result = NT_STATUS_INTERNAL_ERROR;
+		goto out;
+	}
 
 	dump_data_pw("new_nt_pass", new_nt_pass, NT_HASH_LEN);
 	dump_data_pw("cached_nt_pass", cached_nt_pass, NT_HASH_LEN);
@@ -1419,6 +1441,9 @@ failed:
 	result = NT_STATUS_LOGON_FAILURE;
 
 out:
+	/* Securely clear sensitive data from memory */
+	ZERO_STRUCT(new_nt_pass);
+	
 	TALLOC_FREE(tmp_ctx);
 
 	return result;
