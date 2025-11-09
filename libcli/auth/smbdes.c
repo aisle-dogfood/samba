@@ -4,6 +4,14 @@
    a partial implementation of DES designed for use in the 
    SMB authentication protocol
 
+   SECURITY WARNING: This file contains implementations of DES encryption
+   which is cryptographically weak and should only be used for legacy
+   compatibility with older SMB/CIFS clients. DES has a 56-bit effective
+   key size which is easily breakable with modern computing power.
+   
+   Modern deployments should disable LM authentication and use stronger
+   authentication methods such as NTLMv2 or Kerberos.
+
    Copyright (C) Andrew Tridgell 1998
    
    This program is free software; you can redistribute it and/or modify
@@ -48,6 +56,12 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       enum samba_gnutls_direction encrypt)
 {
 	/*
+	 * SECURITY WARNING: This function uses DES encryption which is
+	 * cryptographically weak and should only be used for legacy
+	 * compatibility with older SMB/CIFS implementations.
+	 * DES has a 56-bit effective key size which is easily breakable
+	 * with modern computing power.
+	 *
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
 	 * This allows us to use GNUTLS_CIPHER_DES_CBC from GnuTLS and not
@@ -63,6 +77,11 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 	uint8_t key2[8];
 	uint8_t outb[8];
 	int ret;
+
+	/* Log security warning about weak DES encryption usage */
+	DEBUG(2, ("WARNING: Using weak DES encryption. This should only be used "
+		  "for legacy SMB/CIFS compatibility. Consider disabling LM "
+		  "authentication if not required for legacy clients.\n"));
 
 	memset(out, 0, 8);
 
@@ -102,6 +121,15 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 	const uint8_t sp8[8] = {0x4b, 0x47, 0x53, 0x21, 0x40, 0x23, 0x24, 0x25};
 	int ret;
 
+	/* 
+	 * SECURITY WARNING: This function implements LM password hashing
+	 * which uses weak DES encryption. LM authentication should be
+	 * disabled in production environments unless required for legacy
+	 * compatibility with very old Windows clients.
+	 */
+	DEBUG(3, ("E_P16: Using LM password hash with weak DES encryption. "
+		  "Consider disabling LM authentication for better security.\n"));
+
 	ret = des_crypt56_gnutls(p16, sp8, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
 		return ret;
@@ -113,6 +141,15 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 {
 	int ret;
+
+	/*
+	 * SECURITY WARNING: This function implements challenge/response
+	 * encryption using weak DES. This is used in LM and NTLM v1
+	 * authentication which should be avoided in favor of NTLMv2
+	 * or Kerberos authentication.
+	 */
+	DEBUG(3, ("E_P24: Using DES-based challenge/response encryption. "
+		  "Consider using stronger authentication methods.\n"));
 
 	ret = des_crypt56_gnutls(p24, c8, p21, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
@@ -130,6 +167,14 @@ int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 int E_old_pw_hash( uint8_t *p14, const uint8_t *in, uint8_t *out)
 {
 	int ret;
+
+	/*
+	 * SECURITY WARNING: This function uses weak DES encryption for
+	 * password hash operations. This is part of legacy LM/NTLM
+	 * authentication and should be avoided when possible.
+	 */
+	DEBUG(3, ("E_old_pw_hash: Using DES encryption for password operations. "
+		  "This is cryptographically weak.\n"));
 
         ret = des_crypt56_gnutls(out, in, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
