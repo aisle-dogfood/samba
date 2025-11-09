@@ -22,6 +22,7 @@
 
 #include "includes.h"
 #include "libcli/auth/libcli_auth.h"
+#include "lib/crypto/gnutls_helpers.h"
 
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
@@ -47,6 +48,14 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       const uint8_t key_in[7],
 		       enum samba_gnutls_direction encrypt)
 {
+	/*
+	 * Check if weak crypto (DES) is allowed. If not, return an error
+	 * to prevent use of cryptographically weak DES encryption.
+	 */
+	if (!samba_gnutls_weak_crypto_allowed()) {
+		return GNUTLS_E_UNWANTED_ALGORITHM;
+	}
+
 	/*
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
