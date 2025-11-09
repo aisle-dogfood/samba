@@ -40,7 +40,26 @@ def read_ms_markdown(in_file, out_folder):
         html = markdown.markdown(re.sub(r'(?m)^# .*\n?', '', update_file.read()),
                                  output_format='xhtml')
 
-    tree = ET.fromstring('<root>' + html + '</root>')
+    # Secure XML parsing to prevent XXE attacks
+    xml_content = '<root>' + html + '</root>'
+    
+    # Validate input doesn't contain dangerous XML constructs
+    # Check for DOCTYPE declarations and custom entity definitions
+    if '<!ENTITY' in xml_content or '<!DOCTYPE' in xml_content:
+        raise ValueError("XML content contains potentially dangerous DOCTYPE declarations or entity definitions")
+    
+    # Check for suspicious entity references (excluding common HTML entities)
+    suspicious_entities = re.findall(r'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^;]+;', xml_content)
+    if suspicious_entities:
+        raise ValueError(f"XML content contains potentially dangerous entity references: {suspicious_entities}")
+    
+    try:
+        # Try to use defusedxml if available (recommended secure XML library)
+        import defusedxml.ElementTree as DefusedET
+        tree = DefusedET.fromstring(xml_content)
+    except ImportError:
+        # Fallback to standard library with input validation already performed above
+        tree = ET.fromstring(xml_content)
 
     ldf = None
     try:
