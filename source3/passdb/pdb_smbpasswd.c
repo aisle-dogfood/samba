@@ -401,6 +401,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	pdb_init_smb(pw_buf);
 	pw_buf->acct_ctrl = ACB_NORMAL;
 
+	/* Clear sensitive password buffers before use */
+	memset(smbpwd, 0, 16);
+	memset(smbntpwd, 0, 16);
+
 	/*
 	 * Scan the file, a line at a time and check if the name matches.
 	 */
@@ -410,6 +414,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear sensitive password buffers on error */
+			memset(smbpwd, 0, 16);
+			memset(smbntpwd, 0, 16);
 			return NULL;
 		}
 
@@ -605,6 +612,9 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	/* Clear sensitive password buffers when no more entries */
+	memset(smbpwd, 0, 16);
+	memset(smbntpwd, 0, 16);
 	return NULL;
 }
 
@@ -684,6 +694,9 @@ static NTSTATUS add_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state,
 	while ((pwd = getsmbfilepwent(smbpasswd_state, fp)) != NULL) {
 		if (strequal(newpwd->smb_name, pwd->smb_name)) {
 			DEBUG(0, ("add_smbfilepwd_entry: entry with name %s already exists\n", pwd->smb_name));
+			/* Clear sensitive password buffers before returning */
+			memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+			memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 			endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 			return NT_STATUS_USER_EXISTS;
 		}
@@ -738,6 +751,9 @@ Error was %s. Password file may be corrupt ! Please examine by hand !\n",
 	}
 
 	free(new_entry);
+	/* Clear sensitive password buffers after successful operation */
+	memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+	memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 	endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 	return NT_STATUS_OK;
 }
@@ -1162,6 +1178,9 @@ static bool del_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 			DEBUG(0, ("del_smbfilepwd_entry(malloc): Failed to copy entry for user %s to file %s. \
 Error was %s\n", pwd->smb_name, pfile2, strerror(errno)));
 			unlink(pfile2);
+			/* Clear sensitive password buffers on error */
+			memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+			memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 			endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 			endsmbfilepwent(fp_write, &pfile2_lockdepth);
 			return False;
@@ -1173,6 +1192,9 @@ Error was %s\n", pwd->smb_name, pfile2, strerror(errno)));
 			DEBUG(0, ("del_smbfilepwd_entry(write): Failed to copy entry for user %s to file %s. \
 Error was %s\n", pwd->smb_name, pfile2, strerror(errno)));
 			unlink(pfile2);
+			/* Clear sensitive password buffers on error */
+			memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+			memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 			endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 			endsmbfilepwent(fp_write, &pfile2_lockdepth);
 			free(new_entry);
@@ -1201,6 +1223,9 @@ Error was %s\n", pwd->smb_name, pfile2, strerror(errno)));
 		unlink(pfile2);
 	}
 
+	/* Clear sensitive password buffers after successful operation */
+	memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+	memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 	endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 	endsmbfilepwent(fp_write,&pfile2_lockdepth);
 	return True;
@@ -1328,8 +1353,12 @@ static NTSTATUS smbpasswd_getsampwnam(struct pdb_methods *my_methods,
 
 
 	/* did we locate the username in smbpasswd  */
-	if (smb_pw == NULL)
+	if (smb_pw == NULL) {
+		/* Clear sensitive password buffers when user not found */
+		memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+		memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 		return nt_status;
+	}
 
 	DEBUG(10, ("getsampwnam (smbpasswd): found by name: %s\n", smb_pw->smb_name));
 
@@ -1339,8 +1368,16 @@ static NTSTATUS smbpasswd_getsampwnam(struct pdb_methods *my_methods,
 	}
 
 	/* now build the struct samu */
-	if (!build_sam_account(smbpasswd_state, sam_acct, smb_pw))
+	if (!build_sam_account(smbpasswd_state, sam_acct, smb_pw)) {
+		/* Clear sensitive password buffers on error */
+		memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+		memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 		return nt_status;
+	}
+
+	/* Clear sensitive password buffers after successful processing */
+	memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+	memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 
 	/* success */
 	return NT_STATUS_OK;
@@ -1386,8 +1423,12 @@ static NTSTATUS smbpasswd_getsampwsid(struct pdb_methods *my_methods, struct sam
 
 
 	/* did we locate the username in smbpasswd  */
-	if (smb_pw == NULL)
+	if (smb_pw == NULL) {
+		/* Clear sensitive password buffers when user not found */
+		memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+		memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 		return nt_status;
+	}
 
 	DEBUG(10, ("getsampwrid (smbpasswd): found by name: %s\n", smb_pw->smb_name));
 
@@ -1397,8 +1438,12 @@ static NTSTATUS smbpasswd_getsampwsid(struct pdb_methods *my_methods, struct sam
 	}
 
 	/* now build the struct samu */
-	if (!build_sam_account (smbpasswd_state, sam_acct, smb_pw))
+	if (!build_sam_account (smbpasswd_state, sam_acct, smb_pw)) {
+		/* Clear sensitive password buffers on error */
+		memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+		memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 		return nt_status;
+	}
 
 	/* build_sam_account might change the SID on us, if the name was for the guest account */
 	if (NT_STATUS_IS_OK(nt_status) && !dom_sid_equal(pdb_get_user_sid(sam_acct), sid)) {
@@ -1408,8 +1453,15 @@ static NTSTATUS smbpasswd_getsampwsid(struct pdb_methods *my_methods, struct sam
 			  dom_sid_str_buf(sid, &buf1),
 			  dom_sid_str_buf(pdb_get_user_sid(sam_acct), &buf2),
 			  pdb_get_username(sam_acct)));
+		/* Clear sensitive password buffers on error */
+		memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+		memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 		return NT_STATUS_NO_SUCH_USER;
 	}
+
+	/* Clear sensitive password buffers after successful processing */
+	memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+	memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 
 	/* success */
 	return NT_STATUS_OK;
@@ -1564,6 +1616,12 @@ static void free_private_data(void **vp)
 
 	endsmbfilepwent((*privates)->pw_file, &((*privates)->pw_file_lock_depth));
 
+	/* Clear sensitive password buffers before freeing */
+	if (*privates) {
+		memset((*privates)->smbpwd, 0, sizeof((*privates)->smbpwd));
+		memset((*privates)->smbntpwd, 0, sizeof((*privates)->smbntpwd));
+	}
+
 	*privates = NULL;
 	/* No need to free any further, as it is talloc()ed */
 }
@@ -1659,6 +1717,9 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 
 		if (!build_sam_account(smbpasswd_state, user, pwd)) {
 			/* Already got debug msgs... */
+			/* Clear sensitive password buffers on error */
+			memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+			memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 			break;
 		}
 
@@ -1678,6 +1739,9 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 		if ((entry.account_name == NULL) || (entry.fullname == NULL)
 		    || (entry.description == NULL)) {
 			DBG_ERR("talloc_strdup failed\n");
+			/* Clear sensitive password buffers on error */
+			memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+			memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 			break;
 		}
 
@@ -1688,6 +1752,10 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 	}
 
 	endsmbfilepwent(fp, &(smbpasswd_state->pw_file_lock_depth));
+
+	/* Clear sensitive password buffers after search operation */
+	memset(smbpasswd_state->smbpwd, 0, sizeof(smbpasswd_state->smbpwd));
+	memset(smbpasswd_state->smbntpwd, 0, sizeof(smbpasswd_state->smbntpwd));
 
 	search->private_data = search_state;
 	search->next_entry = smbpasswd_search_next_entry;
