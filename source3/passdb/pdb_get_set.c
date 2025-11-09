@@ -1007,7 +1007,10 @@ bool pdb_set_plaintext_passwd(struct samu *sampass, const char *plaintext)
 		return False;
 
 	/* Calculate the MD4 hash (NT compatible) of the password */
-	E_md4hash(plaintext, new_nt_p16);
+	if (!E_md4hash(plaintext, new_nt_p16)) {
+		ZERO_STRUCT(new_nt_p16);
+		return False;
+	}
 
 	if (!pdb_set_nt_passwd (sampass, new_nt_p16, PDB_CHANGED)) {
 		ZERO_STRUCT(new_nt_p16);

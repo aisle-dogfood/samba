@@ -824,7 +824,10 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 			return NULL;
 		}
 	} else {
-		E_md4hash(password, nt_hash->hash);
+		if (!E_md4hash(password, nt_hash->hash)) {
+			TALLOC_FREE(nt_hash);
+			return NULL;
+		}
 	}
 
 	cred->nt_hash = nt_hash;
@@ -876,7 +879,10 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_old_nt_hash(struct cli_creden
 		}
 		talloc_keep_secret(nt_hash);
 
-		E_md4hash(old_password, nt_hash->hash);
+		if (!E_md4hash(old_password, nt_hash->hash)) {
+			TALLOC_FREE(nt_hash);
+			return NULL;
+		}
 
 		return nt_hash;
 	}

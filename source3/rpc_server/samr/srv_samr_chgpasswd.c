@@ -810,7 +810,9 @@ static NTSTATUS check_oem_password(const char *user,
 
 		/* Calculate the MD4 hash (NT compatible) of the password */
 		memset(new_nt_hash, '\0', 16);
-		E_md4hash(*pp_new_passwd, new_nt_hash);
+		if (!E_md4hash(*pp_new_passwd, new_nt_hash)) {
+			return NT_STATUS_INTERNAL_ERROR;
+		}
 
 		if (nt_pw) {
 			/*
@@ -988,7 +990,9 @@ static bool check_passwd_history(struct samu *sampass, const char *plaintext)
 
 	nt_pw = pdb_get_nt_passwd(sampass);
 
-	E_md4hash(plaintext, new_nt_p16);
+	if (!E_md4hash(plaintext, new_nt_p16)) {
+		return False;
+	}
 
 	if (mem_equal_const_time(nt_pw, new_nt_p16, NT_HASH_LEN)) {
 		DEBUG(10,("check_passwd_history: proposed new password for user %s is the same as the current password !\n",
