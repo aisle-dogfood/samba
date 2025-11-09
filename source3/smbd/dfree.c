@@ -29,6 +29,11 @@
 
 static void disk_norm(uint64_t *bsize, uint64_t *dfree, uint64_t *dsize)
 {
+	/* Prevent divide by zero error */
+	if (*bsize == 0) {
+		*bsize = 512; /* Set to a reasonable default block size */
+	}
+	
 	/* check if the disk is beyond the max disk size */
 	uint64_t maxdisksize = lp_max_disk_size();
 	if (maxdisksize) {
