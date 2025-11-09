@@ -113,7 +113,10 @@ class gp_log:
         self.gpostore = gpostore
         self.username = user
         if db_log:
-            self.gpdb = etree.fromstring(db_log)
+            # Create a secure XML parser that disables external entity processing
+            # to prevent XXE attacks
+            parser = etree.XMLParser(resolve_entities=False, forbid_dtd=True)
+            self.gpdb = etree.fromstring(db_log, parser)
         else:
             self.gpdb = etree.Element('gp')
         self.user = user
@@ -380,10 +383,13 @@ class gp_xml_ext(gp_ext):
     def read(self, data_file):
         with open(data_file, 'rb') as f:
             raw = f.read()
+        # Create a secure XML parser that disables external entity processing
+        # to prevent XXE attacks
+        parser = etree.XMLParser(resolve_entities=False, forbid_dtd=True)
         try:
-            return etree.fromstring(raw.decode())
+            return etree.fromstring(raw.decode(), parser)
         except UnicodeDecodeError:
-            return etree.fromstring(raw.decode('utf-16'))
+            return etree.fromstring(raw.decode('utf-16'), parser)
 
 
 class gp_applier(object):
@@ -529,7 +535,10 @@ class gp_misc_applier(gp_applier):
     def parse_value(self, value):
         vals = {}
         try:
-            data = etree.fromstring(value)
+            # Create a secure XML parser that disables external entity processing
+            # to prevent XXE attacks
+            parser = etree.XMLParser(resolve_entities=False, forbid_dtd=True)
+            data = etree.fromstring(value, parser)
         except etree.ParseError:
             # If parsing fails, then it's an old cache value
             return {'old_val': value}
