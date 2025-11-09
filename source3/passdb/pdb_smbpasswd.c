@@ -410,6 +410,8 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 
 		status = fgets(linebuf, 256, fp);
 		if (status == NULL && ferror(fp)) {
+			/* Clear sensitive data before returning */
+			memset(linebuf, 0, sizeof(linebuf));
 			return NULL;
 		}
 
@@ -434,7 +436,7 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		}
 
 #ifdef DEBUG_PASSWORD
-		DEBUG(100, ("getsmbfilepwent: got line |%s|\n", linebuf));
+		DEBUG(100, ("getsmbfilepwent: processing password file line\n"));
 #endif
 		if ((linebuf[0] == 0) && feof(fp)) {
 			DEBUG(4, ("getsmbfilepwent: end of file reached\n"));
@@ -601,10 +603,14 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 			}
 		}
 
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
 		return pw_buf;
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	/* Clear sensitive data before returning */
+	memset(linebuf, 0, sizeof(linebuf));
 	return NULL;
 }
 
@@ -716,8 +722,8 @@ Error was %s\n", newpwd->smb_name, pfile, strerror(errno)));
 	new_entry_length = strlen(new_entry);
 
 #ifdef DEBUG_PASSWORD
-	DEBUG(100, ("add_smbfilepwd_entry(%d): new_entry_len %d made line |%s|",
-			fd, (int)new_entry_length, new_entry));
+	DEBUG(100, ("add_smbfilepwd_entry(%d): new_entry_len %d for user %s",
+			fd, (int)new_entry_length, newpwd->smb_name));
 #endif
 
 	if ((wr_len = write(fd, new_entry, new_entry_length)) != new_entry_length) {
@@ -795,6 +801,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 
 	if (!pw_file_lock(lockfd, F_WRLCK, 5, &smbpasswd_state->pw_file_lock_depth)) {
 		DEBUG(0, ("mod_smbfilepwd_entry: unable to lock file %s\n", pfile));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		fclose(fp);
 		return False;
 	}
@@ -837,7 +846,7 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 		}
 
 #ifdef DEBUG_PASSWORD
-		DEBUG(100, ("mod_smbfilepwd_entry: got line |%s|\n", linebuf));
+		DEBUG(100, ("mod_smbfilepwd_entry: processing password file line\n"));
 #endif
 
 		if ((linebuf[0] == 0) && feof(fp)) {
@@ -879,6 +888,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	}
 
 	if (!found_entry) {
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd, &smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 
@@ -895,6 +907,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	if (!isdigit(*p)) {
 		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (uid not number)\n",
 			pwd->smb_name));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd, &smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -906,6 +921,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	if (*p != ':') {
 		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (no : after uid)\n",
 			pwd->smb_name));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd, &smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -924,6 +942,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	if (linebuf_len < (PTR_DIFF(p, linebuf) + 33)) {
 		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (passwd too short)\n",
 			pwd->smb_name));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return (False);
@@ -932,6 +953,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	if (p[32] != ':') {
 		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (no terminating :)\n",
 			pwd->smb_name));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -942,6 +966,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	if (linebuf_len < (PTR_DIFF(p, linebuf) + 33)) {
 		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (passwd too short)\n",
 			pwd->smb_name));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return (False);
@@ -950,6 +977,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	if (p[32] != ':') {
 		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (no terminating :)\n",
 			pwd->smb_name));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -982,6 +1012,9 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 			DEBUG(0,("mod_smbfilepwd_entry:  Using old smbpasswd format for user %s. \
 This is no longer supported.!\n", pwd->smb_name));
 			DEBUG(0,("mod_smbfilepwd_entry:  No changes made, failing.!\n"));
+			/* Clear sensitive data before returning */
+			memset(linebuf, 0, sizeof(linebuf));
+			memset(ascii_p16, 0, sizeof(ascii_p16));
 			pw_file_unlock(lockfd, &smbpasswd_state->pw_file_lock_depth);
 			fclose(fp);
 			return False;
@@ -1037,12 +1070,14 @@ This is no longer supported.!\n", pwd->smb_name));
 	}
 
 #ifdef DEBUG_PASSWORD
-	DEBUG(100,("mod_smbfilepwd_entry: "));
-	dump_data(100, (uint8_t *)ascii_p16, wr_len);
+	DEBUG(100,("mod_smbfilepwd_entry: writing %d bytes for user %s\n", wr_len, pwd->smb_name));
 #endif
 
 	if(wr_len > LINEBUF_SIZE) {
 		DEBUG(0, ("mod_smbfilepwd_entry: line to write (%d) is too long.\n", wr_len+1));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return (False);
@@ -1061,6 +1096,9 @@ This is no longer supported.!\n", pwd->smb_name));
 
 	if (lseek(fd, pwd_seekpos - 1, SEEK_SET) != pwd_seekpos - 1) {
 		DEBUG(0, ("mod_smbfilepwd_entry: seek fail on file %s.\n", pfile));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -1069,6 +1107,9 @@ This is no longer supported.!\n", pwd->smb_name));
 	/* Sanity check - ensure the areas we are writing are framed by ':' */
 	if (read(fd, linebuf, wr_len+1) != wr_len+1) {
 		DEBUG(0, ("mod_smbfilepwd_entry: read fail on file %s.\n", pfile));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -1076,6 +1117,9 @@ This is no longer supported.!\n", pwd->smb_name));
 
 	if ((linebuf[0] != ':') || (linebuf[wr_len] != ':'))	{
 		DEBUG(0, ("mod_smbfilepwd_entry: check on passwd file %s failed.\n", pfile));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -1083,6 +1127,9 @@ This is no longer supported.!\n", pwd->smb_name));
 
 	if (lseek(fd, pwd_seekpos, SEEK_SET) != pwd_seekpos) {
 		DEBUG(0, ("mod_smbfilepwd_entry: seek fail on file %s.\n", pfile));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -1090,11 +1137,17 @@ This is no longer supported.!\n", pwd->smb_name));
 
 	if (write(fd, ascii_p16, wr_len) != wr_len) {
 		DEBUG(0, ("mod_smbfilepwd_entry: write failed in passwd file %s\n", pfile));
+		/* Clear sensitive data before returning */
+		memset(linebuf, 0, sizeof(linebuf));
+		memset(ascii_p16, 0, sizeof(ascii_p16));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
 	}
 
+	/* Clear sensitive data before returning */
+	memset(linebuf, 0, sizeof(linebuf));
+	memset(ascii_p16, 0, sizeof(ascii_p16));
 	pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 	fclose(fp);
 	return True;
