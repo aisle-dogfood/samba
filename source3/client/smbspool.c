@@ -230,6 +230,16 @@ main(int argc,			/* I - Number of command-line arguments */
 	if (print_file != NULL) {
 		char *endp;
 
+		/* Validate print_file path to prevent path traversal attacks */
+		if (strstr(print_file, "..") != NULL || 
+		    print_file[0] == '/' ||
+		    strlen(print_file) == 0) {
+			fprintf(stderr,
+				"ERROR: Invalid print file path: %s\n",
+				print_file);
+			goto done;
+		}
+
 		fp = fopen(print_file, "rb");
 		if (fp == NULL) {
 			fprintf(stderr,
