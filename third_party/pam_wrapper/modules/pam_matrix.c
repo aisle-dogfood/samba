@@ -116,6 +116,37 @@ struct pam_matrix_ctx {
 	struct pam_matrix_mod_items pmi;
 };
 
+/* Validate database path to prevent path traversal attacks */
+static int pam_matrix_validate_db_path(const char *db)
+{
+	const char *p;
+	
+	if (db == NULL) {
+		return PAM_AUTHINFO_UNAVAIL;
+	}
+	
+	/* Check for absolute paths */
+	if (db[0] == '/') {
+		return PAM_AUTHINFO_UNAVAIL;
+	}
+	
+	/* Check for path traversal sequences */
+	p = db;
+	while ((p = strstr(p, "..")) != NULL) {
+		/* Check if ".." is followed by a path separator or end of string */
+		if (p[2] == '/' || p[2] == '\0') {
+			return PAM_AUTHINFO_UNAVAIL;
+		}
+		/* Check if ".." is preceded by a path separator or start of string */
+		if (p == db || p[-1] == '/') {
+			return PAM_AUTHINFO_UNAVAIL;
+		}
+		p += 2;
+	}
+	
+	return PAM_SUCCESS;
+}
+
 /* Search the passdb for user entry and fill his info into pmi */
 static int pam_matrix_mod_items_get(const char *db,
 				    const char *username,
@@ -127,6 +158,12 @@ static int pam_matrix_mod_items_get(const char *db,
 	char *file_user = NULL;
 	char *file_password = NULL;
 	char *file_svc = NULL;
+
+	/* Validate database path to prevent path traversal */
+	rv = pam_matrix_validate_db_path(db);
+	if (rv != PAM_SUCCESS) {
+		return rv;
+	}
 
 	fp = fopen(db, "r");
 	if (fp == NULL) {
@@ -201,6 +238,12 @@ static int pam_matrix_lib_items_put(const char *db,
 	char *file_user = NULL;
 	char *file_password = NULL;
 	char *file_svc = NULL;
+
+	/* Validate database path to prevent path traversal */
+	rv = pam_matrix_validate_db_path(db);
+	if (rv != PAM_SUCCESS) {
+		return rv;
+	}
 
 	rv = snprintf(template, sizeof(template),
 		      "%s.XXXXXX", db);
