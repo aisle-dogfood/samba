@@ -518,7 +518,9 @@ static NTSTATUS auth_check_password_wrapper_recv(struct tevent_req *req,
 	}
 
 	talloc_steal(mem_ctx, user_info_dc);
-	*server_returned_info = user_info_dc;
+	if (server_returned_info != NULL) {
+		*server_returned_info = user_info_dc;
+	}
 
 	if (user_session_key) {
 		DEBUG(10, ("Got NT session key of length %u\n",
