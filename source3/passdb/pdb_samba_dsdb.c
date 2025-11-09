@@ -2265,7 +2265,10 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
-	*pwd = SMB_STRNDUP(password_talloc, password_len);
+	*pwd = talloc_strndup(NULL, password_talloc, password_len);
+	if (*pwd != NULL) {
+		talloc_keep_secret(*pwd);
+	}
 	if (pass_last_set_time) {
 		*pass_last_set_time = nt_time_to_unix(auth_array->array[i].LastUpdateTime);
 	}
