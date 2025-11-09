@@ -1178,6 +1178,7 @@ int ctdb_set_public_addresses(struct ctdb_context *ctdb)
 		const char *addrstr;
 		const char *ifaces;
 		char *tok, *line;
+		char *saveptr;
 		int ret;
 
 		line = lines[i];
@@ -1190,10 +1191,10 @@ int ctdb_set_public_addresses(struct ctdb_context *ctdb)
 		if (strcmp(line, "") == 0) {
 			continue;
 		}
-		tok = strtok(line, " \t");
+		tok = strtok_r(line, " \t", &saveptr);
 		addrstr = tok;
 
-		tok = strtok(NULL, " \t");
+		tok = strtok_r(NULL, " \t", &saveptr);
 		if (tok == NULL) {
 			D_ERR("No interface specified at line %u "
 			      "of public addresses file\n", i+1);
