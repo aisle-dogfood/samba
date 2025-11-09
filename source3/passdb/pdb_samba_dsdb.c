@@ -2175,8 +2175,8 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 		 * This can be called to work out of a domain is
 		 * trusted, rather than just to get the password
 		 */
-		DEBUG(2, ("Failed to get trusted domain password for %s - %s.  "
-			  "It may not be a trusted domain.\n", domain,
+		DEBUG(5, ("Failed to get trusted domain password - %s.  "
+			  "It may not be a trusted domain.\n",
 			  nt_errstr(status)));
 		TALLOC_FREE(tmp_ctx);
 		return false;
@@ -2184,40 +2184,37 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 
 	netbios_domain = ldb_msg_find_attr_as_string(msg, "flatName", NULL);
 	if (netbios_domain == NULL) {
-		DEBUG(2, ("Trusted domain %s has to flatName defined.\n",
-			  domain));
+		DEBUG(5, ("Trusted domain has no flatName defined.\n"));
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
 
 	domain_sid = samdb_result_dom_sid(tmp_ctx, msg, "securityIdentifier");
 	if (domain_sid == NULL) {
-		DEBUG(2, ("Trusted domain %s has no securityIdentifier defined.\n",
-			  domain));
+		DEBUG(5, ("Trusted domain has no securityIdentifier defined.\n"));
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
 
 	trust_direction_flags = ldb_msg_find_attr_as_int(msg, "trustDirection", 0);
 	if (!(trust_direction_flags & LSA_TRUST_DIRECTION_OUTBOUND)) {
-		DBG_WARNING("Trusted domain %s is not an outbound trust.\n",
-			    domain);
+		DBG_WARNING("Trusted domain is not an outbound trust.\n");
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
 
 	trust_type = ldb_msg_find_attr_as_int(msg, "trustType", 0);
 	if (trust_type == LSA_TRUST_TYPE_MIT) {
-		DBG_WARNING("Trusted domain %s is not an AD trust "
-			    "(trustType == LSA_TRUST_TYPE_MIT).\n", domain);
+		DBG_WARNING("Trusted domain is not an AD trust "
+			    "(trustType == LSA_TRUST_TYPE_MIT).\n");
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
 
 	password_val = ldb_msg_find_ldb_val(msg, "trustAuthOutgoing");
 	if (password_val == NULL) {
-		DEBUG(2, ("Failed to get trusted domain password for %s, "
-			  "attribute trustAuthOutgoing not returned.\n", domain));
+		DEBUG(5, ("Failed to get trusted domain password, "
+			  "attribute trustAuthOutgoing not returned.\n"));
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
@@ -2225,9 +2222,8 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 	ndr_err = ndr_pull_struct_blob(password_val, tmp_ctx, &password_blob,
 				(ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		DEBUG(0, ("Failed to get trusted domain password for %s, "
+		DEBUG(5, ("Failed to get trusted domain password, "
 			  "attribute trustAuthOutgoing could not be parsed %s.\n",
-			  domain,
 			  ndr_map_error2string(ndr_err)));
 		TALLOC_FREE(tmp_ctx);
 		return false;
@@ -2242,9 +2238,8 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 	}
 
 	if (i == auth_array->count) {
-		DEBUG(0, ("Trusted domain %s does not have a "
-			  "clear-text password stored\n",
-			  domain));
+		DEBUG(5, ("Trusted domain does not have a "
+			  "clear-text password stored\n"));
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
@@ -2265,9 +2260,8 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 				   password_utf16.data, password_utf16.length,
 				   (void *)&password_talloc,
 				   &password_len)) {
-		DEBUG(0, ("FIXME: Could not convert password for trusted domain %s"
-			  " to UTF8. This may be a password set from Windows.\n",
-			  domain));
+		DEBUG(5, ("FIXME: Could not convert password for trusted domain"
+			  " to UTF8. This may be a password set from Windows.\n"));
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
@@ -2335,8 +2329,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 		 * This can be called to work out of a domain is
 		 * trusted, rather than just to get the password
 		 */
-		DEBUG(2, ("Failed to get trusted domain password for %s - %s "
-			  "It may not be a trusted domain.\n", domain,
+		DEBUG(5, ("Failed to get trusted domain password - %s "
+			  "It may not be a trusted domain.\n",
 			  nt_errstr(status)));
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
@@ -2344,8 +2338,7 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 
 	netbios_domain = ldb_msg_find_attr_as_string(msg, "flatName", NULL);
 	if (netbios_domain == NULL) {
-		DEBUG(2, ("Trusted domain %s has to flatName defined.\n",
-			  domain));
+		DEBUG(5, ("Trusted domain has no flatName defined.\n"));
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2354,24 +2347,23 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 
 	trust_direction_flags = ldb_msg_find_attr_as_int(msg, "trustDirection", 0);
 	if (!(trust_direction_flags & LSA_TRUST_DIRECTION_OUTBOUND)) {
-		DBG_WARNING("Trusted domain %s is not an outbound trust.\n",
-			    domain);
+		DBG_WARNING("Trusted domain is not an outbound trust.\n");
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
 
 	trust_type = ldb_msg_find_attr_as_int(msg, "trustType", 0);
 	if (trust_type == LSA_TRUST_TYPE_MIT) {
-		DBG_WARNING("Trusted domain %s is not an AD trust "
-			    "(trustType == LSA_TRUST_TYPE_MIT).\n", domain);
+		DBG_WARNING("Trusted domain is not an AD trust "
+			    "(trustType == LSA_TRUST_TYPE_MIT).\n");
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
 
 	password_val = ldb_msg_find_ldb_val(msg, "trustAuthOutgoing");
 	if (password_val == NULL) {
-		DEBUG(2, ("Failed to get trusted domain password for %s, "
-			  "attribute trustAuthOutgoing not returned.\n", domain));
+		DEBUG(5, ("Failed to get trusted domain password, "
+			  "attribute trustAuthOutgoing not returned.\n"));
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 	}
@@ -2379,9 +2371,8 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	ndr_err = ndr_pull_struct_blob(password_val, tmp_ctx, &password_blob,
 				(ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		DEBUG(0, ("Failed to get trusted domain password for %s, "
+		DEBUG(5, ("Failed to get trusted domain password, "
 			  "attribute trustAuthOutgoing could not be parsed %s.\n",
-			  domain,
 			  ndr_map_error2string(ndr_err)));
 		TALLOC_FREE(tmp_ctx);
 		return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
@@ -2618,8 +2609,7 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 
 	ok = samdb_is_pdc(state->ldb);
 	if (!ok) {
-		DEBUG(2, ("Password changes for domain %s are only allowed on a PDC.\n",
-			  domain));
+		DEBUG(5, ("Password changes for domain are only allowed on a PDC.\n"));
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2632,8 +2622,8 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 		 * This can be called to work out of a domain is
 		 * trusted, rather than just to get the password
 		 */
-		DEBUG(2, ("Failed to get trusted domain password for %s - %s.  "
-			  "It may not be a trusted domain.\n", domain,
+		DEBUG(5, ("Failed to get trusted domain password - %s.  "
+			  "It may not be a trusted domain.\n",
 			  nt_errstr(status)));
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
@@ -2642,8 +2632,7 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 
 	trust_direction_flags = ldb_msg_find_attr_as_int(msg, "trustDirection", 0);
 	if (!(trust_direction_flags & LSA_TRUST_DIRECTION_OUTBOUND)) {
-		DBG_WARNING("Trusted domain %s is not an outbound trust, can't set a password.\n",
-			    domain);
+		DBG_WARNING("Trusted domain is not an outbound trust, can't set a password.\n");
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2668,9 +2657,8 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 		ndr_err = ndr_pull_struct_blob(old_val, tmp_ctx, &old_blob,
 				(ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
 		if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-			DEBUG(0, ("Failed to get trusted domain password for %s, "
+			DEBUG(5, ("Failed to get trusted domain password, "
 				  "attribute trustAuthOutgoing could not be parsed %s.\n",
-				  domain,
 				  ndr_map_error2string(ndr_err)));
 			TALLOC_FREE(tmp_ctx);
 			ldb_transaction_cancel(state->ldb);
@@ -2705,27 +2693,24 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 			           (void *)&new_utf16.data,
 			           &new_utf16.length);
 	if (!ok) {
-		DEBUG(0, ("Failed to generate new_utf16 password for  domain %s\n",
-			  domain));
+		DEBUG(5, ("Failed to generate new_utf16 password for domain\n"));
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
 	}
 
 	if (new_utf16.length < 28) {
-		DEBUG(0, ("new_utf16[%zu] version[%u] for domain %s to short.\n",
+		DEBUG(5, ("new_utf16[%zu] version[%u] for domain too short.\n",
 			  new_utf16.length,
-			  (unsigned)new_version,
-			  domain));
+			  (unsigned)new_version));
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
 	}
 	if (new_utf16.length > 498) {
-		DEBUG(0, ("new_utf16[%zu] version[%u] for domain %s to long.\n",
+		DEBUG(5, ("new_utf16[%zu] version[%u] for domain too long.\n",
 			  new_utf16.length,
-			  (unsigned)new_version,
-			  domain));
+			  (unsigned)new_version));
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
