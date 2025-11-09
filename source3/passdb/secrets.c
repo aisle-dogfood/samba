@@ -32,6 +32,7 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include "../lib/crypto/gnutls_helpers.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
@@ -250,6 +251,129 @@ static char *trustdom_keystr(const char *domain)
 }
 
 /************************************************************************
+ Helper functions for encrypting/decrypting trusted domain passwords
+************************************************************************/
+
+static DATA_BLOB derive_trusted_domain_key(void)
+{
+	DATA_BLOB key = data_blob_null;
+	struct dom_sid *machine_sid = NULL;
+	char *sid_string = NULL;
+	uint8_t hash[16];
+	
+	/* Get the machine SID to derive encryption key */
+	machine_sid = get_global_sam_sid();
+	if (machine_sid == NULL) {
+		DEBUG(0, ("Failed to get machine SID for key derivation\n"));
+		return key;
+	}
+	
+	sid_string = dom_sid_string(talloc_tos(), machine_sid);
+	if (sid_string == NULL) {
+		DEBUG(0, ("Failed to convert machine SID to string\n"));
+		return key;
+	}
+	
+	/* Create a 32-byte key by double hashing the machine SID */
+	E_md4hash(sid_string, hash);
+	/* Extend to 32 bytes by hashing the hash */
+	key = data_blob_talloc(talloc_tos(), NULL, 32);
+	if (key.data == NULL) {
+		TALLOC_FREE(sid_string);
+		ZERO_STRUCT(hash);
+		return key;
+	}
+	memcpy(key.data, hash, 16);
+	E_md4hash((char *)hash, key.data + 16);
+	
+	TALLOC_FREE(sid_string);
+	ZERO_STRUCT(hash);
+	
+	return key;
+}
+
+static char *encrypt_trusted_domain_password(TALLOC_CTX *mem_ctx, const char *plaintext)
+{
+	DATA_BLOB key = data_blob_null;
+	DATA_BLOB plaintext_blob = data_blob_null;
+	DATA_BLOB ciphertext_blob = data_blob_null;
+	char *encrypted_b64 = NULL;
+	int rc;
+	
+	if (plaintext == NULL) {
+		return NULL;
+	}
+	
+	key = derive_trusted_domain_key();
+	if (key.data == NULL) {
+		DEBUG(0, ("Failed to derive encryption key\n"));
+		return NULL;
+	}
+	
+	plaintext_blob = data_blob_string_const(plaintext);
+	
+	rc = samba_gnutls_aead_aes_256_cbc_hmac_sha512_encrypt(
+		mem_ctx, &plaintext_blob, &key, NULL, NULL, &ciphertext_blob, NULL);
+	
+	if (rc != 0) {
+		DEBUG(0, ("Failed to encrypt trusted domain password: %s\n", gnutls_strerror(rc)));
+		goto done;
+	}
+	
+	encrypted_b64 = base64_encode_data_blob(mem_ctx, ciphertext_blob);
+	if (encrypted_b64 == NULL) {
+		DEBUG(0, ("Failed to base64 encode encrypted password\n"));
+	}
+	
+done:
+	data_blob_clear_free(&key);
+	data_blob_clear_free(&ciphertext_blob);
+	return encrypted_b64;
+}
+
+static char *decrypt_trusted_domain_password(TALLOC_CTX *mem_ctx, const char *encrypted_b64)
+{
+	DATA_BLOB key = data_blob_null;
+	DATA_BLOB ciphertext_blob = data_blob_null;
+	DATA_BLOB plaintext_blob = data_blob_null;
+	char *plaintext = NULL;
+	int rc;
+	
+	if (encrypted_b64 == NULL) {
+		return NULL;
+	}
+	
+	key = derive_trusted_domain_key();
+	if (key.data == NULL) {
+		DEBUG(0, ("Failed to derive decryption key\n"));
+		return NULL;
+	}
+	
+	ciphertext_blob = base64_decode_data_blob(mem_ctx, encrypted_b64);
+	if (ciphertext_blob.data == NULL) {
+		DEBUG(0, ("Failed to base64 decode encrypted password\n"));
+		goto done;
+	}
+	
+	rc = samba_gnutls_aead_aes_256_cbc_hmac_sha512_decrypt(
+		mem_ctx, &ciphertext_blob, &key, NULL, NULL, &plaintext_blob, NULL);
+	
+	if (rc != 0) {
+		DEBUG(0, ("Failed to decrypt trusted domain password: %s\n", gnutls_strerror(rc)));
+		goto done;
+	}
+	
+	/* Ensure null termination */
+	plaintext = talloc_strndup(mem_ctx, (char *)plaintext_blob.data, plaintext_blob.length);
+	
+done:
+	data_blob_clear_free(&key);
+	data_blob_clear_free(&ciphertext_blob);
+	data_blob_clear_free(&plaintext_blob);
+	return plaintext;
+}
+
+/************************************************************************
  Routine to get account password to trusted domain
 ************************************************************************/
 
@@ -286,7 +410,15 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 
 	/* the trust's password */
 	if (pwd) {
-		*pwd = SMB_STRDUP(pass.pass);
+		/* Try to decrypt the password first (new format) */
+		char *decrypted_pwd = decrypt_trusted_domain_password(talloc_tos(), pass.pass);
+		if (decrypted_pwd != NULL) {
+			*pwd = SMB_STRDUP(decrypted_pwd);
+			TALLOC_FREE(decrypted_pwd);
+		} else {
+			/* Fall back to plain text (old format for backward compatibility) */
+			*pwd = SMB_STRDUP(pass.pass);
+		}
 		if (!*pwd) {
 			return False;
 		}
@@ -328,9 +460,14 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 	/* last change time */
 	pass.mod_time = time(NULL);
 
-	/* password of the trust */
-	pass.pass_len = strlen(pwd);
-	pass.pass = pwd;
+	/* password of the trust - encrypt it for security */
+	char *encrypted_pwd = encrypt_trusted_domain_password(talloc_tos(), pwd);
+	if (encrypted_pwd == NULL) {
+		DEBUG(0, ("Failed to encrypt trusted domain password\n"));
+		return false;
+	}
+	pass.pass_len = strlen(encrypted_pwd);
+	pass.pass = encrypted_pwd;
 
 	/* domain sid */
 	sid_copy(&pass.domain_sid, sid);
@@ -345,6 +482,9 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 
 	/* This blob is talloc based. */
 	data_blob_clear_free(&blob);
+	
+	/* Clean up the encrypted password */
+	TALLOC_FREE(encrypted_pwd);
 
 	return ret;
 }
