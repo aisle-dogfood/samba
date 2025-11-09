@@ -127,6 +127,7 @@ static void get_auth_data_with_context_fn(SMBCCTX *ctx,
 		}
 		if (overwrite) {
 			strncpy(dom, domain, dom_len - 1);
+			dom[dom_len - 1] = '\0';
 		}
 	}
 	cli_credentials_set_domain(creds, dom, obtained);
@@ -142,6 +143,7 @@ static void get_auth_data_with_context_fn(SMBCCTX *ctx,
 		}
 		if (overwrite) {
 			strncpy(usr, username, usr_len - 1);
+			usr[usr_len - 1] = '\0';
 		}
 	}
 	cli_credentials_set_username(creds, usr, obtained);
@@ -157,6 +159,7 @@ static void get_auth_data_with_context_fn(SMBCCTX *ctx,
 		}
 		if (overwrite) {
 			strncpy(pwd, password, pwd_len - 1);
+			pwd[pwd_len - 1] = '\0';
 		}
 	}
 	cli_credentials_set_password(creds, pwd, obtained);
