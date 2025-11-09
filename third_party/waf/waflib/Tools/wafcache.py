@@ -400,6 +400,22 @@ def atomic_copy(orig, dest):
 	Copy files to the cache, the operation is atomic for a given file
 	"""
 	global copyfun
+	
+	# Validate destination path to prevent path traversal attacks
+	dest_realpath = os.path.realpath(dest)
+	cwd_realpath = os.path.realpath(os.getcwd())
+	
+	# Ensure destination is within current working directory or cache directory
+	try:
+		cache_realpath = os.path.realpath(CACHE_DIR)
+		if not (dest_realpath.startswith(cwd_realpath + os.sep) or 
+		        dest_realpath.startswith(cache_realpath + os.sep) or
+		        dest_realpath == cwd_realpath or
+		        dest_realpath == cache_realpath):
+			raise ValueError("Invalid destination path: path traversal detected")
+	except (ValueError, OSError):
+		raise ValueError("Invalid destination path: path traversal detected")
+	
 	tmp = dest + '.tmp'
 	up = os.path.dirname(dest)
 	try:
