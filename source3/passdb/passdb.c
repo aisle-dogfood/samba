@@ -414,12 +414,32 @@ uint32_t pdb_decode_acct_ctrl(const char *p)
 
 /*************************************************************
  Routine to set 32 hex password characters from a 16 byte array.
+ This version is for secure file storage purposes only.
+**************************************************************/
+
+void pdb_sethexpwd_raw(char p[33], const unsigned char *pwd, uint32_t acct_ctrl)
+{
+	if (pwd != NULL) {
+		hex_encode_buf(p, pwd, 16);
+	} else {
+		if (acct_ctrl & ACB_PWNOTREQ)
+			strlcpy(p, "NO PASSWORDXXXXXXXXXXXXXXXXXXXXX", 33);
+		else
+			strlcpy(p, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 33);
+	}
+}
+
+/*************************************************************
+ Routine to set 32 hex password characters from a 16 byte array.
+ For security purposes, this function now redacts password data
+ to prevent credential exposure in logs or display contexts.
 **************************************************************/
 
 void pdb_sethexpwd(char p[33], const unsigned char *pwd, uint32_t acct_ctrl)
 {
 	if (pwd != NULL) {
-		hex_encode_buf(p, pwd, 16);
+		/* Always redact password data to prevent credential exposure */
+		strlcpy(p, "[REDACTED PASSWORD HASH]        ", 33);
 	} else {
 		if (acct_ctrl & ACB_PWNOTREQ)
 			strlcpy(p, "NO PASSWORDXXXXXXXXXXXXXXXXXXXXX", 33);

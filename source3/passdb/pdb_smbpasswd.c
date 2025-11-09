@@ -630,12 +630,12 @@ static char *format_new_smbpasswd_entry(const struct smb_passwd *newpwd)
 	slprintf(new_entry, new_entry_length - 1, "%s:%u:", newpwd->smb_name, (unsigned)newpwd->smb_userid);
 
 	p = new_entry+strlen(new_entry);
-	pdb_sethexpwd(p, newpwd->smb_passwd, newpwd->acct_ctrl);
+	pdb_sethexpwd_raw(p, newpwd->smb_passwd, newpwd->acct_ctrl);
 	p+=strlen(p);
 	*p = ':';
 	p++;
 
-	pdb_sethexpwd(p, newpwd->smb_nt_passwd, newpwd->acct_ctrl);
+	pdb_sethexpwd_raw(p, newpwd->smb_nt_passwd, newpwd->acct_ctrl);
 	p+=strlen(p);
 	*p = ':';
 	p++;
@@ -1018,12 +1018,12 @@ This is no longer supported.!\n", pwd->smb_name));
 	/* Entry is correctly formed. */
 
 	/* Create the 32 byte representation of the new p16 */
-	pdb_sethexpwd(ascii_p16, pwd->smb_passwd, pwd->acct_ctrl);
+	pdb_sethexpwd_raw(ascii_p16, pwd->smb_passwd, pwd->acct_ctrl);
 
 	/* Add on the NT md4 hash */
 	ascii_p16[32] = ':';
 	wr_len = 66;
-	pdb_sethexpwd(ascii_p16+33, pwd->smb_nt_passwd, pwd->acct_ctrl);
+	pdb_sethexpwd_raw(ascii_p16+33, pwd->smb_nt_passwd, pwd->acct_ctrl);
 	ascii_p16[65] = ':';
 	ascii_p16[66] = '\0'; /* null-terminate the string so that strlen works */
 
