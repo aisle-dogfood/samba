@@ -380,15 +380,20 @@ bool rpc_lsa_encrypt_trustdom_info_aes(
 		&ciphertext,
 		authinfo_internal->auth_data);
 	if (!NT_STATUS_IS_OK(status)) {
+		data_blob_clear(&ciphertext);
 		return false;
 	}
 
 	if (ciphertext.length < 520) {
+		data_blob_clear(&ciphertext);
 		return false;
 	}
 
 	authinfo_internal->cipher.data = ciphertext.data;
 	authinfo_internal->cipher.size = ciphertext.length;
+
+	/* Clear the local ciphertext structure to prevent heap inspection */
+	data_blob_clear(&ciphertext);
 
 	*pauthinfo_internal = authinfo_internal;
 
