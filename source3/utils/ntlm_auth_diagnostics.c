@@ -74,6 +74,12 @@ static bool test_lm_ntlm_broken(enum ntlm_break break_which,
 
 	SMBNTencrypt(opt_password,chall.data,nt_response.data);
 
+	/* 
+	 * SECURITY WARNING: Using MD4 hash which is cryptographically weak.
+	 * This is required for NTLM protocol compatibility but should not be
+	 * used for new security implementations. MD4 is vulnerable to collision
+	 * attacks and should be considered deprecated.
+	 */
 	E_md4hash(opt_password, nt_hash);
 	SMBsesskeygen_ntv1(nt_hash, session_key.data);
 
@@ -301,6 +307,12 @@ static bool test_ntlm_in_both(bool lanman_support_expected)
 	flags |= WBFLAG_PAM_USER_SESSION_KEY;
 
 	SMBNTencrypt(opt_password,chall.data,nt_response.data);
+	/* 
+	 * SECURITY WARNING: Using MD4 hash which is cryptographically weak.
+	 * This is required for NTLM protocol compatibility but should not be
+	 * used for new security implementations. MD4 is vulnerable to collision
+	 * attacks and should be considered deprecated.
+	 */
 	E_md4hash(opt_password, nt_hash);
 	SMBsesskeygen_ntv1(nt_hash, session_key.data);
 
@@ -720,6 +732,15 @@ bool diagnose_ntlm_auth(bool lanman_support_expected)
 {
 	unsigned int i;
 	bool pass = True;
+
+	/* 
+	 * SECURITY WARNING: This diagnostic tool uses MD4 hashing which is
+	 * cryptographically weak and vulnerable to collision attacks. This is
+	 * required for NTLM protocol compatibility but represents a security
+	 * risk. Consider using more secure authentication protocols when possible.
+	 */
+	DBG_WARNING("NTLM authentication diagnostics using weak MD4 hashing. "
+		    "Consider using more secure authentication protocols.\n");
 
 	for (i=0; test_table[i].fn; i++) {
 		bool test_pass = test_table[i].fn(lanman_support_expected);
