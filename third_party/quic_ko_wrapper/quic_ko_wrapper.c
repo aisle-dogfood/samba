@@ -3078,7 +3078,7 @@ static int qwrap_setsockopt(int s, int level, int optname,
 	struct qwrap_socket_info *si = find_qwrap_socket(s);
 	struct quic_crypto_secret secret = {};
 	gnutls_cipher_algorithm_t cipher = GNUTLS_CIPHER_UNKNOWN;
-	uint8_t keylen = 0;
+	size_t keylen = 0;
 	gnutls_digest_algorithm_t hash = GNUTLS_DIG_UNKNOWN;
 	gnutls_cipher_algorithm_t hp_cipher = GNUTLS_CIPHER_UNKNOWN;
 	const ngtcp2_crypto_ctx *ctx = NULL;
@@ -3135,6 +3135,11 @@ static int qwrap_setsockopt(int s, int level, int optname,
 			break;
 		}
 		keylen = gnutls_hash_get_len(hash);
+		if (keylen > QUIC_CRYPTO_SECRET_BUFFER_SIZE) {
+			errno = EINVAL;
+			ret = -1;
+			break;
+		}
 
 		hp_cipher = qwrap_tls_hp_cipher_type(secret.type);
 		if (hp_cipher == GNUTLS_CIPHER_UNKNOWN) {
