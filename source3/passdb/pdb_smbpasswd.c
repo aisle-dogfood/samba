@@ -683,7 +683,7 @@ static NTSTATUS add_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state,
 
 	while ((pwd = getsmbfilepwent(smbpasswd_state, fp)) != NULL) {
 		if (strequal(newpwd->smb_name, pwd->smb_name)) {
-			DEBUG(0, ("add_smbfilepwd_entry: entry with name %s already exists\n", pwd->smb_name));
+			DEBUG(0, ("add_smbfilepwd_entry: entry with name %s already exists\n", newpwd->smb_name));
 			endsmbfilepwent(fp, &smbpasswd_state->pw_file_lock_depth);
 			return NT_STATUS_USER_EXISTS;
 		}
