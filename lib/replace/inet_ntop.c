@@ -20,6 +20,7 @@
 #include "system/network.h"
 
 #define NS_INT16SZ	 2
+#define NS_INADDRSZ	 4
 #define NS_IN6ADDRSZ	16
 
 /*
@@ -46,6 +47,12 @@ static const char *inet_ntop6(const unsigned char *src, char *dst,
 const char *
 rep_inet_ntop(int af, const void *src, char *dst, socklen_t size)
 {
+	/* Validate input parameters */
+	if (src == NULL || dst == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
 	switch (af) {
 	case AF_INET:
 		return (inet_ntop4(src, dst, size));
@@ -73,6 +80,12 @@ inet_ntop4(const unsigned char *src, char *dst, socklen_t size)
 {
 	char tmp[sizeof("255.255.255.255")];
 	size_t len;
+
+	/* Ensure src has at least NS_INADDRSZ bytes to prevent buffer over-read */
+	if (src == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
 
 	len = snprintf(tmp,
 		       sizeof(tmp),
@@ -111,6 +124,12 @@ inet_ntop6(const unsigned char *src, char *dst, socklen_t size)
 	struct { int base, len; } best, cur;
 	unsigned int words[NS_IN6ADDRSZ / NS_INT16SZ];
 	int i, inc;
+
+	/* Ensure src has at least NS_IN6ADDRSZ bytes to prevent buffer over-read */
+	if (src == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
 
 	/*
 	 * Preprocess:
