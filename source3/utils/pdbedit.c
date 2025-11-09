@@ -860,8 +860,8 @@ static int new_machine(const char *machinename, char *machine_sid)
 	TALLOC_CTX *tosctx;
 	NTSTATUS status;
 	struct dom_sid m_sid;
-	char *compatpwd;
-	char *name;
+	char *compatpwd = NULL;
+	char *name = NULL;
 	int flags;
 	int len;
 	int ret;
