@@ -98,6 +98,14 @@ static int ridalloc_poke_rid_manager(struct ldb_module *module)
 		return LDB_ERR_UNWILLING_TO_PERFORM;
 	}
 
+	if (num_servers == 0) {
+		ldb_asprintf_errstring(ldb_module_get_ctx(module),
+				"Failed to send MSG_DREPL_ALLOCATE_RID, "
+				"no dreplsrv servers available");
+		talloc_free(tmp_ctx);
+		return LDB_ERR_UNWILLING_TO_PERFORM;
+	}
+
 	status = imessaging_send(msg, servers[0], MSG_DREPL_ALLOCATE_RID, NULL);
 
 	/* Only error out if an error happened, not on STATUS_MORE_ENTRIES, ie a delayed message */
