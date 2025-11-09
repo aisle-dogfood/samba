@@ -40,7 +40,11 @@ static struct dom_sid domain_sid;
  ****************************************************************************/
 static void display_samr_user_info_7(struct samr_UserInfo7 *r)
 {
-	printf("\tUser Name   :\t%s\n", r->account_name.string);
+	if (DEBUGLEVEL >= 10) {
+		printf("\tUser Name   :\t%s\n", r->account_name.string ? r->account_name.string : "(null)");
+	} else {
+		printf("\tUser Name   :\t%s\n", r->account_name.string ? "***MASKED***" : "(null)");
+	}
 }
 
 /****************************************************************************
@@ -74,17 +78,34 @@ static void display_samr_user_info_20(struct samr_UserInfo20 *r)
  ****************************************************************************/
 static void display_samr_user_info_21(struct samr_UserInfo21 *r)
 {
-	printf("\tUser Name   :\t%s\n", r->account_name.string);
-	printf("\tFull Name   :\t%s\n", r->full_name.string);
-	printf("\tHome Drive  :\t%s\n", r->home_directory.string);
-	printf("\tDir Drive   :\t%s\n", r->home_drive.string);
-	printf("\tProfile Path:\t%s\n", r->profile_path.string);
-	printf("\tLogon Script:\t%s\n", r->logon_script.string);
-	printf("\tDescription :\t%s\n", r->description.string);
-	printf("\tWorkstations:\t%s\n", r->workstations.string);
-	printf("\tComment     :\t%s\n", r->comment.string);
-	printf("\tRemote Dial :\n");
-	dump_data(0, (uint8_t *)r->parameters.array, r->parameters.length*2);
+	printf("\n*** WARNING: Displaying sensitive user information ***\n");
+	
+	/* Only display sensitive information if debug level is high enough */
+	if (DEBUGLEVEL >= 10) {
+		printf("\tUser Name   :\t%s\n", r->account_name.string ? r->account_name.string : "(null)");
+		printf("\tFull Name   :\t%s\n", r->full_name.string ? r->full_name.string : "(null)");
+		printf("\tHome Drive  :\t%s\n", r->home_directory.string ? r->home_directory.string : "(null)");
+		printf("\tDir Drive   :\t%s\n", r->home_drive.string ? r->home_drive.string : "(null)");
+		printf("\tProfile Path:\t%s\n", r->profile_path.string ? r->profile_path.string : "(null)");
+		printf("\tLogon Script:\t%s\n", r->logon_script.string ? r->logon_script.string : "(null)");
+		printf("\tDescription :\t%s\n", r->description.string ? r->description.string : "(null)");
+		printf("\tWorkstations:\t%s\n", r->workstations.string ? r->workstations.string : "(null)");
+		printf("\tComment     :\t%s\n", r->comment.string ? r->comment.string : "(null)");
+		printf("\tRemote Dial :\n");
+		dump_data(0, (uint8_t *)r->parameters.array, r->parameters.length*2);
+	} else {
+		/* Mask sensitive information when debug level is low */
+		printf("\tUser Name   :\t%s\n", r->account_name.string ? "***MASKED***" : "(null)");
+		printf("\tFull Name   :\t%s\n", r->full_name.string ? "***MASKED***" : "(null)");
+		printf("\tHome Drive  :\t%s\n", r->home_directory.string ? "***MASKED***" : "(null)");
+		printf("\tDir Drive   :\t%s\n", r->home_drive.string ? "***MASKED***" : "(null)");
+		printf("\tProfile Path:\t%s\n", r->profile_path.string ? "***MASKED***" : "(null)");
+		printf("\tLogon Script:\t%s\n", r->logon_script.string ? "***MASKED***" : "(null)");
+		printf("\tDescription :\t%s\n", r->description.string ? "***MASKED***" : "(null)");
+		printf("\tWorkstations:\t%s\n", r->workstations.string ? "***MASKED***" : "(null)");
+		printf("\tComment     :\t%s\n", r->comment.string ? "***MASKED***" : "(null)");
+		printf("\tRemote Dial :\t***MASKED*** (use -d 10 to view)\n");
+	}
 
 	printf("\tLogon Time               :\t%s\n",
 	       http_timestring(talloc_tos(), nt_time_to_unix(r->last_logon)));
