@@ -30,6 +30,7 @@
 #include "rpc_client/init_samr.h"
 #include "librpc/rpc/dcerpc_samr.h"
 #include "lib/crypto/gnutls_helpers.h"
+#include "../libcli/auth/ntlm_check.h"
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
 
@@ -44,6 +45,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 {
 	NTSTATUS status;
 	int rc;
+	enum ntlm_auth_level ntlm_auth_level = lp_ntlm_auth();
 	struct samr_Password hash1, hash2, hash3, hash4, hash5, hash6;
 
 	uint8_t old_nt_hash[16] = {0};
@@ -52,6 +54,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 	uint8_t new_lm_hash[16] = {0};
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user\n"));
+
+	/* Check if NTLM authentication is disabled to prevent use of weak MD4 hashing */
+	if (ntlm_auth_level == NTLM_AUTH_DISABLED) {
+		DBG_WARNING("NTLM password changes not permitted by configuration. "
+			    "MD4 hashing is cryptographically weak.\n");
+		return NT_STATUS_NTLM_BLOCKED;
+	}
 
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
@@ -148,6 +157,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 {
 	NTSTATUS status;
 	int rc;
+	enum ntlm_auth_level ntlm_auth_level = lp_ntlm_auth();
 	struct samr_CryptPassword new_nt_password;
 	struct samr_CryptPassword new_lm_password;
 	struct samr_Password old_nt_hash_enc;
@@ -162,6 +172,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 	DATA_BLOB session_key = data_blob_const(old_nt_hash, 16);
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user2\n"));
+
+	/* Check if NTLM authentication is disabled to prevent use of weak MD4 hashing */
+	if (ntlm_auth_level == NTLM_AUTH_DISABLED) {
+		DBG_WARNING("NTLM password changes not permitted by configuration. "
+			    "MD4 hashing is cryptographically weak.\n");
+		return NT_STATUS_NTLM_BLOCKED;
+	}
 
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
@@ -353,6 +370,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 {
 	NTSTATUS status;
 	int rc;
+	enum ntlm_auth_level ntlm_auth_level = lp_ntlm_auth();
 
 	struct samr_CryptPassword new_nt_password;
 	struct samr_CryptPassword new_lm_password;
@@ -369,6 +387,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 	DATA_BLOB session_key = data_blob_const(old_nt_hash, 16);
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user3\n"));
+
+	/* Check if NTLM authentication is disabled to prevent use of weak MD4 hashing */
+	if (ntlm_auth_level == NTLM_AUTH_DISABLED) {
+		DBG_WARNING("NTLM password changes not permitted by configuration. "
+			    "MD4 hashing is cryptographically weak.\n");
+		return NT_STATUS_NTLM_BLOCKED;
+	}
 
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
@@ -476,6 +501,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 				     const char *newpassword,
 				     NTSTATUS *presult)
 {
+	enum ntlm_auth_level ntlm_auth_level = lp_ntlm_auth();
 	struct lsa_String server, user_account;
 	uint8_t old_nt_key_data[16] = {0};
 	gnutls_datum_t old_nt_key = {
@@ -508,6 +534,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 	NTSTATUS status;
 	bool ok;
 	int rc;
+
+	/* Check if NTLM authentication is disabled to prevent use of weak MD4 hashing */
+	if (ntlm_auth_level == NTLM_AUTH_DISABLED) {
+		DBG_WARNING("NTLM password changes not permitted by configuration. "
+			    "MD4 hashing is cryptographically weak.\n");
+		return NT_STATUS_NTLM_BLOCKED;
+	}
 
 	generate_nonce_buffer(iv.data, iv.length);
 
