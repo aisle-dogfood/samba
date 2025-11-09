@@ -450,6 +450,10 @@ static struct ldb_val gnutls_encrypt_aead(int *err,
 					       "it is %zu bytes\n",
 					       key_size,
 					       key_blob.length);
+			/* Clear sensitive key material before exit */
+			if (key_blob.data != NULL) {
+				memset(key_blob.data, 0, key_blob.length);
+			}
 			goto error_exit;
 		}
 		cipher_key = convert_from_data_blob(key_blob);
@@ -457,6 +461,15 @@ static struct ldb_val gnutls_encrypt_aead(int *err,
 		rc = gnutls_aead_cipher_init(&cipher_hnd,
 					     data->encryption_algorithm,
 					     &cipher_key);
+		
+		/* Clear sensitive key material from cipher_key structure */
+		ZERO_STRUCT(cipher_key);
+		
+		/* Clear sensitive key material from key_blob */
+		if (key_blob.data != NULL) {
+			memset(key_blob.data, 0, key_blob.length);
+		}
+		
 		if (rc !=0) {
 			ldb_asprintf_errstring(ldb,
 					       "gnutls_aead_cipher_init failed "
@@ -606,6 +619,10 @@ static void gnutls_decrypt_aead(int *err,
 		key_blob   = get_key(data);
 
 		if (algorithm == 0) {
+			/* Clear sensitive key material before exit */
+			if (key_blob.data != NULL) {
+				memset(key_blob.data, 0, key_blob.length);
+			}
 			goto error_exit;
 		}
 
@@ -616,6 +633,10 @@ static void gnutls_decrypt_aead(int *err,
 					       "it is %zu bytes\n",
 					       key_size,
 					       key_blob.length);
+			/* Clear sensitive key material before exit */
+			if (key_blob.data != NULL) {
+				memset(key_blob.data, 0, key_blob.length);
+			}
 			goto error_exit;
 		}
 		cipher_key = convert_from_data_blob(key_blob);
@@ -624,6 +645,15 @@ static void gnutls_decrypt_aead(int *err,
 			&cipher_hnd,
 			algorithm,
 			&cipher_key);
+		
+		/* Clear sensitive key material from cipher_key structure */
+		ZERO_STRUCT(cipher_key);
+		
+		/* Clear sensitive key material from key_blob */
+		if (key_blob.data != NULL) {
+			memset(key_blob.data, 0, key_blob.length);
+		}
+		
 		if (rc != 0) {
 			ldb_asprintf_errstring(ldb,
 					       "gnutls_aead_cipher_init failed "
