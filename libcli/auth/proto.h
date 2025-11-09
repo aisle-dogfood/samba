@@ -16,10 +16,7 @@
 bool netlogon_creds_is_random_challenge(const struct netr_Credential *challenge);
 void netlogon_creds_random_challenge(struct netr_Credential *challenge);
 
-NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds,
-				    struct samr_Password *pass);
-NTSTATUS netlogon_creds_des_decrypt(struct netlogon_creds_CredentialState *creds,
-				    struct samr_Password *pass);
+
 NTSTATUS netlogon_creds_arcfour_crypt(struct netlogon_creds_CredentialState *creds,
 				      uint8_t *data,
 				      size_t len);
@@ -31,8 +28,6 @@ NTSTATUS netlogon_creds_aes_decrypt(struct netlogon_creds_CredentialState *creds
 				    size_t len);
 
 /* These should not be used directly! */
-#define netlogon_creds_des_encrypt __DO_NOT_USE_netlogon_creds_des_encrypt
-#define netlogon_creds_des_decrypt __DO_NOT_USE_netlogon_creds_des_decrypt
 #define netlogon_creds_arcfour_crypt __DO_NOT_USE_netlogon_creds_arcfour_crypt
 #define netlogon_creds_aes_encrypt __DO_NOT_USE_netlogon_creds_aes_encrypt
 #define netlogon_creds_aes_decrypt __DO_NOT_USE_netlogon_creds_aes_decrypt

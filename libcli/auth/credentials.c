@@ -31,8 +31,6 @@
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
 
-#undef netlogon_creds_des_encrypt
-#undef netlogon_creds_des_decrypt
 #undef netlogon_creds_arcfour_crypt
 #undef netlogon_creds_aes_encrypt
 #undef netlogon_creds_aes_decrypt
@@ -384,77 +382,9 @@ static NTSTATUS netlogon_creds_step(struct netlogon_creds_CredentialState *creds
 	return NT_STATUS_OK;
 }
 
-/*
-  DES encrypt a 8 byte LMSessionKey buffer using the Netlogon session key
-*/
-static NTSTATUS netlogon_creds_des_encrypt_LMKey(struct netlogon_creds_CredentialState *creds,
-					  struct netr_LMSessionKey *key)
-{
-	int rc;
-	struct netr_LMSessionKey tmp;
 
-	rc = des_crypt56_gnutls(tmp.key, key->key, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	*key = tmp;
 
-	return NT_STATUS_OK;
-}
 
-/*
-  DES decrypt a 8 byte LMSessionKey buffer using the Netlogon session key
-*/
-static NTSTATUS netlogon_creds_des_decrypt_LMKey(struct netlogon_creds_CredentialState *creds,
-					  struct netr_LMSessionKey *key)
-{
-	int rc;
-	struct netr_LMSessionKey tmp;
-
-	rc = des_crypt56_gnutls(tmp.key, key->key, creds->session_key, SAMBA_GNUTLS_DECRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	*key = tmp;
-
-	return NT_STATUS_OK;
-}
-
-/*
-  DES encrypt a 16 byte password buffer using the session key
-*/
-NTSTATUS netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds,
-				    struct samr_Password *pass)
-{
-	struct samr_Password tmp;
-	int rc;
-
-	rc = des_crypt112_16(tmp.hash, pass->hash, creds->session_key, SAMBA_GNUTLS_ENCRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	*pass = tmp;
-
-	return NT_STATUS_OK;
-}
-
-/*
-  DES decrypt a 16 byte password buffer using the session key
-*/
-NTSTATUS netlogon_creds_des_decrypt(struct netlogon_creds_CredentialState *creds,
-				    struct samr_Password *pass)
-{
-	struct samr_Password tmp;
-	int rc;
-
-	rc = des_crypt112_16(tmp.hash, pass->hash, creds->session_key, SAMBA_GNUTLS_DECRYPT);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	*pass = tmp;
-
-	return NT_STATUS_OK;
-}
 
 /*
   ARCFOUR encrypt/decrypt a password buffer using the session key
@@ -1181,26 +1111,10 @@ static NTSTATUS netlogon_creds_crypt_samlogon_validation(struct netlogon_creds_C
 		}
 	} else {
 		/*
-		 * Don't crypt an all-zero key, it would give away
-		 * the NETLOGON pipe session key
-		 *
-		 * But for ServerAuthenticateKerberos we don't care
-		 * as we use a random key
+		 * DES encryption is no longer supported due to inadequate
+		 * encryption strength. Require at least ARCFOUR or AES.
 		 */
-		if (creds->authenticate_kerberos ||
-		    !all_zero(base->LMSessKey.key,
-			      sizeof(base->LMSessKey.key))) {
-			if (do_encrypt) {
-				status = netlogon_creds_des_encrypt_LMKey(creds,
-									  &base->LMSessKey);
-			} else {
-				status = netlogon_creds_des_decrypt_LMKey(creds,
-									  &base->LMSessKey);
-			}
-			if (!NT_STATUS_IS_OK(status)) {
-				return status;
-			}
-		}
+		return NT_STATUS_DOWNGRADE_DETECTED;
 	}
 
 	return NT_STATUS_OK;
@@ -1328,30 +1242,11 @@ static NTSTATUS netlogon_creds_crypt_samlogon_logon(struct netlogon_creds_Creden
 				}
 			}
 		} else {
-			struct samr_Password *p;
-
-			p = &logon->password->lmpassword;
-			if (!all_zero(p->hash, 16)) {
-				if (do_encrypt) {
-					status = netlogon_creds_des_encrypt(creds, p);
-				} else {
-					status = netlogon_creds_des_decrypt(creds, p);
-				}
-				if (!NT_STATUS_IS_OK(status)) {
-					return status;
-				}
-			}
-			p = &logon->password->ntpassword;
-			if (!all_zero(p->hash, 16)) {
-				if (do_encrypt) {
-					status = netlogon_creds_des_encrypt(creds, p);
-				} else {
-					status = netlogon_creds_des_decrypt(creds, p);
-				}
-				if (!NT_STATUS_IS_OK(status)) {
-					return status;
-				}
-			}
+			/*
+			 * DES encryption is no longer supported due to inadequate
+			 * encryption strength. Require at least ARCFOUR or AES.
+			 */
+			return NT_STATUS_DOWNGRADE_DETECTED;
 		}
 		break;
 
@@ -1461,15 +1356,11 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * DES encryption is no longer supported due to inadequate
+	 * encryption strength. This function previously used DES
+	 * even when stronger encryption was available.
 	 */
-
-	if (do_encrypt) {
-		return netlogon_creds_des_encrypt(creds, pass);
-	}
-
-	return netlogon_creds_des_decrypt(creds, pass);
+	return NT_STATUS_DOWNGRADE_DETECTED;
 }
 
 NTSTATUS netlogon_creds_decrypt_samr_Password(struct netlogon_creds_CredentialState *creds,
