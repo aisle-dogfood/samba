@@ -64,8 +64,37 @@ static char fcntl_lock(const char *file, int *outfd)
 {
 	int fd;
 	int ret;
+	char *resolved_path = NULL;
 
-	fd = open(file, O_RDWR|O_CREAT, 0600);
+	/* Validate and resolve the file path to prevent path traversal attacks */
+	resolved_path = realpath(file, NULL);
+	if (resolved_path == NULL) {
+		/* If realpath fails, the file might not exist yet, which is OK for O_CREAT.
+		 * However, we still need to validate the input path for dangerous patterns. */
+		
+		/* Check for path traversal attempts */
+		if (strstr(file, "..") != NULL) {
+			fprintf(stderr, "%s: Path traversal detected in %s\n",
+				progname, file);
+			return '3';
+		}
+		
+		/* Check for absolute paths that might access system files */
+		if (file[0] == '/' && (strncmp(file, "/tmp/", 5) != 0 && 
+		                       strncmp(file, "/var/", 5) != 0)) {
+			fprintf(stderr, "%s: Absolute path outside allowed directories: %s\n",
+				progname, file);
+			return '3';
+		}
+		
+		/* Use the original file path if validation passes */
+		fd = open(file, O_RDWR|O_CREAT, 0600);
+	} else {
+		/* Use the resolved canonical path */
+		fd = open(resolved_path, O_RDWR|O_CREAT, 0600);
+		free(resolved_path);
+	}
+	
 	if (fd == -1) {
 		fprintf(stderr, "%s: Unable to open %s - (%s)\n",
 			progname, file, strerror(errno));
