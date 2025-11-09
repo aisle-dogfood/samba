@@ -473,9 +473,11 @@ bool secrets_fetch_afs_key(const char *cell, struct afs_key *result)
 *******************************************************************************/
 void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 {
+	char *temp_password = NULL;
+	
 	*username = (char *)secrets_fetch(SECRETS_AUTH_USER, NULL);
 	*domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, NULL);
-	*password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, NULL);
+	temp_password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, NULL);
 
 	if (*username && **username) {
 
@@ -484,9 +486,12 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 			*domain = smb_xstrdup(lp_workgroup());
 		}
 
-		if (!*password || !**password) {
-			BURN_FREE_STR(*password);
+		if (!temp_password || !*temp_password) {
+			BURN_FREE_STR(temp_password);
 			*password = smb_xstrdup("");
+		} else {
+			*password = temp_password;
+			temp_password = NULL; /* Transfer ownership, prevent double-free */
 		}
 
 		DEBUG(3, ("IPC$ connections done by user %s\\%s\n",
@@ -496,7 +501,7 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		DEBUG(3, ("IPC$ connections done anonymously\n"));
 		SAFE_FREE(*username);
 		SAFE_FREE(*domain);
-		BURN_FREE_STR(*password);
+		BURN_FREE_STR(temp_password);
 		*username = smb_xstrdup("");
 		*domain = smb_xstrdup("");
 		*password = smb_xstrdup("");
