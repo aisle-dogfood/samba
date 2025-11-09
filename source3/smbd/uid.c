@@ -39,11 +39,18 @@ extern struct current_user current_user;
 bool change_to_guest(void)
 {
 	struct passwd *pass;
+	uid_t guest_uid;
+	gid_t guest_gid;
 
 	pass = Get_Pwnam_alloc(talloc_tos(), lp_guest_account());
 	if (!pass) {
 		return false;
 	}
+
+	/* Extract uid and gid before freeing the passwd structure
+	   to avoid potential memory issues if set_sec_ctx fails */
+	guest_uid = pass->pw_uid;
+	guest_gid = pass->pw_gid;
 
 #ifdef AIX
 	/* MWW: From AIX FAQ patch to WU-ftpd: call initgroups before 
@@ -51,12 +58,14 @@ bool change_to_guest(void)
 	initgroups(pass->pw_name, pass->pw_gid);
 #endif
 
-	set_sec_ctx(pass->pw_uid, pass->pw_gid, 0, NULL, NULL);
+	/* Free the allocated memory before calling set_sec_ctx
+	   to prevent memory leaks if set_sec_ctx calls smb_panic */
+	TALLOC_FREE(pass);
+
+	set_sec_ctx(guest_uid, guest_gid, 0, NULL, NULL);
 
 	current_user.conn = NULL;
 	current_user.vuid = UID_FIELD_INVALID;
-
-	TALLOC_FREE(pass);
 
 	return true;
 }
