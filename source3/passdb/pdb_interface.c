@@ -2345,6 +2345,10 @@ static NTSTATUS pdb_default_get_trusted_domain(struct pdb_methods *methods,
 	aia.AuthInfo.clear.size = strlen(pwd);
 	aia.AuthInfo.clear.password = (uint8_t *)talloc_memdup(tdom, pwd,
 							       aia.AuthInfo.clear.size);
+	/* Securely clear the original password before freeing */
+	if (pwd != NULL) {
+		memset_s(pwd, aia.AuthInfo.clear.size, 0, aia.AuthInfo.clear.size);
+	}
 	SAFE_FREE(pwd);
 	if (aia.AuthInfo.clear.password == NULL) {
 		talloc_free(tdom);
@@ -2357,6 +2361,12 @@ static NTSTATUS pdb_default_get_trusted_domain(struct pdb_methods *methods,
 	ndr_err = ndr_push_struct_blob(&tdom->trust_auth_outgoing,
 					tdom, &taiob,
 			(ndr_push_flags_fn_t)ndr_push_trustAuthInOutBlob);
+	
+	/* Securely clear the password from memory after serialization */
+	if (aia.AuthInfo.clear.password != NULL) {
+		memset_s(aia.AuthInfo.clear.password, aia.AuthInfo.clear.size, 0, aia.AuthInfo.clear.size);
+	}
+	
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
 		talloc_free(tdom);
 		return NT_STATUS_UNSUCCESSFUL;
