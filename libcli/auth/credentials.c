@@ -1461,9 +1461,34 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * Use stronger encryption when available, fall back to DES only
+	 * when necessary and with appropriate security checks
 	 */
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds,
+							  pass->hash,
+							  ARRAY_SIZE(pass->hash));
+		}
+
+		return netlogon_creds_aes_decrypt(creds,
+						  pass->hash,
+						  ARRAY_SIZE(pass->hash));
+	}
+
+	if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+		return netlogon_creds_arcfour_crypt(creds,
+						    pass->hash,
+						    ARRAY_SIZE(pass->hash));
+	}
+
+	/*
+	 * Using DES to encrypt the password is cryptographically weak,
+	 * but if the connection is encrypted we allow it as a fallback
+	 */
+	if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
 
 	if (do_encrypt) {
 		return netlogon_creds_des_encrypt(creds, pass);
