@@ -2061,6 +2061,16 @@ static bool shadow_copy2_snapshot_to_gmt(vfs_handle_struct *handle,
 	}
 
 	if (config->use_sscanf) {
+		/* 
+		 * Validate input length to prevent buffer overflow.
+		 * GMT format "@GMT-%Y.%m.%d-%H.%M.%S" should be around 24 chars,
+		 * allow reasonable buffer for variations but prevent excessive input.
+		 */
+		if (strnlen(name, 256) >= 256) {
+			DEBUG(10, ("shadow_copy2_snapshot_to_gmt: "
+				   "input string too long: %s\n", name));
+			goto done;
+		}
 		if (sscanf(name, fmt, &timestamp_long) != 1) {
 			DEBUG(10, ("shadow_copy2_snapshot_to_gmt: "
 				   "no sscanf match %s: %s\n",
