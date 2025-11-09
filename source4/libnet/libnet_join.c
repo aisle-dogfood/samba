@@ -876,6 +876,10 @@ NTSTATUS libnet_JoinDomain(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, stru
 	status = libnet_SetPassword(ctx, tmp_ctx, &r2);	
 	if (!NT_STATUS_IS_OK(status)) {
 		r->out.error_string = talloc_steal(mem_ctx, r2.samr_handle.out.error_string);
+		/* Securely clear password from memory before freeing context */
+		if (password_str) {
+			BURN_PTR_SIZE(password_str, strlen(password_str));
+		}
 		talloc_free(tmp_ctx);
 		return status;
 	}
@@ -883,6 +887,10 @@ NTSTATUS libnet_JoinDomain(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, stru
 	account_sid = dom_sid_add_rid(mem_ctx, connect_with_info->out.domain_sid, rid);
 	if (!account_sid) {
 		r->out.error_string = NULL;
+		/* Securely clear password from memory before freeing context */
+		if (password_str) {
+			BURN_PTR_SIZE(password_str, strlen(password_str));
+		}
 		talloc_free(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
