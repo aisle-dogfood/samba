@@ -675,7 +675,7 @@ smb_connect(struct cli_state **output_cli,
 {
 	struct cli_state *cli = NULL;	/* New connection */
 	char           *myname = NULL;	/* Client name */
-	struct passwd  *pwd;
+	struct passwd  *pwd = NULL;
 	bool use_kerberos = false;
 	bool fallback_after_kerberos = false;
 	const char *user = username;
