@@ -1519,22 +1519,28 @@ bool extract_pwd_blob_from_buffer514(TALLOC_CTX *mem_ctx,
 				     const uint8_t in_buffer[514],
 				     DATA_BLOB *new_password)
 {
+	size_t password_length;
+	uint8_t *password_data;
+
 #ifdef DEBUG_PASSWORD
 	DEBUG(100, ("in_buffer: "));
 	dump_data(100, in_buffer, 514);
 #endif
 
-	new_password->length = PULL_LE_U16(in_buffer, 0);
-	if (new_password->length == 0 || new_password->length > 512) {
+	password_length = PULL_LE_U16(in_buffer, 0);
+	if (password_length == 0 || password_length > 512) {
 		return false;
 	}
 
-	new_password->data =
-		talloc_memdup(mem_ctx, in_buffer + 2, new_password->length);
-	if (new_password->data == NULL) {
+	password_data = talloc_memdup(mem_ctx, in_buffer + 2, password_length);
+	if (password_data == NULL) {
 		return false;
 	}
-	talloc_keep_secret(new_password->data);
+	talloc_keep_secret(password_data);
+
+	/* Only set output parameters after all validations and allocations succeed */
+	new_password->length = password_length;
+	new_password->data = password_data;
 
 #ifdef DEBUG_PASSWORD
 	DEBUG(100, ("new_pwd_len: %zu\n", new_password->length));
