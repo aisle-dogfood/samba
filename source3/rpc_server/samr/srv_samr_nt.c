@@ -3943,7 +3943,7 @@ NTSTATUS _samr_CreateUser2(struct pipes_struct *p,
 	}
 
 	DEBUG(5, ("_samr_CreateUser2: %s can add this account : %s\n",
-		  uidtoname(session_info->unix_token->uid),
+		  uidtoname(talloc_tos(), session_info->unix_token->uid),
 		  can_add_account ? "True":"False" ));
 
 	if (!can_add_account) {

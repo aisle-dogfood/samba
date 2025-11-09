@@ -800,7 +800,7 @@ static bool lookup_rids(TALLOC_CTX *mem_ctx, const struct dom_sid *domain_sid,
 		}
 		for (i=0; i<num_rids; i++) {
 			(*names)[i] = talloc_strdup(
-				(*names), uidtoname(rids[i]));
+				(*names), uidtoname(mem_ctx, rids[i]));
 			if ((*names)[i] == NULL) {
 				return false;
 			}
