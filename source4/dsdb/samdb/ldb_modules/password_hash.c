@@ -4793,7 +4793,7 @@ static int password_hash_modify(struct ldb_module *module, struct ldb_request *r
 	struct ph_context *ac = NULL;
 	const char *passwordAttrs[] = {DSDB_PASSWORD_ATTRIBUTES, NULL}, **l;
 	unsigned int del_attr_cnt, add_attr_cnt, rep_attr_cnt;
-	struct ldb_message_element *passwordAttr;
+	struct ldb_message_element *passwordAttr = NULL;
 	struct ldb_message *msg;
 	struct ldb_request *down_req;
 	struct ldb_control *restore = NULL;
