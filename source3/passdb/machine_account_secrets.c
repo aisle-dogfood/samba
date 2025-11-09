@@ -354,6 +354,9 @@ bool secrets_fetch_trust_account_password_legacy(const char *domain,
 	if (pass_last_set_time) {
 		*pass_last_set_time = pass->mod_time;
 	}
+	
+	/* Clear the output buffer before copying sensitive data */
+	BURN_PTR_SIZE(ret_pwd, 16);
 	memcpy(ret_pwd, pass->hash, 16);
 
 	if (channel) {
