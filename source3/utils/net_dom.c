@@ -141,7 +141,7 @@ static int net_dom_join(struct net_context *c, int argc, const char **argv)
 	const char *domain_name = NULL;
 	const char *account_ou = NULL;
 	const char *Account = NULL;
-	const char *password = NULL;
+	char *password = NULL;
 	uint32_t join_flags = NETSETUP_ACCT_CREATE |
 			      NETSETUP_JOIN_DOMAIN;
 	struct cli_state *cli = NULL;
@@ -185,9 +185,15 @@ static int net_dom_join(struct net_context *c, int argc, const char **argv)
 			}
 		}
 		if (strnequal(argv[i], "password", strlen("password"))) {
-			password = get_string_param(argv[i]);
+			const char *temp_password = get_string_param(argv[i]);
+			if (!temp_password) {
+				ret = -1;
+				goto done;
+			}
+			password = strdup(temp_password);
 			if (!password) {
-				return -1;
+				ret = -1;
+				goto done;
 			}
 		}
 		if (strequal(argv[i], "reboot")) {
@@ -200,7 +206,8 @@ static int net_dom_join(struct net_context *c, int argc, const char **argv)
 						      server_name, NULL, 0,
 						      &cli);
 		if (!NT_STATUS_IS_OK(ntstatus)) {
-			return -1;
+			ret = -1;
+			goto done;
 		}
 	}
 
@@ -215,6 +222,7 @@ static int net_dom_join(struct net_context *c, int argc, const char **argv)
 	}
 
 	if (do_reboot) {
+
 		c->opt_comment = _("Shutting down due to a domain membership "
 				   "change");
 		c->opt_reboot = true;
@@ -236,6 +244,10 @@ static int net_dom_join(struct net_context *c, int argc, const char **argv)
 	ret = 0;
 
  done:
+	if (password) {
+		memset_s(password, strlen(password), 0, strlen(password));
+		free(password);
+	}
 	if (cli) {
 		cli_shutdown(cli);
 	}
@@ -247,7 +259,7 @@ static int net_dom_renamecomputer(struct net_context *c, int argc, const char **
 {
 	const char *server_name = NULL;
 	const char *account = NULL;
-	const char *password = NULL;
+	char *password = NULL;
 	const char *newname = NULL;
 	uint32_t rename_options = NETSETUP_ACCT_CREATE;
 	struct cli_state *cli = NULL;
@@ -273,15 +285,22 @@ static int net_dom_renamecomputer(struct net_context *c, int argc, const char **
 			}
 		}
 		if (strnequal(argv[i], "password", strlen("password"))) {
-			password = get_string_param(argv[i]);
+			const char *temp_password = get_string_param(argv[i]);
+			if (!temp_password) {
+				ret = -1;
+				goto done;
+			}
+			password = strdup(temp_password);
 			if (!password) {
-				return -1;
+				ret = -1;
+				goto done;
 			}
 		}
 		if (strnequal(argv[i], "newname", strlen("newname"))) {
 			newname = get_string_param(argv[i]);
 			if (!newname) {
-				return -1;
+				ret = -1;
+				goto done;
 			}
 		}
 		if (strequal(argv[i], "reboot")) {
@@ -294,7 +313,8 @@ static int net_dom_renamecomputer(struct net_context *c, int argc, const char **
 						      server_name, NULL, 0,
 						      &cli);
 		if (!NT_STATUS_IS_OK(ntstatus)) {
-			return -1;
+			ret = -1;
+			goto done;
 		}
 	}
 
@@ -333,6 +353,10 @@ static int net_dom_renamecomputer(struct net_context *c, int argc, const char **
 	ret = 0;
 
  done:
+	if (password) {
+		memset_s(password, strlen(password), 0, strlen(password));
+		free(password);
+	}
 	if (cli) {
 		cli_shutdown(cli);
 	}
