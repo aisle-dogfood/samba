@@ -290,7 +290,6 @@ static int net_changesecretpw(struct net_context *c, int argc,
  */
 static int net_setauthuser(struct net_context *c, int argc, const char **argv)
 {
-	const char *password = NULL;
 	bool ok;
 
 	if (!secrets_init()) {
@@ -331,8 +330,7 @@ static int net_setauthuser(struct net_context *c, int argc, const char **argv)
 		return 1;
 	}
 
-	password = cli_credentials_get_password(c->creds);
-	if (password == NULL) {
+	if (cli_credentials_get_password(c->creds) == NULL) {
 		d_fprintf(stderr,_("Failed to get the auth users password.\n"));
 		return 1;
 	}
