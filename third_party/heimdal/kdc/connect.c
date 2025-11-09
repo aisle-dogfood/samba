@@ -591,7 +591,19 @@ grow_descr (krb5_context context,
 	unsigned char *tmp;
 	size_t grow;
 
+	/* Check for integer overflow in d->len + n */
+	if (d->len > SIZE_MAX - n) {
+	    kdc_log(context, config, 2, "Request size would cause integer overflow.");
+	    clear_descr(d);
+	    return -1;
+	}
 	grow = max(1024, d->len + n);
+	/* Check for integer overflow in d->size + grow */
+	if (d->size > SIZE_MAX - grow) {
+	    kdc_log(context, config, 2, "Buffer size would cause integer overflow.");
+	    clear_descr(d);
+	    return -1;
+	}
 	if (d->size + grow > max_request_tcp) {
 	    kdc_log(context, config, 2, "Request exceeds max request size (%lu bytes).",
 		    (unsigned long)d->size + grow);
