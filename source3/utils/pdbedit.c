@@ -765,13 +765,13 @@ static int new_user(const char *username, const char *fullname,
 	tosctx = talloc_tos();
 	if (!tosctx) {
 		fprintf(stderr, "Out of memory!\n");
-		return -1;
+		goto done;
 	}
 
 	if (user_sid) {
 		if (get_sid_from_cli_string(&u_sid, user_sid)) {
 			fprintf(stderr, "Failed to parse SID\n");
-			return -1;
+			goto done;
 		}
 	}
 
