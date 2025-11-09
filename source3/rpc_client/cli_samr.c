@@ -166,17 +166,26 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
 
-	/* Calculate the MD4 hash (NT compatible) of the password */
+	/* 
+	 * SECURITY WARNING: Using MD4 hash which is cryptographically weak.
+	 * This is required for compatibility with legacy Windows systems.
+	 * Consider using dcerpc_samr_chgpasswd_user4() which uses stronger
+	 * AES-256 encryption when possible.
+	 */
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
 	if (lp_client_lanman_auth() &&
 	    E_deshash(newpassword, new_lanman_hash) &&
 	    E_deshash(oldpassword, old_lanman_hash)) {
-		/* E_deshash returns false for 'long' passwords (> 14
-		   DOS chars).  This allows us to match Win2k, which
-		   does not store a LM hash for these passwords (which
-		   would reduce the effective password length to 14) */
+		/* 
+		 * SECURITY WARNING: Using DES hash which is cryptographically weak.
+		 * DES has a small key size (56 bits) and is vulnerable to brute force attacks.
+		 * E_deshash returns false for 'long' passwords (> 14 DOS chars).  
+		 * This allows us to match Win2k, which does not store a LM hash for 
+		 * these passwords (which would reduce the effective password length to 14).
+		 * Consider disabling 'client lanman auth' in smb.conf for better security.
+		 */
 		status = init_samr_CryptPassword(newpassword,
 						 &session_key,
 						 &new_lm_password);
@@ -239,6 +248,10 @@ NTSTATUS rpccli_samr_chgpasswd_user2(struct rpc_pipe_client *cli,
 	NTSTATUS status;
 	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
 
+	/* 
+	 * SECURITY WARNING: This function uses weak MD4 and DES encryption.
+	 * Consider using rpccli_samr_chgpasswd_user4() for better security.
+	 */
 	status = dcerpc_samr_chgpasswd_user2(cli->binding_handle,
 					     mem_ctx,
 					     cli->srv_name_slash,
@@ -373,17 +386,26 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
 
-	/* Calculate the MD4 hash (NT compatible) of the password */
+	/* 
+	 * SECURITY WARNING: Using MD4 hash which is cryptographically weak.
+	 * This is required for compatibility with legacy Windows systems.
+	 * Consider using dcerpc_samr_chgpasswd_user4() which uses stronger
+	 * AES-256 encryption when possible.
+	 */
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
 	if (lp_client_lanman_auth() &&
 	    E_deshash(newpassword, new_lanman_hash) &&
 	    E_deshash(oldpassword, old_lanman_hash)) {
-		/* E_deshash returns false for 'long' passwords (> 14
-		   DOS chars).  This allows us to match Win2k, which
-		   does not store a LM hash for these passwords (which
-		   would reduce the effective password length to 14) */
+		/* 
+		 * SECURITY WARNING: Using DES hash which is cryptographically weak.
+		 * DES has a small key size (56 bits) and is vulnerable to brute force attacks.
+		 * E_deshash returns false for 'long' passwords (> 14 DOS chars).  
+		 * This allows us to match Win2k, which does not store a LM hash for 
+		 * these passwords (which would reduce the effective password length to 14).
+		 * Consider disabling 'client lanman auth' in smb.conf for better security.
+		 */
 		status = init_samr_CryptPassword(newpassword,
 						 &session_key,
 						 &new_lm_password);
@@ -452,6 +474,10 @@ NTSTATUS rpccli_samr_chgpasswd_user3(struct rpc_pipe_client *cli,
 	NTSTATUS status;
 	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
 
+	/* 
+	 * SECURITY WARNING: This function uses weak MD4 and DES encryption.
+	 * Consider using rpccli_samr_chgpasswd_user4() for better security.
+	 */
 	status = dcerpc_samr_chgpasswd_user3(cli->binding_handle,
 					     mem_ctx,
 					     cli->srv_name_slash,
@@ -511,7 +537,11 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 
 	generate_nonce_buffer(iv.data, iv.length);
 
-	/* Calculate the MD4 hash (NT compatible) of the password */
+	/* 
+	 * NOTE: Even user4 still uses MD4 for initial key derivation for compatibility,
+	 * but then uses strong PBKDF2 with SHA-512 and AES-256 for the actual encryption.
+	 * This provides much better security than the legacy user2/user3 functions.
+	 */
 	E_md4hash(oldpassword, old_nt_key_data);
 
 	init_lsa_String(&server, srv_name_slash);
