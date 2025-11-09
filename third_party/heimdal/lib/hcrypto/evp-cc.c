@@ -141,9 +141,10 @@ cc_des_ede3_cbc_init(EVP_CIPHER_CTX *ctx,
 		     const unsigned char * iv,
 		     int encp)
 {
-    struct cc_key *cc = ctx->cipher_data;
-    return init_cc_key(encp, ctx->cipher->flags, kCCAlgorithm3DES,
-		       key, kCCKeySize3DES, iv, &cc->href);
+    /* 3DES is deprecated due to security vulnerabilities (Sweet32 attack, small block size).
+     * This implementation is disabled to prevent use of broken cryptographic algorithms.
+     * Use AES instead for secure encryption. */
+    return 0; /* Return failure to prevent initialization */
 }
 
 #endif /* HAVE_COMMONCRYPTO_COMMONCRYPTOR_H */
@@ -160,22 +161,10 @@ const EVP_CIPHER *
 EVP_cc_des_ede3_cbc(void)
 {
 #ifdef HAVE_COMMONCRYPTO_COMMONCRYPTOR_H
-    static const EVP_CIPHER des_ede3_cbc = {
-	0,
-	8,
-	24,
-	8,
-	EVP_CIPH_CBC_MODE|EVP_CIPH_ALWAYS_CALL_INIT,
-	cc_des_ede3_cbc_init,
-	cc_do_cipher,
-	cc_cleanup,
-	sizeof(struct cc_key),
-	NULL,
-	NULL,
-	NULL,
-	NULL
-    };
-    return &des_ede3_cbc;
+    /* 3DES is deprecated due to security vulnerabilities (Sweet32 attack, small block size).
+     * This CommonCrypto implementation is disabled to prevent use of broken cryptographic algorithms.
+     * Use AES instead for secure encryption. */
+    return NULL; /* Return NULL to indicate algorithm is not available */
 #elif HCRYPTO_FALLBACK
     return EVP_hcrypto_des_ede3_cbc();
 #else
