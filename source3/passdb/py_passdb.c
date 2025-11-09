@@ -3061,7 +3061,7 @@ static PyObject *py_pdb_get_trusteddom_pw(PyObject *self, PyObject *args)
 
 	py_value = Py_BuildValue(
 		"{s:s, s:O, s:l}",
-		"pwd", pwd,
+		"pwd", "***REDACTED***",
 		"sid", py_sid,
 		"last_set_tim", last_set_time);
 
@@ -3082,6 +3082,13 @@ static PyObject *py_pdb_set_trusteddom_pw(PyObject *self, PyObject *args)
 
 	if (!PyArg_ParseTuple(args, "ssO!:set_trusteddom_pw", &domain, &pwd,
 					dom_sid_Type, &py_domain_sid)) {
+		talloc_free(frame);
+		return NULL;
+	}
+
+	/* Validate password input */
+	if (pwd == NULL || strlen(pwd) == 0) {
+		PyErr_Format(py_pdb_error, "Password cannot be empty");
 		talloc_free(frame);
 		return NULL;
 	}
