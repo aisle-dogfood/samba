@@ -27,6 +27,7 @@
 #include "system/select.h"
 #include "winbind_client.h"
 #include "lib/util/dlinklist.h"
+#include "lib/util/genrand.h"
 #include <assert.h>
 
 #ifdef HAVE_PTHREAD_H
@@ -548,8 +549,12 @@ static int winbind_named_pipe_sock(const char *dir)
 				slept = CONNECT_TIMEOUT;
 				break;
 			case EAGAIN:
-				slept = rand() % 3 + 1;
-				sleep(slept);
+				{
+					uint8_t random_byte;
+					generate_random_buffer(&random_byte, 1);
+					slept = (random_byte % 3) + 1;
+					sleep(slept);
+				}
 				break;
 			default:
 				goto error_out;
