@@ -82,6 +82,20 @@ NTSTATUS rpc_query_user_list(TALLOC_CTX *mem_ctx,
 			goto done;
 		}
 
+		/* Validate that sam_array contains the expected number of entries */
+		if (sam_array == NULL || sam_array->entries == NULL) {
+			if (count > 0) {
+				DBG_WARNING("sam_array is NULL but count is %u\n", count);
+				status = NT_STATUS_INVALID_PARAMETER;
+				goto done;
+			}
+		} else if (count > sam_array->count) {
+			DBG_WARNING("count (%u) exceeds sam_array->count (%u)\n", 
+				    count, sam_array->count);
+			status = NT_STATUS_INVALID_PARAMETER;
+			goto done;
+		}
+
 		tmp = talloc_realloc(tmp_ctx, rids, uint32_t, num_rids+count);
 		if (tmp == NULL) {
 			status = NT_STATUS_NO_MEMORY;
@@ -142,6 +156,18 @@ NTSTATUS rpc_enum_dom_groups(TALLOC_CTX *mem_ctx,
 					 nt_errstr(result)));
 				return result;
 			}
+		}
+
+		/* Validate that sam_array contains the expected number of entries */
+		if (sam_array == NULL || sam_array->entries == NULL) {
+			if (count > 0) {
+				DBG_WARNING("sam_array is NULL but count is %u\n", count);
+				return NT_STATUS_INVALID_PARAMETER;
+			}
+		} else if (count > sam_array->count) {
+			DBG_WARNING("count (%u) exceeds sam_array->count (%u)\n", 
+				    count, sam_array->count);
+			return NT_STATUS_INVALID_PARAMETER;
 		}
 
 		info = talloc_realloc(mem_ctx,
@@ -208,6 +234,18 @@ NTSTATUS rpc_enum_local_groups(TALLOC_CTX *mem_ctx,
 			if (!NT_STATUS_EQUAL(result, STATUS_MORE_ENTRIES)) {
 				return result;
 			}
+		}
+
+		/* Validate that sam_array contains the expected number of entries */
+		if (sam_array == NULL || sam_array->entries == NULL) {
+			if (count > 0) {
+				DBG_WARNING("sam_array is NULL but count is %u\n", count);
+				return NT_STATUS_INVALID_PARAMETER;
+			}
+		} else if (count > sam_array->count) {
+			DBG_WARNING("count (%u) exceeds sam_array->count (%u)\n", 
+				    count, sam_array->count);
+			return NT_STATUS_INVALID_PARAMETER;
 		}
 
 		info = talloc_realloc(mem_ctx,
