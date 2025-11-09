@@ -528,7 +528,7 @@ _kdc_do_digest(krb5_context context,
 	    }
 	}
 
-	buf.length = strlen(ireq.u.digestRequest.opaque);
+	buf.length = (strlen(ireq.u.digestRequest.opaque) + 1) / 2;
 	buf.data = malloc(buf.length);
 	if (buf.data == NULL) {
 	    ret = ENOMEM;
@@ -559,7 +559,7 @@ _kdc_do_digest(krb5_context context,
 	    goto out;
 	}
 
-	serverNonce.length = strlen(ireq.u.digestRequest.serverNonce);
+	serverNonce.length = (strlen(ireq.u.digestRequest.serverNonce) + 1) / 2;
 	serverNonce.data = malloc(serverNonce.length);
 	if (serverNonce.data == NULL) {
 	    ret = ENOMEM;
@@ -844,7 +844,7 @@ _kdc_do_digest(krb5_context context,
 		ssize_t ssize;
 		krb5_data clientNonce;
 
-		clientNonce.length = strlen(*ireq.u.digestRequest.clientNonce);
+		clientNonce.length = (strlen(*ireq.u.digestRequest.clientNonce) + 1) / 2;
 		clientNonce.data = malloc(clientNonce.length);
 		if (clientNonce.data == NULL) {
 		    ret = ENOMEM;
