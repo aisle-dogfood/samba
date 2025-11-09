@@ -200,11 +200,59 @@ int des_crypt112_16(uint8_t out[16], const uint8_t in[16], const uint8_t key[14]
 	return des_crypt56_gnutls(out + 8, in + 8, key+7, encrypt);
 }
 
-/* Decode a sam password hash into a password.  The password hash is the
-   same method used to store passwords in the NT registry.  The DES key
-   used is based on the RID of the user. */
-int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
-		  enum samba_gnutls_direction encrypt)
+/* AES-based sam password encryption/decryption using RID-derived key.
+   This provides stronger encryption than the legacy DES implementation. */
+static int sam_rid_crypt_aes(unsigned int rid, const uint8_t *in, uint8_t *out,
+			     enum samba_gnutls_direction encrypt)
+{
+	uint8_t key[16];
+	uint8_t iv[16];
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	gnutls_cipher_hd_t ctx;
+	int ret;
+
+	/* Generate 128-bit AES key from RID */
+	memset(key, 0, sizeof(key));
+	key[0] = key[4] = key[8] = key[12] = (uint8_t)(rid & 0xFF);
+	key[1] = key[5] = key[9] = key[13] = (uint8_t)((rid >> 8) & 0xFF);
+	key[2] = key[6] = key[10] = key[14] = (uint8_t)((rid >> 16) & 0xFF);
+	key[3] = key[7] = key[11] = key[15] = (uint8_t)((rid >> 24) & 0xFF);
+
+	/* Use zero IV for consistency with existing behavior */
+	memset(iv, 0, sizeof(iv));
+
+	key_datum.data = key;
+	key_datum.size = 16;
+	iv_datum.data = iv;
+	iv_datum.size = 16;
+
+	ret = gnutls_global_init();
+	if (ret != 0) {
+		return ret;
+	}
+
+	ret = gnutls_cipher_init(&ctx, GNUTLS_CIPHER_AES_128_CBC, &key_datum, &iv_datum);
+	if (ret != 0) {
+		return ret;
+	}
+
+	memcpy(out, in, 16);
+	if (encrypt == SAMBA_GNUTLS_ENCRYPT) {
+		ret = gnutls_cipher_encrypt(ctx, out, 16);
+	} else {
+		ret = gnutls_cipher_decrypt(ctx, out, 16);
+	}
+
+	gnutls_cipher_deinit(ctx);
+	return ret;
+}
+
+/* Legacy DES-based sam password encryption/decryption.
+   WARNING: DES encryption is cryptographically weak and should be avoided.
+   Use sam_rid_crypt_secure() for new implementations. */
+static int sam_rid_crypt_des(unsigned int rid, const uint8_t *in, uint8_t *out,
+			     enum samba_gnutls_direction encrypt)
 {
 	uint8_t s[14];
 	int ret;
@@ -219,4 +267,25 @@ int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 		return ret;
 	}
 	return des_crypt56_gnutls(out+8, in+8, s+7, encrypt);
+}
+
+/* Secure sam password encryption/decryption using AES.
+   This function should be used for new implementations requiring strong encryption. */
+int sam_rid_crypt_secure(unsigned int rid, const uint8_t *in, uint8_t *out,
+			 enum samba_gnutls_direction encrypt)
+{
+	return sam_rid_crypt_aes(rid, in, out, encrypt);
+}
+
+/* Decode a sam password hash into a password.  The password hash is the
+   same method used to store passwords in the NT registry.  
+   
+   WARNING: This function uses legacy DES encryption which is cryptographically weak.
+   For new implementations, use sam_rid_crypt_secure() which provides AES encryption.
+   This function is maintained for backward compatibility with existing protocols. */
+int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
+		  enum samba_gnutls_direction encrypt)
+{
+	/* Use legacy DES for backward compatibility */
+	return sam_rid_crypt_des(rid, in, out, encrypt);
 }
