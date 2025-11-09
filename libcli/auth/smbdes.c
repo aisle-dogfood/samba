@@ -20,6 +20,20 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/*
+ * SECURITY WARNING: This file implements DES encryption which is 
+ * cryptographically weak and considered insecure by modern standards.
+ * DES uses a 56-bit key size which can be brute-forced and is vulnerable
+ * to various cryptographic attacks. This implementation is maintained
+ * solely for compatibility with legacy Windows NT/Active Directory
+ * protocols that require DES encryption for SAM database synchronization
+ * and replication operations.
+ * 
+ * Users should be aware that data encrypted with these functions may
+ * be vulnerable to cryptographic attacks and should consider migrating
+ * to systems that support stronger encryption algorithms when possible.
+ */
+
 #include "includes.h"
 #include "libcli/auth/libcli_auth.h"
 
@@ -48,6 +62,10 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       enum samba_gnutls_direction encrypt)
 {
 	/*
+	 * SECURITY WARNING: This function uses DES encryption which is
+	 * cryptographically weak and vulnerable to attacks. DES should
+	 * only be used for compatibility with legacy systems.
+	 *
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
 	 * This allows us to use GNUTLS_CIPHER_DES_CBC from GnuTLS and not
@@ -63,6 +81,10 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 	uint8_t key2[8];
 	uint8_t outb[8];
 	int ret;
+
+	/* Log security warning about weak encryption usage - use DEBUG level to avoid spam */
+	DBG_DEBUG("Using DES encryption which is cryptographically weak. "
+		  "This should only be used for legacy protocol compatibility.\n");
 
 	memset(out, 0, 8);
 
@@ -97,6 +119,10 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 	return ret;
 }
 
+/* E_P16 - LM password hash generation using DES
+   SECURITY WARNING: This function uses DES encryption which is 
+   cryptographically weak. It is maintained for compatibility with
+   legacy LM authentication protocols. */
 int E_P16(const uint8_t *p14,uint8_t *p16)
 {
 	const uint8_t sp8[8] = {0x4b, 0x47, 0x53, 0x21, 0x40, 0x23, 0x24, 0x25};
@@ -110,6 +136,10 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 	return des_crypt56_gnutls(p16+8, sp8, p14+7, SAMBA_GNUTLS_ENCRYPT);
 }
 
+/* E_P24 - Challenge/response calculation using DES
+   SECURITY WARNING: This function uses DES encryption which is 
+   cryptographically weak. It is maintained for compatibility with
+   legacy NTLM authentication protocols. */
 int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 {
 	int ret;
@@ -193,12 +223,21 @@ int des_crypt112_16(uint8_t out[16], const uint8_t in[16], const uint8_t key[14]
 
 /* Decode a sam password hash into a password.  The password hash is the
    same method used to store passwords in the NT registry.  The DES key
-   used is based on the RID of the user. */
+   used is based on the RID of the user. 
+   
+   SECURITY WARNING: This function uses DES encryption which is 
+   cryptographically weak. It is maintained for compatibility with
+   Windows NT/Active Directory SAM synchronization protocols. */
 int sam_rid_crypt(unsigned int rid, const uint8_t *in, uint8_t *out,
 		  enum samba_gnutls_direction encrypt)
 {
 	uint8_t s[14];
 	int ret;
+
+	/* Log security warning about weak encryption usage - use DEBUG level to avoid spam */
+	DBG_DEBUG("sam_rid_crypt: Using DES encryption for RID %u. "
+		  "DES is cryptographically weak and should only be used "
+		  "for legacy protocol compatibility.\n", rid);
 
 	s[0] = s[4] = s[8] = s[12] = (uint8_t)(rid & 0xFF);
 	s[1] = s[5] = s[9] = s[13] = (uint8_t)((rid >> 8) & 0xFF);
