@@ -395,6 +395,15 @@ _PUBLIC_ bool cli_credentials_set_utf16_password(struct cli_credentials *cred,
 		return false;
 	}
 
+	/*
+	 * Security Warning: Using MD4 for password hashing.
+	 * MD4 is cryptographically weak and should be avoided when possible.
+	 * This is required for NTLM protocol compatibility with Windows systems.
+	 * Consider using stronger authentication methods like Kerberos when available.
+	 */
+	DBG_WARNING("Using MD4 for UTF16 NT password hash generation. "
+		    "MD4 is cryptographically weak. "
+		    "Consider using stronger authentication methods.\n");
 	mdfour(nt_hash->hash, password_utf16->data, password_utf16->length);
 	cred->nt_hash = nt_hash;
 	return true;
@@ -446,6 +455,15 @@ _PUBLIC_ bool cli_credentials_set_old_utf16_password(struct cli_credentials *cre
 		return false;
 	}
 
+	/*
+	 * Security Warning: Using MD4 for password hashing.
+	 * MD4 is cryptographically weak and should be avoided when possible.
+	 * This is required for NTLM protocol compatibility with Windows systems.
+	 * Consider using stronger authentication methods like Kerberos when available.
+	 */
+	DBG_WARNING("Using MD4 for old UTF16 NT password hash generation. "
+		    "MD4 is cryptographically weak. "
+		    "Consider using stronger authentication methods.\n");
 	mdfour(nt_hash->hash, password_utf16->data, password_utf16->length);
 	cred->old_nt_hash = nt_hash;
 	return true;
