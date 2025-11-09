@@ -87,7 +87,7 @@ print (int argc,
     char s[64];
 
     alg->next (key);
-    if (i >= n - incount) {
+    if (incount >= n || i >= n - incount) {
       (*print_fn)(key, s, sizeof(s));
       printf ("%d: %s\n", i + 1, s);
     }
