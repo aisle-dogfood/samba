@@ -89,9 +89,10 @@ bool E_md4hash(const char *passwd, uint8_t p16[16])
 
 	ret = push_ucs2_talloc(NULL, &wpwd, passwd, &len);
 	if (!ret || len < 2) {
-		/* We don't want to return fixed data, as most callers
-		 * don't check */
-		mdfour(p16, (const uint8_t *)passwd, strlen(passwd));
+		/* Zero out the buffer to avoid returning uninitialized data
+		 * or potentially insecure fallback data. Callers should
+		 * check the return value and handle the failure appropriately. */
+		memset(p16, 0, 16);
 		return false;
 	}
 
