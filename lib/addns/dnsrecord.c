@@ -72,7 +72,11 @@ DNS_ERROR dns_create_update( TALLOC_CTX *mem_ctx, const char *name,
 		return ERROR_DNS_NO_MEMORY;
 	}
 
-	req->id = random();
+	{
+		uint8_t random_bytes[2];
+		generate_random_buffer(random_bytes, sizeof(random_bytes));
+		req->id = (uint16_t)(random_bytes[0] << 8) | random_bytes[1];
+	}
 	req->flags = 0x2800;	/* Dynamic update */
 
 	req->num_zones = 1;
