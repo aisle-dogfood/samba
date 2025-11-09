@@ -504,6 +504,12 @@ static NTSTATUS push_recursive (struct gp_context *gp_ctx, const char *local_pat
 					status = NT_STATUS_UNSUCCESSFUL;
 					goto done;
 				}
+				/* Check for integer overflow before using total_read as offset */
+				if (total_read > SSIZE_MAX - nread) {
+					DBG_ERR("Integer overflow detected in file transfer\n");
+					status = NT_STATUS_UNSUCCESSFUL;
+					goto done;
+				}
 				nwrite = smbcli_write(gp_ctx->cli->tree,
 						      remote_fd, 0, buf,
 						      total_read, nread);
