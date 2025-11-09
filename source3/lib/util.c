@@ -650,6 +650,10 @@ uid_t nametouid(const char *name)
 	pass = Get_Pwnam_alloc(talloc_tos(), name);
 	if (pass) {
 		u = pass->pw_uid;
+		/* Clear sensitive data before freeing to prevent heap inspection */
+		if (pass->pw_passwd) {
+			memset(pass->pw_passwd, 0, strlen(pass->pw_passwd));
+		}
 		TALLOC_FREE(pass);
 		return u;
 	}
