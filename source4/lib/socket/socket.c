@@ -202,11 +202,11 @@ _PUBLIC_ NTSTATUS socket_recv(struct socket_context *sock, void *buf,
 	if ((sock->flags & SOCKET_FLAG_TESTNONBLOCK) 
 	    && wantlen > 1) {
 
-		if (random() % 10 == 0) {
+		if (generate_random() % 10 == 0) {
 			*nread = 0;
 			return STATUS_MORE_ENTRIES;
 		}
-		return sock->ops->fn_recv(sock, buf, 1+(random() % wantlen), nread);
+		return sock->ops->fn_recv(sock, buf, 1+(generate_random() % wantlen), nread);
 	}
 	return sock->ops->fn_recv(sock, buf, wantlen, nread);
 }
