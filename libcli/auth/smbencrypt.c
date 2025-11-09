@@ -1588,6 +1588,11 @@ NTSTATUS encode_rc4_passwd_buffer(const char *passwd,
 	bool ok;
 	int rc;
 
+	/* Check if weak crypto (RC4) is allowed */
+	if (!samba_gnutls_weak_crypto_allowed()) {
+		return NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER;
+	}
+
 	ok = encode_pw_buffer(pw_data.data, passwd, STR_UNICODE);
 	if (!ok) {
 		return NT_STATUS_INVALID_PARAMETER;
@@ -1628,6 +1633,11 @@ NTSTATUS decode_rc4_passwd_buffer(const DATA_BLOB *psession_key,
 	DATA_BLOB confounder = data_blob_const(&inout_crypt_pwd->data[516], 16);
 	DATA_BLOB pw_data = data_blob_const(&inout_crypt_pwd->data, 516);
 	int rc;
+
+	/* Check if weak crypto (RC4) is allowed */
+	if (!samba_gnutls_weak_crypto_allowed()) {
+		return NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER;
+	}
 
 	rc = samba_gnutls_arcfour_confounded_md5(&confounder,
 						 psession_key,
@@ -1747,6 +1757,11 @@ WERROR encode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 	DATA_BLOB encrypt_pwbuf = data_blob_const(pwbuf, 516);
 	int rc;
 
+	/* Check if weak crypto (RC4) is allowed */
+	if (!samba_gnutls_weak_crypto_allowed()) {
+		return WERR_CONTENT_BLOCKED;
+	}
+
 	pwd_buf = talloc_zero(mem_ctx, struct wkssvc_PasswordBuffer);
 	if (pwd_buf == NULL) {
 		return WERR_NOT_ENOUGH_MEMORY;
@@ -1787,6 +1802,11 @@ WERROR decode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 	DATA_BLOB decrypt_pwbuf = data_blob_const(pwbuf, 516);
 	bool ok;
 	int rc;
+
+	/* Check if weak crypto (RC4) is allowed */
+	if (!samba_gnutls_weak_crypto_allowed()) {
+		return WERR_CONTENT_BLOCKED;
+	}
 
 	if (pwd_buf == NULL) {
 		return WERR_INVALID_PASSWORD;
