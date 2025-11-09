@@ -1590,6 +1590,7 @@ NTSTATUS encode_rc4_passwd_buffer(const char *passwd,
 
 	ok = encode_pw_buffer(pw_data.data, passwd, STR_UNICODE);
 	if (!ok) {
+		data_blob_clear(&pw_data);
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 

@@ -64,6 +64,7 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 				&sess_key,
 				NULL);
 	if (rc != 0) {
+		ZERO_ARRAY_LEN(pwd_buf->data, 516);
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
 	}
 	rc = gnutls_cipher_encrypt(cipher_hnd,
@@ -71,6 +72,7 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 				   516);
 	gnutls_cipher_deinit(cipher_hnd);
 	if (rc != 0) {
+		ZERO_ARRAY_LEN(pwd_buf->data, 516);
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
 	}
 
