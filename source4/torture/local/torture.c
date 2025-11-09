@@ -61,7 +61,10 @@ static bool test_provision(struct torture_context *tctx)
 	settings->domain = "EXAMPLE";
 	settings->netbios_name = "torture";
 	settings->ntds_dn_str = NULL;
-	settings->machine_password = "geheim";
+	settings->machine_password = talloc_strdup(settings, "geheim");
+	/* Protect sensitive password data from heap inspection */
+	talloc_keep_secret(discard_const(settings->machine_password));
+	talloc_set_name_const(settings->machine_password, "test machine password (protected)");
 	settings->use_ntvfs = true;
 
 	status = provision_bare(settings, tctx->lp_ctx, settings, &result);
