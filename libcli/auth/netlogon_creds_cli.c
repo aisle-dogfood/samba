@@ -2586,6 +2586,13 @@ static void netlogon_creds_cli_ServerPasswordSet_locked(struct tevent_req *subre
 		       state->samr_crypt_password.data, 512);
 		state->netr_crypt_password.length =
 			IVAL(state->samr_crypt_password.data, 512);
+		
+		/* Validate that the length doesn't exceed the buffer size */
+		if (state->netr_crypt_password.length > 512) {
+			status = NT_STATUS_INVALID_PARAMETER;
+			netlogon_creds_cli_ServerPasswordSet_cleanup(req, status);
+			return;
+		}
 
 		subreq = dcerpc_netr_ServerPasswordSet2_send(state, state->ev,
 					state->binding_handle,
