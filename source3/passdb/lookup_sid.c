@@ -42,6 +42,16 @@ static bool lookup_unix_user_name(const char *name, struct dom_sid *sid)
 	}
 
 	/*
+	 * Validate the passwd structure to prevent heap inspection vulnerabilities.
+	 * Ensure essential fields are not NULL before accessing them.
+	 */
+	if (pwd->pw_name == NULL) {
+		DEBUG(1, ("lookup_unix_user_name: passwd structure has NULL pw_name\n"));
+		TALLOC_FREE(pwd);
+		return False;
+	}
+
+	/*
 	 * For 64-bit uid's we have enough space in the whole SID,
 	 * should they become necessary
 	 */
