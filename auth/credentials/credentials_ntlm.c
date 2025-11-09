@@ -364,6 +364,10 @@ _PUBLIC_ bool cli_credentials_set_utf16_password(struct cli_credentials *cred,
 		return cli_credentials_set_password(cred, NULL, obtained);
 	}
 
+	if (password_utf16->data == NULL) {
+		return cli_credentials_set_password(cred, NULL, obtained);
+	}
+
 	if (obtained < cred->password_obtained) {
 		return false;
 	}
@@ -412,6 +416,10 @@ _PUBLIC_ bool cli_credentials_set_old_utf16_password(struct cli_credentials *cre
 	bool ok;
 
 	if (password_utf16 == NULL) {
+		return cli_credentials_set_old_password(cred, NULL, CRED_SPECIFIED);
+	}
+
+	if (password_utf16->data == NULL) {
 		return cli_credentials_set_old_password(cred, NULL, CRED_SPECIFIED);
 	}
 
