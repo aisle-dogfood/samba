@@ -1092,6 +1092,9 @@ static inline bool _hexcharval(char c, uint8_t *val)
 static inline bool hex_byte(const char *in, uint8_t *out)
 {
 	uint8_t hi=0, lo=0;
+	if (in == NULL || in[0] == '\0' || in[1] == '\0') {
+		return false;
+	}
 	bool ok = _hexcharval(in[0], &hi) && _hexcharval(in[1], &lo);
 	*out = (hi<<4)+lo;
 	return ok;
