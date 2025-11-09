@@ -183,7 +183,7 @@ struct DNS_ADDR_ARRAY *dns_addr_array_copy(TALLOC_CTX *mem_ctx,
 
 int dns_split_name_components(TALLOC_CTX *tmp_ctx, const char *name, char ***components)
 {
-	char *str = NULL, *ptr, **list;
+	char *str = NULL, *ptr, **list, *saveptr;
 	int count = 0;
 
 	if (name == NULL) {
@@ -200,7 +200,7 @@ int dns_split_name_components(TALLOC_CTX *tmp_ctx, const char *name, char ***com
 		goto failed;
 	}
 
-	ptr = strtok(str, ".");
+	ptr = strtok_r(str, ".", &saveptr);
 	while (ptr != NULL) {
 		count++;
 		list = talloc_realloc(tmp_ctx, list, char *, count);
@@ -211,7 +211,7 @@ int dns_split_name_components(TALLOC_CTX *tmp_ctx, const char *name, char ***com
 		if (list[count-1] == NULL) {
 			goto failed;
 		}
-		ptr = strtok(NULL, ".");
+		ptr = strtok_r(NULL, ".", &saveptr);
 	}
 
 	talloc_free(str);
