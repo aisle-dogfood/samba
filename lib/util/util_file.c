@@ -41,12 +41,23 @@ _PUBLIC_ char *afdgets(int fd, TALLOC_CTX *mem_ctx, size_t hint)
 	if (hint <= 0) hint = 0x100;
 
 	do {
+		/* Check for integer overflow in alloc_size */
+		if (alloc_size > SSIZE_MAX - hint) {
+			talloc_free(data);
+			return NULL;
+		}
 		alloc_size += hint;
 
 		data = talloc_realloc(mem_ctx, data, char, alloc_size);
 
 		if (!data)
 			return NULL;
+
+		/* Check for integer overflow in offset before read */
+		if (offset > SSIZE_MAX - hint || offset + hint > alloc_size) {
+			talloc_free(data);
+			return NULL;
+		}
 
 		ret = read(fd, data + offset, hint);
 
@@ -61,11 +72,21 @@ _PUBLIC_ char *afdgets(int fd, TALLOC_CTX *mem_ctx, size_t hint)
 
 		/* Find newline */
 		for (p = 0; p < ret; p++) {
+			/* Check for integer overflow and buffer bounds */
+			if (offset > SSIZE_MAX - p || offset + p >= alloc_size) {
+				talloc_free(data);
+				return NULL;
+			}
 			if (data[offset + p] == '\n')
 				break;
 		}
 
 		if (p < ret) {
+			/* Check for integer overflow and buffer bounds before writing */
+			if (offset > SSIZE_MAX - p || offset + p >= alloc_size) {
+				talloc_free(data);
+				return NULL;
+			}
 			data[offset + p] = '\0';
 
 			/* Go back to position of newline */
@@ -73,10 +94,20 @@ _PUBLIC_ char *afdgets(int fd, TALLOC_CTX *mem_ctx, size_t hint)
 			return data;
 		}
 
+		/* Check for integer overflow before updating offset */
+		if (offset > SSIZE_MAX - ret) {
+			talloc_free(data);
+			return NULL;
+		}
 		offset += ret;
 
 	} while ((size_t)ret == hint);
 
+	/* Check for buffer bounds before writing null terminator */
+	if (offset >= alloc_size) {
+		talloc_free(data);
+		return NULL;
+	}
 	data[offset] = '\0';
 
 	return data;
