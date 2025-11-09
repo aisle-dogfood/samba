@@ -401,6 +401,10 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	pdb_init_smb(pw_buf);
 	pw_buf->acct_ctrl = ACB_NORMAL;
 
+	/* Clear password buffers to prevent credential exposure */
+	memset(smbpwd, 0, 16);
+	memset(smbntpwd, 0, 16);
+
 	/*
 	 * Scan the file, a line at a time and check if the name matches.
 	 */
@@ -605,6 +609,11 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 	}
 
 	DEBUG(5,("getsmbfilepwent: end of file reached.\n"));
+	
+	/* Clear password buffers when no entry found to prevent credential exposure */
+	memset(smbpwd, 0, 16);
+	memset(smbntpwd, 0, 16);
+	
 	return NULL;
 }
 
@@ -1563,6 +1572,10 @@ static void free_private_data(void **vp)
 	struct smbpasswd_privates **privates = (struct smbpasswd_privates**)vp;
 
 	endsmbfilepwent((*privates)->pw_file, &((*privates)->pw_file_lock_depth));
+
+	/* Clear password buffers before freeing to prevent credential exposure */
+	memset((*privates)->smbpwd, 0, 16);
+	memset((*privates)->smbntpwd, 0, 16);
 
 	*privates = NULL;
 	/* No need to free any further, as it is talloc()ed */
