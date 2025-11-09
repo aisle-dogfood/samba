@@ -89,6 +89,18 @@ from samba.gp.gpclass import register_gp_extension, list_gp_extensions, \
     unregister_gp_extension
 
 
+def secure_xml_fromstring(xml_string):
+    """Securely parse XML string with external entity processing disabled"""
+    # Create a parser with external entity processing disabled to prevent XXE attacks
+    parser = ET.XMLParser()
+    # Disable external entity processing
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    return ET.fromstring(xml_string, parser)
+
+
 def gpo_flags_string(value):
     """return gpo flags string"""
     flags = policy.get_gpo_flags(value)
@@ -3998,7 +4010,7 @@ samba-tool gpo manage issue set {31B2F340-016D-11D2-945F-00C04FB984F9} "Welcome 
             return
 
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            xml_data = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
