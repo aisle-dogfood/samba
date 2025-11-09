@@ -795,12 +795,20 @@ static struct swrap_packet *swrap_packet_init(struct timeval *tval,
 	case SOCK_STREAM:
 		protocol = 0x06; /* TCP */
 		wire_hdr_len = sizeof(packet->ip.hdr) + sizeof(packet->ip.p.tcp);
+		/* Check for integer overflow */
+		if (payload_len > SIZE_MAX - wire_hdr_len) {
+			return NULL;
+		}
 		wire_len = wire_hdr_len + payload_len;
 		break;
 
 	case SOCK_DGRAM:
 		protocol = 0x11; /* UDP */
 		wire_hdr_len = sizeof(packet->ip.hdr) + sizeof(packet->ip.p.udp);
+		/* Check for integer overflow */
+		if (payload_len > SIZE_MAX - wire_hdr_len) {
+			return NULL;
+		}
 		wire_len = wire_hdr_len + payload_len;
 		break;
 	}
@@ -812,10 +820,22 @@ static struct swrap_packet *swrap_packet_init(struct timeval *tval,
 			icmp_truncate_len = wire_len - 64;
 		}
 		icmp_hdr_len = sizeof(packet->ip.hdr) + sizeof(packet->ip.p.icmp);
+		/* Check for integer overflow in wire_hdr_len addition */
+		if (wire_hdr_len > SIZE_MAX - icmp_hdr_len) {
+			return NULL;
+		}
 		wire_hdr_len += icmp_hdr_len;
+		/* Check for integer overflow in wire_len addition */
+		if (wire_len > SIZE_MAX - icmp_hdr_len) {
+			return NULL;
+		}
 		wire_len += icmp_hdr_len;
 	}
 
+	/* Check for integer overflow in packet_len calculation */
+	if (wire_len > SIZE_MAX - nonwire_len) {
+		return NULL;
+	}
 	packet_len = nonwire_len + wire_len;
 	alloc_len = packet_len;
 	if (alloc_len < sizeof(struct swrap_packet)) {
