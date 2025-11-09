@@ -849,6 +849,9 @@ NTSTATUS libnet_JoinDomain(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, stru
 
 	if (r->in.account_pass != NULL) {
 		password_str = talloc_strdup(tmp_ctx, r->in.account_pass);
+		if (password_str != NULL) {
+			talloc_keep_secret(password_str);
+		}
 	} else {
 		/* Grab a password of that minimum length */
 		password_str = generate_random_password(tmp_ctx,

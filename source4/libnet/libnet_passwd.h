@@ -33,8 +33,8 @@ union libnet_ChangePassword {
 		struct _libnet_ChangePassword_in {
 			const char *account_name;
 			const char *domain_name;
-			const char *oldpassword;
-			const char *newpassword;
+			const char *oldpassword;	/* Should be marked with talloc_keep_secret() */
+			const char *newpassword;	/* Should be marked with talloc_keep_secret() */
 		} in;
 
 		struct _libnet_ChangePassword_out {
