@@ -50,6 +50,7 @@ int SMBencrypt_hash(const uint8_t lm_hash[16], const uint8_t *c8, uint8_t p24[24
 	dump_data(100, p24, 24);
 #endif
 
+	ZERO_STRUCT(p21);
 	return rc;
 }
 
@@ -72,6 +73,7 @@ bool SMBencrypt(const char *passwd, const uint8_t *c8, uint8_t p24[24])
 	if (rc != 0) {
 		ret = false;
 	}
+	ZERO_STRUCT(lm_hash);
 	return ret;
 }
 
