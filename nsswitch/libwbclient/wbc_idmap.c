@@ -501,6 +501,10 @@ wbcErr wbcCtxUnixIdsToSids(struct wbcContext *ctx,
 			return WBC_ERR_INVALID_PARAM;
 		}
 
+		if (len < 0) {
+			free(buf);
+			return WBC_ERR_UNKNOWN_FAILURE;
+		}
 		if (len + ofs >= buflen) { /* >= for the terminating '\0' */
 			free(buf);
 			return WBC_ERR_UNKNOWN_FAILURE;
