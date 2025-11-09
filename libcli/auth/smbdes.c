@@ -18,6 +18,14 @@
    
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+   SECURITY WARNING: This file contains DES encryption implementations
+   which are cryptographically weak and vulnerable to attacks. DES uses
+   a 56-bit effective key length and should be considered insecure for
+   modern applications. These functions are only provided for legacy
+   compatibility with older SMB/CIFS implementations. Production
+   deployments should use stronger authentication methods like NTLMv2
+   or Kerberos whenever possible.
 */
 
 #include "includes.h"
@@ -48,6 +56,14 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 		       enum samba_gnutls_direction encrypt)
 {
 	/*
+	 * WARNING: This function uses DES encryption which is cryptographically
+	 * weak and should be avoided. DES has a 56-bit effective key length
+	 * and is vulnerable to brute force attacks. This function is only
+	 * provided for legacy compatibility with older SMB/CIFS implementations.
+	 * Consider using stronger encryption algorithms like AES when possible.
+	 */
+	
+	/*
 	 * A single block DES-CBC op, with an all-zero IV is the same as DES
 	 * because the IV is combined with the data using XOR.
 	 * This allows us to use GNUTLS_CIPHER_DES_CBC from GnuTLS and not
@@ -63,6 +79,11 @@ int des_crypt56_gnutls(uint8_t out[8], const uint8_t in[8],
 	uint8_t key2[8];
 	uint8_t outb[8];
 	int ret;
+
+	/* Log security warning about weak encryption usage */
+	DBG_WARNING("SECURITY WARNING: Using weak DES encryption. "
+		    "This is cryptographically insecure and should be avoided. "
+		    "Consider upgrading to stronger authentication methods.\n");
 
 	memset(out, 0, 8);
 
@@ -102,6 +123,14 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 	const uint8_t sp8[8] = {0x4b, 0x47, 0x53, 0x21, 0x40, 0x23, 0x24, 0x25};
 	int ret;
 
+	/*
+	 * SECURITY WARNING: This function generates LM hashes using weak DES encryption.
+	 * LM hashes are cryptographically insecure and should be disabled in production.
+	 * Consider using NTLMv2 or Kerberos authentication instead.
+	 */
+	DBG_WARNING("SECURITY WARNING: Generating LM hash using weak DES encryption. "
+		    "LM authentication is insecure and should be disabled.\n");
+
 	ret = des_crypt56_gnutls(p16, sp8, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
 		return ret;
@@ -113,6 +142,14 @@ int E_P16(const uint8_t *p14,uint8_t *p16)
 int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 {
 	int ret;
+
+	/*
+	 * SECURITY WARNING: This function performs DES encryption for SMB authentication.
+	 * DES is cryptographically weak and vulnerable to attacks. This function is only
+	 * provided for legacy compatibility. Consider using stronger authentication methods.
+	 */
+	DBG_WARNING("SECURITY WARNING: Using weak DES encryption for SMB authentication. "
+		    "Consider upgrading to NTLMv2 or Kerberos authentication.\n");
 
 	ret = des_crypt56_gnutls(p24, c8, p21, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
@@ -130,6 +167,13 @@ int E_P24(const uint8_t *p21, const uint8_t *c8, uint8_t *p24)
 int E_old_pw_hash( uint8_t *p14, const uint8_t *in, uint8_t *out)
 {
 	int ret;
+
+	/*
+	 * SECURITY WARNING: This function uses weak DES encryption for password hashing.
+	 * This is cryptographically insecure and should be avoided in production environments.
+	 */
+	DBG_WARNING("SECURITY WARNING: Using weak DES encryption for password hashing. "
+		    "This is cryptographically insecure.\n");
 
         ret = des_crypt56_gnutls(out, in, p14, SAMBA_GNUTLS_ENCRYPT);
 	if (ret != 0) {
