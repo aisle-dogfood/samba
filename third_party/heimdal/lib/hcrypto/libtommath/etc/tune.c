@@ -192,7 +192,20 @@ static void s_run(const char *name, uint64_t (*op)(int), int *cutoff)
          count--;
       }
    }
-   *cutoff = x - s_stabilization_extra * args.increment_print;
+   
+   /* Check for integer overflow in multiplication */
+   if (s_stabilization_extra != 0 && args.increment_print > INT_MAX / s_stabilization_extra) {
+      /* Multiplication would overflow, set cutoff to minimum safe value */
+      *cutoff = 8;  /* minimum value from loop start */
+   } else {
+      int adjustment = s_stabilization_extra * args.increment_print;
+      /* Check for underflow in subtraction */
+      if (x < adjustment) {
+         *cutoff = 8;  /* minimum value from loop start */
+      } else {
+         *cutoff = x - adjustment;
+      }
+   }
 }
 
 static long s_strtol(const char *str, char **endptr, const char *err)
