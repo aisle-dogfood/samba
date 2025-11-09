@@ -286,6 +286,18 @@ def find_parser(name, flags=re.IGNORECASE):
     return GPParser()
 
 
+def secure_xml_fromstring(xml_data):
+    """Securely parse XML data by disabling external entity processing to prevent XXE attacks."""
+    # Create a secure XML parser that disables external entity processing
+    parser = ET.XMLParser()
+    # Disable external entity processing to prevent XXE attacks
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    return ET.fromstring(xml_data, parser)
+
+
 def backup_directory_remote_to_local(conn, remotedir, localdir):
     SUFFIX = '.SAMBABACKUP'
     if not os.path.isdir(localdir):
@@ -3546,7 +3558,7 @@ samba-tool gpo manage scripts startup add {31B2F340-016D-11D2-945F-00C04FB984F9}
                              'MACHINE\\VGP\\VTLA\\Unix\\Scripts\\Startup'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policy = xml_data.getroot().find('policysetting')
             data = policy.find('data')
         except NTSTATUSError as e:
