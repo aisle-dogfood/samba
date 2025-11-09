@@ -1969,7 +1969,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 	if (do_newer_keys) {
 		struct package_PrimaryKerberosBlob pknb;
 		DATA_BLOB pknb_blob;
-		char *pknb_hexstr;
+		char *pknb_hexstr = NULL;
 		/*
 		 * setup 'Primary:Kerberos-Newer-Keys' element
 		 */
@@ -2012,7 +2012,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 		/* Primary:Kerberos */
 		struct package_PrimaryKerberosBlob pkb;
 		DATA_BLOB pkb_blob;
-		char *pkb_hexstr;
+		char *pkb_hexstr = NULL;
 
 		names[num_names++] = "Kerberos";
 
@@ -2051,7 +2051,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 		 */
 		struct package_PrimaryWDigestBlob pdb;
 		DATA_BLOB pdb_blob;
-		char *pdb_hexstr;
+		char *pdb_hexstr = NULL;
 
 		names[num_names++] = "WDigest";
 
@@ -2094,7 +2094,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 	if (do_cleartext) {
 		struct package_PrimaryCLEARTEXTBlob pcb;
 		DATA_BLOB pcb_blob;
-		char *pcb_hexstr;
+		char *pcb_hexstr = NULL;
 
 		names[num_names++] = "CLEARTEXT";
 
@@ -2136,7 +2136,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 		struct package_PrimaryUserPasswordBlob
 			p_userPassword_b;
 		DATA_BLOB p_userPassword_b_blob;
-		char *p_userPassword_b_hexstr;
+		char *p_userPassword_b_hexstr = NULL;
 
 		names[num_names++] = "userPassword";
 
@@ -2185,7 +2185,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 	if (do_samba_gpg) {
 		struct package_PrimarySambaGPGBlob pgb;
 		DATA_BLOB pgb_blob;
-		char *pgb_hexstr;
+		char *pgb_hexstr = NULL;
 
 		names[num_names++] = "SambaGPG";
 
@@ -2221,7 +2221,7 @@ static int setup_supplemental_field(struct setup_password_fields_io *io)
 	{
 		struct package_PackagesBlob pb;
 		DATA_BLOB pb_blob;
-		char *pb_hexstr;
+		char *pb_hexstr = NULL;
 
 		pb.names = names;
 		ndr_err = ndr_push_struct_blob(
