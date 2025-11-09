@@ -195,8 +195,9 @@ cc_des_cbc_init(EVP_CIPHER_CTX *ctx,
 		int encp)
 {
     struct cc_key *cc = ctx->cipher_data;
-    return init_cc_key(encp, ctx->cipher->flags, kCCAlgorithmDES,
-		       key, kCCBlockSizeDES, iv, &cc->href);
+    /* Use 3DES instead of single DES for security - single DES is cryptographically broken */
+    return init_cc_key(encp, ctx->cipher->flags, kCCAlgorithm3DES,
+		       key, kCCKeySize3DES, iv, &cc->href);
 }
 #endif
 
