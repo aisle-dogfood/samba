@@ -2717,6 +2717,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 			  new_utf16.length,
 			  (unsigned)new_version,
 			  domain));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2726,6 +2730,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 			  new_utf16.length,
 			  (unsigned)new_version,
 			  domain));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2738,6 +2746,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 	if (new_blob.current.array == NULL) {
 		DEBUG(0, ("talloc_zero_array(%u) failed\n",
 			  (unsigned)new_blob.count));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2745,9 +2757,13 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 	new_blob.previous.array = talloc_zero_array(tmp_ctx,
 					struct AuthenticationInformation,
 					new_blob.count);
-	if (new_blob.current.array == NULL) {
+	if (new_blob.previous.array == NULL) {
 		DEBUG(0, ("talloc_zero_array(%u) failed\n",
 			  (unsigned)new_blob.count));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2809,6 +2825,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 		DEBUG(0, ("Failed to generate trustAuthOutgoing for "
 			  "trusted domain password for %s: %s.\n",
 			  domain, ndr_map_error2string(ndr_err)));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2819,6 +2839,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 				   &new_val, LDB_FLAG_MOD_REPLACE);
 	if (ret != LDB_SUCCESS) {
 		DEBUG(0, ("ldb_msg_append_value() failed\n"));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2829,6 +2853,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 		DEBUG(0, ("Failed to replace trustAuthOutgoing for "
 			  "trusted domain password for %s: %s - %s\n",
 			  domain, ldb_strerror(ret), ldb_errstring(state->ldb)));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		ldb_transaction_cancel(state->ldb);
 		return false;
@@ -2839,6 +2867,10 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 		DEBUG(0, ("Failed to commit trustAuthOutgoing for "
 			  "trusted domain password for %s: %s - %s\n",
 			  domain, ldb_strerror(ret), ldb_errstring(state->ldb)));
+		/* Securely clear sensitive password data from memory */
+		if (new_utf16.data != NULL) {
+			BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+		}
 		TALLOC_FREE(tmp_ctx);
 		return false;
 	}
@@ -2846,6 +2878,12 @@ static bool pdb_samba_dsdb_set_trusteddom_pw(struct pdb_methods *m,
 	DEBUG(1, ("Added new_version[%u] to trustAuthOutgoing for "
 		  "trusted domain password for %s.\n",
 		  (unsigned)new_version, domain));
+	
+	/* Securely clear sensitive password data from memory */
+	if (new_utf16.data != NULL) {
+		BURN_PTR_SIZE(new_utf16.data, new_utf16.length);
+	}
+	
 	TALLOC_FREE(tmp_ctx);
 	return true;
 }
