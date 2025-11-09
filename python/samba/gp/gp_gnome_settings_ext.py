@@ -284,7 +284,9 @@ class gp_gnome_settings_ext(gp_pol_ext, gp_file_applier):
             if os.path.exists(udisk2):
                 with open(udisk2, 'rb') as f:
                     data = f.read()
-                existing_xml = etree.ElementTree(etree.fromstring(data))
+                # Create a secure XML parser that disables external entities and DTD processing
+                parser = etree.XMLParser(resolve_entities=False, no_network=True)
+                existing_xml = etree.ElementTree(etree.fromstring(data, parser))
                 root = xml_data.getroot()
                 root.append(existing_xml.find('vendor'))
                 root.append(existing_xml.find('vendor_url'))
