@@ -1349,6 +1349,15 @@ class cmd_backup(GPOCommand):
     def generalize_xml_entities(outf, sourcedir, targetdir):
         entities = {}
 
+        # Create a secure XML parser that disables external entity processing
+        def create_secure_parser():
+            parser = ET.XMLParser()
+            # Disable external entity processing to prevent XXE attacks
+            parser.parser.DefaultHandler = lambda data: None
+            parser.parser.ExternalEntityRefHandler = None
+            parser.parser.EntityDeclHandler = None
+            return parser
+
         if not os.path.exists(targetdir):
             os.mkdir(targetdir)
 
@@ -1381,7 +1390,8 @@ class cmd_backup(GPOCommand):
                             with open(l_name, 'r') as ltemp:
                                 data = ltemp.read()
 
-                            concrete_xml = ET.fromstring(data)
+                            secure_parser = create_secure_parser()
+                            concrete_xml = ET.fromstring(data, parser=secure_parser)
                             found_entities = parser.generalize_xml(concrete_xml, r_name, entities)
                         except GPGeneralizeException:
                             outf.write('SKIPPING: Generalizing failed for %s\n' % to_parse)
@@ -1569,6 +1579,15 @@ class cmd_restore(cmd_create):
     def restore_from_backup_to_local_dir(self, sourcedir, targetdir, dtd_header=''):
         SUFFIX = '.SAMBABACKUP'
 
+        # Create a secure XML parser that disables external entity processing
+        def create_secure_parser():
+            parser = ET.XMLParser()
+            # Disable external entity processing to prevent XXE attacks
+            parser.parser.DefaultHandler = lambda data: None
+            parser.parser.ExternalEntityRefHandler = None
+            parser.parser.EntityDeclHandler = None
+            return parser
+
         if not os.path.exists(targetdir):
             os.mkdir(targetdir)
 
@@ -1607,10 +1626,12 @@ class cmd_restore(cmd_create):
                                     # the xml header being after it.
                                     data = data[len(xml_head):]
 
-                                    # Load the XML file with the DTD (entity) header
-                                    parser.load_xml(ET.fromstring(xml_head + dtd_header + data))
+                                    # Load the XML file with the DTD (entity) header using secure parser
+                                    secure_parser = create_secure_parser()
+                                    parser.load_xml(ET.fromstring(xml_head + dtd_header + data, parser=secure_parser))
                                 else:
-                                    parser.load_xml(ET.fromstring(dtd_header + data))
+                                    secure_parser = create_secure_parser()
+                                    parser.load_xml(ET.fromstring(dtd_header + data, parser=secure_parser))
 
                                 # Write out the substituted files in the output
                                 # location, ready to copy over.
