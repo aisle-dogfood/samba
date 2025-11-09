@@ -174,6 +174,7 @@ static NTSTATUS cli_credentials_set_secrets_lct(struct cli_credentials *cred,
 			       MIN(nt_password_hash->length, sizeof(hash.hash)));
 
 			cli_credentials_set_nt_hash(cred, &hash, CRED_SPECIFIED);
+			ZERO_STRUCT(hash);
 		} else {
 			cli_credentials_set_password(cred, NULL, CRED_SPECIFIED);
 		}
