@@ -344,6 +344,8 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 	status = NT_STATUS_OK;
 
 out:
+	/* Clear sensitive data from stack variables to prevent heap inspection attacks */
+	ZERO_STRUCT(io);
 	TALLOC_FREE(tmp_ctx);
 	return status;
 }
