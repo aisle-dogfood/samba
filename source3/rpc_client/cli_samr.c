@@ -32,6 +32,7 @@
 #include "lib/crypto/gnutls_helpers.h"
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
+#include "lib/param/loadparm.h"
 
 /* User change password */
 
@@ -52,6 +53,12 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 	uint8_t new_lm_hash[16] = {0};
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user\n"));
+
+	/* Check if weak crypto is disallowed */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(1, ("MD4 password hashing is disabled due to weak crypto policy\n"));
+		return NT_STATUS_NOT_SUPPORTED;
+	}
 
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
@@ -162,6 +169,12 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 	DATA_BLOB session_key = data_blob_const(old_nt_hash, 16);
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user2\n"));
+
+	/* Check if weak crypto is disallowed */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(1, ("MD4 password hashing is disabled due to weak crypto policy\n"));
+		return NT_STATUS_NOT_SUPPORTED;
+	}
 
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
@@ -370,6 +383,12 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user3\n"));
 
+	/* Check if weak crypto is disallowed */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(1, ("MD4 password hashing is disabled due to weak crypto policy\n"));
+		return NT_STATUS_NOT_SUPPORTED;
+	}
+
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&account, username);
 
@@ -510,6 +529,12 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 	int rc;
 
 	generate_nonce_buffer(iv.data, iv.length);
+
+	/* Check if weak crypto is disallowed */
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(1, ("MD4 password hashing is disabled due to weak crypto policy\n"));
+		return NT_STATUS_NOT_SUPPORTED;
+	}
 
 	/* Calculate the MD4 hash (NT compatible) of the password */
 	E_md4hash(oldpassword, old_nt_key_data);
