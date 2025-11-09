@@ -74,17 +74,31 @@ static void display_samr_user_info_20(struct samr_UserInfo20 *r)
  ****************************************************************************/
 static void display_samr_user_info_21(struct samr_UserInfo21 *r)
 {
-	printf("\tUser Name   :\t%s\n", r->account_name.string);
-	printf("\tFull Name   :\t%s\n", r->full_name.string);
-	printf("\tHome Drive  :\t%s\n", r->home_directory.string);
-	printf("\tDir Drive   :\t%s\n", r->home_drive.string);
-	printf("\tProfile Path:\t%s\n", r->profile_path.string);
-	printf("\tLogon Script:\t%s\n", r->logon_script.string);
-	printf("\tDescription :\t%s\n", r->description.string);
-	printf("\tWorkstations:\t%s\n", r->workstations.string);
-	printf("\tComment     :\t%s\n", r->comment.string);
-	printf("\tRemote Dial :\n");
-	dump_data(0, (uint8_t *)r->parameters.array, r->parameters.length*2);
+	/* Only display sensitive personal information at high debug levels */
+	if (DEBUGLEVEL >= 10) {
+		printf("\tUser Name   :\t%s\n", r->account_name.string);
+		printf("\tFull Name   :\t%s\n", r->full_name.string);
+		printf("\tHome Drive  :\t%s\n", r->home_directory.string);
+		printf("\tDir Drive   :\t%s\n", r->home_drive.string);
+		printf("\tProfile Path:\t%s\n", r->profile_path.string);
+		printf("\tLogon Script:\t%s\n", r->logon_script.string);
+		printf("\tDescription :\t%s\n", r->description.string);
+		printf("\tWorkstations:\t%s\n", r->workstations.string);
+		printf("\tComment     :\t%s\n", r->comment.string);
+		printf("\tRemote Dial :\n");
+		dump_data(0, (uint8_t *)r->parameters.array, r->parameters.length*2);
+	} else {
+		printf("\tUser Name   :\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tFull Name   :\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tHome Drive  :\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tDir Drive   :\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tProfile Path:\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tLogon Script:\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tDescription :\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tWorkstations:\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tComment     :\t[REDACTED - use debug level 10+ to view]\n");
+		printf("\tRemote Dial :\t[REDACTED - use debug level 10+ to view]\n");
+	}
 
 	printf("\tLogon Time               :\t%s\n",
 	       http_timestring(talloc_tos(), nt_time_to_unix(r->last_logon)));
