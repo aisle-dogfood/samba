@@ -977,8 +977,27 @@ static int ildb_connect(struct ldb_context *ldb, const char *url,
 	if (creds != NULL && cli_credentials_authentication_requested(creds)) {
 		const char *bind_dn = cli_credentials_get_bind_dn(creds);
 		if (bind_dn) {
-			const char *password = cli_credentials_get_password(creds);
+			const char *password_const = cli_credentials_get_password(creds);
+			char *password = NULL;
+			size_t password_len = 0;
+			
+			if (password_const != NULL) {
+				password_len = strlen(password_const);
+				password = talloc_strndup(ildb, password_const, password_len);
+				if (password == NULL) {
+					ldb_oom(ldb);
+					goto failed;
+				}
+			}
+			
 			status = ldap_bind_simple(ildb->ldap, bind_dn, password);
+			
+			/* Securely clear the password from memory */
+			if (password != NULL) {
+				memset_s(password, password_len + 1, 0, password_len + 1);
+				talloc_free(password);
+			}
+			
 			if (!NT_STATUS_IS_OK(status)) {
 				if (no_debug) {
 					goto failed;
