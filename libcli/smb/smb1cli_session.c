@@ -296,7 +296,7 @@ struct tevent_req *smb1cli_session_setup_nt1_send(TALLOC_CTX *mem_ctx,
 	uint8_t *bytes = NULL;
 	size_t align_upassword = 0;
 	size_t apassword_ofs = 0;
-	size_t upassword_ofs = 0;
+	size_t upassword_ofs = in_apassword.length;
 
 	req = tevent_req_create(mem_ctx, &state,
 				struct smb1cli_session_setup_nt1_state);
@@ -382,7 +382,6 @@ struct tevent_req *smb1cli_session_setup_nt1_send(TALLOC_CTX *mem_ctx,
 		memcpy(bytes + apassword_ofs,
 		       in_apassword.data,
 		       in_apassword.length);
-		upassword_ofs += in_apassword.length;
 	}
 	if (align_upassword != 0) {
 		memset(bytes + upassword_ofs, 0, align_upassword);
