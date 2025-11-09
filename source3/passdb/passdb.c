@@ -2159,7 +2159,7 @@ bool pdb_copy_sam_account(struct samu *dst, struct samu *src )
 
 bool pdb_update_bad_password_count(struct samu *sampass, bool *updated)
 {
-	time_t LastBadPassword;
+	time_t LastBadPassword = 0;
 	uint16_t BadPasswordCount;
 	uint32_t resettime;
 	bool res;
