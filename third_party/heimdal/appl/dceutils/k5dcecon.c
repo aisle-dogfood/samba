@@ -350,6 +350,10 @@ int k5dcegettgt(pcache, ccname, pname, tgt)
   DEEDEBUG("Principals equal\n");
 
   realm = strchr(pname,'@');
+  if (realm == NULL) {
+    DEEDEBUG("No realm found in principal name\n");
+    goto return1;
+  }
   realm++;
 
   if ((tgtname = malloc(9 + 2 * strlen(realm))) == 0) {
