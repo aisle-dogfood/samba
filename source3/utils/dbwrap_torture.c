@@ -301,7 +301,7 @@ int main(int argc, const char *argv[])
 	extra_argv = poptGetArgs(pc);
 	if (extra_argv) {
 		extra_argv++;
-		while (extra_argv[extra_argc]) extra_argc++;
+		while (extra_argv[extra_argc] && extra_argc < 1000) extra_argc++;
 	}
 
 	ev_ctx = samba_tevent_context_init(mem_ctx);
