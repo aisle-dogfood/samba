@@ -474,13 +474,12 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		p++; /* Go past ':' */
 
 		if(*p == '-') {
-			DEBUG(0, ("getsmbfilepwent: user name %s has a negative uid.\n", user_name));
+			DEBUG(0, ("getsmbfilepwent: user has a negative uid.\n"));
 			continue;
 		}
 
 		if (!isdigit(*p)) {
-			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (uid not number)\n",
-				user_name));
+			DEBUG(0, ("getsmbfilepwent: malformed password entry (uid not number)\n"));
 			continue;
 		}
 
@@ -491,8 +490,7 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		}
 
 		if (*p != ':') {
-			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (no : after uid)\n",
-				user_name));
+			DEBUG(0, ("getsmbfilepwent: malformed password entry (no : after uid)\n"));
 			continue;
 		}
 
@@ -509,14 +507,12 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 		p++;
 
 		if (linebuf_len < (PTR_DIFF(p, linebuf) + 33)) {
-			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (passwd too short)\n",
-				user_name ));
+			DEBUG(0, ("getsmbfilepwent: malformed password entry (passwd too short)\n"));
 			continue;
 		}
 
 		if (p[32] != ':') {
-			DEBUG(0, ("getsmbfilepwent: malformed password entry for user %s (no terminating :)\n",
-				user_name));
+			DEBUG(0, ("getsmbfilepwent: malformed password entry (no terminating :)\n"));
 			continue;
 		}
 
@@ -527,13 +523,12 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 			if (*p == '*' || *p == 'X') {
 				/* NULL LM password */
 				pw_buf->smb_passwd = NULL;
-				DEBUG(10, ("getsmbfilepwent: LM password for user %s invalidated\n", user_name));
+				DEBUG(10, ("getsmbfilepwent: LM password invalidated\n"));
 			} else if (pdb_gethexpwd((char *)p, smbpwd)) {
 				pw_buf->smb_passwd = smbpwd;
 			} else {
 				pw_buf->smb_passwd = NULL;
-				DEBUG(0, ("getsmbfilepwent: Malformed Lanman password entry for user %s \
-(non hex chars)\n", user_name));
+				DEBUG(0, ("getsmbfilepwent: Malformed Lanman password entry (non hex chars)\n"));
 			}
 		}
 
@@ -552,8 +547,7 @@ static struct smb_passwd *getsmbfilepwent(struct smbpasswd_privates *smbpasswd_s
 			p += 33; /* Move to the first character of the line after the NT password. */
 		}
 
-		DEBUG(5,("getsmbfilepwent: returning passwd entry for user %s, uid %ld\n",
-			user_name, uidval));
+		DEBUG(5,("getsmbfilepwent: returning passwd entry for uid %ld\n", uidval));
 
 		if (*p == '[') {
 			unsigned char *end_p = (unsigned char *)strchr_m((char *)p, ']');
@@ -887,14 +881,13 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 		return False;
 	}
 
-	DEBUG(6, ("mod_smbfilepwd_entry: entry exists for user %s\n", pwd->smb_name));
+	DEBUG(6, ("mod_smbfilepwd_entry: entry exists\n"));
 
 	/* User name matches - get uid and password */
 	p++; /* Go past ':' */
 
 	if (!isdigit(*p)) {
-		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (uid not number)\n",
-			pwd->smb_name));
+		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry (uid not number)\n"));
 		pw_file_unlock(lockfd, &smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -904,8 +897,7 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 		p++;
 	}
 	if (*p != ':') {
-		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (no : after uid)\n",
-			pwd->smb_name));
+		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry (no : after uid)\n"));
 		pw_file_unlock(lockfd, &smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -922,16 +914,14 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	pwd_seekpos += PTR_DIFF(p, linebuf);
 
 	if (linebuf_len < (PTR_DIFF(p, linebuf) + 33)) {
-		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (passwd too short)\n",
-			pwd->smb_name));
+		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry (passwd too short)\n"));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return (False);
 	}
 
 	if (p[32] != ':') {
-		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (no terminating :)\n",
-			pwd->smb_name));
+		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry (no terminating :)\n"));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -940,16 +930,14 @@ static bool mod_smbfilepwd_entry(struct smbpasswd_privates *smbpasswd_state, con
 	/* Now check if the NT compatible password is available. */
 	p += 33; /* Move to the first character of the line after the lanman password. */
 	if (linebuf_len < (PTR_DIFF(p, linebuf) + 33)) {
-		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (passwd too short)\n",
-			pwd->smb_name));
+		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry (passwd too short)\n"));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return (False);
 	}
 
 	if (p[32] != ':') {
-		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry for user %s (no terminating :)\n",
-			pwd->smb_name));
+		DEBUG(0, ("mod_smbfilepwd_entry: malformed password entry (no terminating :)\n"));
 		pw_file_unlock(lockfd,&smbpasswd_state->pw_file_lock_depth);
 		fclose(fp);
 		return False;
@@ -1268,8 +1256,8 @@ static bool build_sam_account(struct smbpasswd_privates *smbpasswd_state,
 	/* verify the user account exists */
 
 	if ( !(pwfile = Get_Pwnam_alloc(NULL, pw_buf->smb_name )) ) {
-		DEBUG(0,("build_sam_account: smbpasswd database is corrupt!  username %s with uid "
-		"%u is not in unix passwd database!\n", pw_buf->smb_name, pw_buf->smb_userid));
+		DEBUG(0,("build_sam_account: smbpasswd database is corrupt!  uid "
+		"%u is not in unix passwd database!\n", pw_buf->smb_userid));
 			return False;
 	}
 
