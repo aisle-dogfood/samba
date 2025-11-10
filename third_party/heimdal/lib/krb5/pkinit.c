@@ -2077,12 +2077,19 @@ _krb5_parse_moduli_line(krb5_context context,
 	goto out;
     }
 
-    m1->bits = atoi(p1);
-    if (m1->bits == 0) {
-	krb5_set_error_message(context, ret,
-			       N_("moduli file %s has un-parsable "
-				  "bits on line %d", ""), file, lineno);
-	goto out;
+    {
+	char *endptr;
+	unsigned long bits_val;
+	
+	errno = 0;
+	bits_val = strtoul(p1, &endptr, 10);
+	if (errno == ERANGE || *endptr != '\0' || endptr == p1 || bits_val == 0) {
+	    krb5_set_error_message(context, ret,
+				   N_("moduli file %s has un-parsable "
+				      "bits on line %d", ""), file, lineno);
+	    goto out;
+	}
+	m1->bits = bits_val;
     }
 
     ret = parse_integer(context, &p, file, lineno, "p", &m1->p);
