@@ -1295,6 +1295,7 @@ static int cmd_more(void)
 	char *lname = NULL;
 	char *pager_cmd = NULL;
 	const char *pager;
+	const char *tmp_dir;
 	int fd;
 	int rc = 0;
 	mode_t mask;
@@ -1304,7 +1305,19 @@ static int cmd_more(void)
 		return 1;
 	}
 
-	lname = talloc_asprintf(ctx, "%s/smbmore.XXXXXX",tmpdir());
+	tmp_dir = tmpdir();
+	if (!tmp_dir) {
+		d_printf("failed to get temporary directory\n");
+		return 1;
+	}
+	
+	/* Validate that the temporary directory path doesn't contain path traversal sequences */
+	if (strstr(tmp_dir, "..") != NULL) {
+		d_printf("temporary directory path contains invalid sequences\n");
+		return 1;
+	}
+
+	lname = talloc_asprintf(ctx, "%s/smbmore.XXXXXX", tmp_dir);
 	if (!lname) {
 		return 1;
 	}
