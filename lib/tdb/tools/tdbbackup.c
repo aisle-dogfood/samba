@@ -53,6 +53,33 @@
 
 static int failed;
 
+/*
+  validate that a path doesn't contain directory traversal sequences
+  returns 1 if path is safe, 0 if it contains traversal attempts
+*/
+static int validate_path(const char *path)
+{
+	const char *p;
+	
+	/* reject absolute paths */
+	if (path[0] == '/') {
+		return 0;
+	}
+	
+	/* check for ".." sequences */
+	p = path;
+	while ((p = strstr(p, "..")) != NULL) {
+		/* check if ".." is a complete path component */
+		if ((p == path || p[-1] == '/') && 
+		    (p[2] == '\0' || p[2] == '/')) {
+			return 0;
+		}
+		p += 2;
+	}
+	
+	return 1;
+}
+
 static struct tdb_logging_context log_ctx;
 
 #ifdef PRINTF_ATTRIBUTE
@@ -349,7 +376,22 @@ static void usage(void)
 		const char *fname = argv[i];
 		char *bak_name;
 
+		/* validate input filename for path traversal */
+		if (!validate_path(fname)) {
+			fprintf(stderr, "Error: Invalid path '%s' - path traversal not allowed\n", fname);
+			ret = 1;
+			continue;
+		}
+
 		bak_name = add_suffix(fname, suffix);
+
+		/* validate backup filename for path traversal */
+		if (!validate_path(bak_name)) {
+			fprintf(stderr, "Error: Invalid backup path '%s' - path traversal not allowed\n", bak_name);
+			free(bak_name);
+			ret = 1;
+			continue;
+		}
 
 		if (verify) {
 			if (verify_tdb(fname, bak_name) != 0) {
