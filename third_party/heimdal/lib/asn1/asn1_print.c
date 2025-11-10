@@ -37,6 +37,7 @@
 #include <com_err.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdint.h>
 #include <dlfcn.h>
 #include <getarg.h>
 #include <err.h>
@@ -593,6 +594,10 @@ doit(char **argv)
 	err(1, "opening %s for read", argv[0]);
     if (fstat (fd, &sb) < 0)
 	err(1, "stat %s", argv[0]);
+    if (sb.st_size < 0)
+	errx(1, "file %s has negative size", argv[0]);
+    if ((uintmax_t)sb.st_size > SIZE_MAX)
+	errx(1, "file %s is too large", argv[0]);
     len = sb.st_size;
     buf = emalloc(len);
     if (read(fd, buf, len) != len)
