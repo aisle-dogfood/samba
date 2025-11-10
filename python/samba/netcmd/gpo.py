@@ -83,6 +83,23 @@ from samba.netcmd.gpcommon import (
     smb_connection,
     get_gpo_dn
 )
+
+
+def secure_xml_fromstring(xml_string):
+    """
+    Secure XML parsing function that disables external entity processing
+    to prevent XXE (XML External Entity) attacks.
+    """
+    # Create a parser with secure settings
+    parser = ET.XMLParser()
+    
+    # Disable external entity processing to prevent XXE attacks
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    # Parse the XML string with the secure parser
+    return ET.fromstring(xml_string, parser)
 from samba.policies import RegistryGroupPolicies
 from samba.dcerpc.misc import REG_MULTI_SZ
 from samba.gp.gpclass import register_gp_extension, list_gp_extensions, \
@@ -1608,9 +1625,9 @@ class cmd_restore(cmd_create):
                                     data = data[len(xml_head):]
 
                                     # Load the XML file with the DTD (entity) header
-                                    parser.load_xml(ET.fromstring(xml_head + dtd_header + data))
+                                    parser.load_xml(secure_xml_fromstring(xml_head + dtd_header + data))
                                 else:
-                                    parser.load_xml(ET.fromstring(dtd_header + data))
+                                    parser.load_xml(secure_xml_fromstring(dtd_header + data))
 
                                 # Write out the substituted files in the output
                                 # location, ready to copy over.
