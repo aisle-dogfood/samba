@@ -2327,7 +2327,7 @@ static bool get_trust_pw_clear2(const char *domain,
 				time_t *_last_set_time,
 				char **prev_pw)
 {
-	char *pwd;
+	char *pwd = NULL;
 	time_t last_set_time;
 
 	if (cur_pw != NULL) {
@@ -2395,6 +2395,7 @@ static bool get_trust_pw_clear2(const char *domain,
 		struct timeval expire;
 
 		*cur_pw = pwd;
+		pwd = NULL; /* Clear local pointer after assignment */
 
 		if (account_name != NULL) {
 			*account_name = lp_netbios_name();
@@ -2420,6 +2421,7 @@ static bool get_trust_pw_clear2(const char *domain,
 		if (pwd != NULL) {
 			*prev_pw = pwd;
 		}
+		pwd = NULL; /* Clear local pointer after assignment */
 
 		return true;
 	}
