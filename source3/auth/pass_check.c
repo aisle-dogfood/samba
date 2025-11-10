@@ -86,11 +86,17 @@ static NTSTATUS password_check(const char *user, const char *password, const voi
 
 
 #ifdef ULTRIX_AUTH
-	ret = (strcmp((char *)crypt16(password, get_this_salt()), get_this_crypted()) == 0);
-	if (ret) {
-		return NT_STATUS_OK;
-        } else {
-		return NT_STATUS_WRONG_PASSWORD;
+	{
+		char *crypted = (char *)crypt16(password, get_this_salt());
+		if (crypted == NULL) {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
+		ret = (strcmp(crypted, get_this_crypted()) == 0);
+		if (ret) {
+			return NT_STATUS_OK;
+		} else {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
 	}
 
 #endif /* ULTRIX_AUTH */
@@ -98,11 +104,17 @@ static NTSTATUS password_check(const char *user, const char *password, const voi
 
 
 #ifdef HAVE_BIGCRYPT
-	ret = (strcmp(bigcrypt(password, get_this_salt()), get_this_crypted()) == 0);
-        if (ret) {
-		return NT_STATUS_OK;
-	} else {
-		return NT_STATUS_WRONG_PASSWORD;
+	{
+		char *crypted = bigcrypt(password, get_this_salt());
+		if (crypted == NULL) {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
+		ret = (strcmp(crypted, get_this_crypted()) == 0);
+		if (ret) {
+			return NT_STATUS_OK;
+		} else {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
 	}
 #endif /* HAVE_BIGCRYPT */
 
@@ -110,11 +122,17 @@ static NTSTATUS password_check(const char *user, const char *password, const voi
 	DEBUG(1, ("Warning - no crypt available\n"));
 	return NT_STATUS_LOGON_FAILURE;
 #else /* HAVE_CRYPT */
-	ret = (strcmp((char *)crypt(password, get_this_salt()), get_this_crypted()) == 0);
-        if (ret) {
-		return NT_STATUS_OK;
-	} else {
-		return NT_STATUS_WRONG_PASSWORD;
+	{
+		char *crypted = (char *)crypt(password, get_this_salt());
+		if (crypted == NULL) {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
+		ret = (strcmp(crypted, get_this_crypted()) == 0);
+		if (ret) {
+			return NT_STATUS_OK;
+		} else {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
 	}
 #endif /* HAVE_CRYPT */
 #endif /* WITH_PAM */
