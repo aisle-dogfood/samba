@@ -1381,7 +1381,9 @@ class cmd_backup(GPOCommand):
                             with open(l_name, 'r') as ltemp:
                                 data = ltemp.read()
 
-                            concrete_xml = ET.fromstring(data)
+                            # Create a secure XML parser that disables external entity processing
+                            secure_parser = ET.XMLParser(resolve_entities=False)
+                            concrete_xml = ET.fromstring(data, parser=secure_parser)
                             found_entities = parser.generalize_xml(concrete_xml, r_name, entities)
                         except GPGeneralizeException:
                             outf.write('SKIPPING: Generalizing failed for %s\n' % to_parse)
@@ -1607,10 +1609,14 @@ class cmd_restore(cmd_create):
                                     # the xml header being after it.
                                     data = data[len(xml_head):]
 
+                                    # Create a secure XML parser that disables external entity processing
+                                    secure_parser = ET.XMLParser(resolve_entities=False)
                                     # Load the XML file with the DTD (entity) header
-                                    parser.load_xml(ET.fromstring(xml_head + dtd_header + data))
+                                    parser.load_xml(ET.fromstring(xml_head + dtd_header + data, parser=secure_parser))
                                 else:
-                                    parser.load_xml(ET.fromstring(dtd_header + data))
+                                    # Create a secure XML parser that disables external entity processing
+                                    secure_parser = ET.XMLParser(resolve_entities=False)
+                                    parser.load_xml(ET.fromstring(dtd_header + data, parser=secure_parser))
 
                                 # Write out the substituted files in the output
                                 # location, ready to copy over.
@@ -2004,7 +2010,9 @@ fakeu,fakeg% ALL=(ALL) NOPASSWD: ALL
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            # Create a secure XML parser that disables external entity processing
+            secure_parser = ET.XMLParser(resolve_entities=False)
+            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
@@ -2110,7 +2118,9 @@ samba-tool gpo manage sudoers list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Sudo',
                                 'SudoersConfiguration\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser that disables external entity processing
+            secure_parser = ET.XMLParser(resolve_entities=False)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -2215,7 +2225,9 @@ samba-tool gpo manage sudoers remove {31B2F340-016D-11D2-945F-00C04FB984F9} 'fak
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            # Create a secure XML parser that disables external entity processing
+            secure_parser = ET.XMLParser(resolve_entities=False)
+            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
@@ -2722,7 +2734,9 @@ samba-tool gpo manage symlink list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Symlink\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser that disables external entity processing
+            secure_parser = ET.XMLParser(resolve_entities=False)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -2979,7 +2993,9 @@ samba-tool gpo manage files list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Files\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser that disables external entity processing
+            secure_parser = ET.XMLParser(resolve_entities=False)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
