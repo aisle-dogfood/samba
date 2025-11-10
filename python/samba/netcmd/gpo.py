@@ -2722,7 +2722,9 @@ samba-tool gpo manage symlink list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Symlink\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Use secure XML parser to prevent XXE attacks
+            parser = ET.XMLParser(resolve_entities=False)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
