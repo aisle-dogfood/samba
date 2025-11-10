@@ -1381,7 +1381,12 @@ class cmd_backup(GPOCommand):
                             with open(l_name, 'r') as ltemp:
                                 data = ltemp.read()
 
-                            concrete_xml = ET.fromstring(data)
+                            # Create a secure XML parser that disables external entity processing
+                            # to prevent XXE (XML External Entity) attacks
+                            secure_parser = ET.XMLParser()
+                            secure_parser.parser.DefaultHandler = lambda data: None
+                            secure_parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+                            concrete_xml = ET.fromstring(data, parser=secure_parser)
                             found_entities = parser.generalize_xml(concrete_xml, r_name, entities)
                         except GPGeneralizeException:
                             outf.write('SKIPPING: Generalizing failed for %s\n' % to_parse)
