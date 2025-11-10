@@ -121,7 +121,9 @@ static void reply_tcon_and_X_send(struct ntvfs_request *ntvfs)
 		SSVAL(req->out.vwv, VWV(0), SMB_CHAIN_NONE);
 		SSVAL(req->out.vwv, VWV(1), 0);
 
-		req_push_str(req, NULL, con->tconx.out.dev_type, -1, STR_TERMINATE|STR_ASCII);
+		if (con->tconx.out.dev_type) {
+			req_push_str(req, NULL, con->tconx.out.dev_type, -1, STR_TERMINATE|STR_ASCII);
+		}
 	} else {
 		smbsrv_setup_reply(req, 3, 0);
 
@@ -129,8 +131,12 @@ static void reply_tcon_and_X_send(struct ntvfs_request *ntvfs)
 		SSVAL(req->out.vwv, VWV(1), 0);
 		SSVAL(req->out.vwv, VWV(2), con->tconx.out.options);
 
-		req_push_str(req, NULL, con->tconx.out.dev_type, -1, STR_TERMINATE|STR_ASCII);
-		req_push_str(req, NULL, con->tconx.out.fs_type, -1, STR_TERMINATE);
+		if (con->tconx.out.dev_type) {
+			req_push_str(req, NULL, con->tconx.out.dev_type, -1, STR_TERMINATE|STR_ASCII);
+		}
+		if (con->tconx.out.fs_type) {
+			req_push_str(req, NULL, con->tconx.out.fs_type, -1, STR_TERMINATE);
+		}
 	}
 
 	/* set the incoming and outgoing tid to the just created one */
