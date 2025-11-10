@@ -339,13 +339,21 @@ static void print_progress(const char *name, time_t start, time_t now,
 	if (columns) {
 		int required = strlen(name),
 		    available = columns - len - strlen("[] ");
-		if (required > available) {
+		if (required > available && available > 3) {
+			int offset = required - available + 3;
+			/* Ensure offset doesn't exceed string length to prevent underflow */
+			if (offset >= required) {
+				offset = required - 1;
+			}
 			if (asprintf(&filename, "...%s",
-				     name + required - available + 3) == -1) {
+				     name + offset) == -1) {
 				return;
 			}
-		} else {
+		} else if (available > 0) {
 			filename = SMB_STRNDUP(name, available);
+		} else {
+			/* Not enough space even for "..." prefix, use original name */
+			filename = SMB_STRDUP(name);
 		}
 	} else {
 		filename = SMB_STRDUP(name);
