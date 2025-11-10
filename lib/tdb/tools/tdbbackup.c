@@ -68,6 +68,32 @@ static void tdb_log(struct tdb_context *tdb, enum tdb_debug_level level, const c
 	fflush(stdout);
 }
 
+/*
+  validate that a path doesn't contain directory traversal sequences
+  returns 0 if path is safe, 1 if path contains traversal attempts
+*/
+static int validate_path(const char *path)
+{
+	const char *p = path;
+	
+	/* Check for absolute paths */
+	if (path[0] == '/') {
+		return 1;
+	}
+	
+	/* Check for ".." sequences */
+	while ((p = strstr(p, "..")) != NULL) {
+		/* Check if ".." is a complete path component */
+		if ((p == path || p[-1] == '/') && 
+		    (p[2] == '\0' || p[2] == '/')) {
+			return 1;
+		}
+		p += 2;
+	}
+	
+	return 0;
+}
+
 static char *add_suffix(const char *name, const char *suffix)
 {
 	char *ret;
@@ -348,6 +374,13 @@ static void usage(void)
 	for (i=0; i<argc; i++) {
 		const char *fname = argv[i];
 		char *bak_name;
+
+		/* Validate the input path to prevent directory traversal */
+		if (validate_path(fname) != 0) {
+			fprintf(stderr, "Error: Invalid path '%s' - path traversal not allowed\n", fname);
+			ret = 1;
+			continue;
+		}
 
 		bak_name = add_suffix(fname, suffix);
 
