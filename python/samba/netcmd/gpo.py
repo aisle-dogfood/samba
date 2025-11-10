@@ -83,6 +83,20 @@ from samba.netcmd.gpcommon import (
     smb_connection,
     get_gpo_dn
 )
+
+
+def secure_xml_fromstring(xml_string):
+    """
+    Securely parse XML string by disabling external entity processing
+    to prevent XXE (XML External Entity) attacks.
+    """
+    # Create a parser that disables external entity processing
+    parser = ET.XMLParser()
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    return ET.fromstring(xml_string, parser)
 from samba.policies import RegistryGroupPolicies
 from samba.dcerpc.misc import REG_MULTI_SZ
 from samba.gp.gpclass import register_gp_extension, list_gp_extensions, \
@@ -3262,7 +3276,7 @@ samba-tool gpo manage openssh list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\SshCfg',
                                 'SshD\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            xml_data = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
