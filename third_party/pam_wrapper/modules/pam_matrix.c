@@ -149,15 +149,15 @@ static int pam_matrix_mod_items_get(const char *db,
 		NEXT_KEY(file_user, file_password);
 		NEXT_KEY(file_password, file_svc);
 
+		if (file_password == NULL || file_svc == NULL) {
+			continue;
+		}
+
 		q = file_svc;
 		while(q[0] != '\n' && q[0] != '\0') {
 			q++;
 		}
 		q[0] = '\0';
-
-		if (file_password == NULL) {
-			continue;
-		}
 
 		if (strcmp(file_user, username) == 0) {
 			pmi->password = strdup(file_password);
@@ -240,15 +240,15 @@ static int pam_matrix_lib_items_put(const char *db,
 		NEXT_KEY(file_user, file_password);
 		NEXT_KEY(file_password, file_svc);
 
+		if (file_password == NULL || file_svc == NULL) {
+			continue;
+		}
+
 		q = file_svc;
 		while(q[0] != '\n' && q[0] != '\0') {
 			q++;
 		}
 		q[0] = '\0';
-
-		if (file_password == NULL) {
-			continue;
-		}
 
 		if (strcmp(file_user, pli->username) == 0) {
 			if (pli->password) {
