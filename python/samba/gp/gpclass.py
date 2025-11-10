@@ -380,10 +380,15 @@ class gp_xml_ext(gp_ext):
     def read(self, data_file):
         with open(data_file, 'rb') as f:
             raw = f.read()
+        
+        # Create a secure XML parser that disables external entity processing
+        # to prevent XXE (XML External Entity) attacks
+        secure_parser = etree.XMLParser(resolve_entities=False)
+        
         try:
-            return etree.fromstring(raw.decode())
+            return etree.fromstring(raw.decode(), parser=secure_parser)
         except UnicodeDecodeError:
-            return etree.fromstring(raw.decode('utf-16'))
+            return etree.fromstring(raw.decode('utf-16'), parser=secure_parser)
 
 
 class gp_applier(object):
