@@ -32,6 +32,7 @@
 #include "baselocl.h"
 
 #include <sys/types.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #ifdef HAVE_IO_H
 #include <io.h>
@@ -606,6 +607,9 @@ read_page(bsearch_file_handle bfh, size_t level, size_t page_idx, size_t page,
     char *page_buf;
 
     /* Figure out where we're reading and how much */
+    /* Check for integer overflow in multiplication */
+    if (bfh->page_sz != 0 && page > SIZE_MAX / bfh->page_sz)
+	return EOVERFLOW;
     off = page * bfh->page_sz;
     if (off < 0)
 	return EOVERFLOW;
@@ -743,8 +747,16 @@ _bsearch_file(bsearch_file_handle bfh, const char *key,
 	    *loops = my_loops_total;
 	if (reads)
 	    *reads = my_reads;
-	if (location)
-	    *location = page * bfh->page_sz + buf_location;
+	if (location) {
+	    /* Check for integer overflow in multiplication */
+	    if (bfh->page_sz != 0 && page > SIZE_MAX / bfh->page_sz)
+		return EOVERFLOW;
+	    size_t page_offset = page * bfh->page_sz;
+	    /* Check for integer overflow in addition */
+	    if (page_offset > SIZE_MAX - buf_location)
+		return EOVERFLOW;
+	    *location = page_offset + buf_location;
+	}
 	if (ret == 0)
 	    return 0; /* found! */
 	/* Not found */
@@ -780,8 +792,16 @@ _bsearch_file(bsearch_file_handle bfh, const char *key,
 		    *loops = my_loops_total;
 		if (reads)
 		    *reads = my_reads;
-		if (location)
-		    *location = page * bfh->page_sz + buf_location;
+		if (location) {
+		    /* Check for integer overflow in multiplication */
+		    if (bfh->page_sz != 0 && page > SIZE_MAX / bfh->page_sz)
+			return EOVERFLOW;
+		    size_t page_offset = page * bfh->page_sz;
+		    /* Check for integer overflow in addition */
+		    if (page_offset > SIZE_MAX - buf_location)
+			return EOVERFLOW;
+		    *location = page_offset + buf_location;
+		}
 		if (ret == 0)
 		    return 0;
 	    }
