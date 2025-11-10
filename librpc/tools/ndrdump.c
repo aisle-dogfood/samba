@@ -134,22 +134,32 @@ _NORETURN_ static void show_functions(const struct ndr_interface_table *p)
 
 static char *stdin_load(TALLOC_CTX *mem_ctx, size_t *size)
 {
-	int num_read, total_len = 0;
+	ssize_t num_read;
+	size_t total_len = 0;
 	char buf[255];
 	char *result = NULL;
 
 	while((num_read = read(STDIN_FILENO, buf, 255)) > 0) {
+		/* Check for integer overflow before addition */
+		if (total_len > SIZE_MAX - (size_t)num_read) {
+			talloc_free(result);
+			return NULL;
+		}
 
 		if (result) {
 			result = talloc_realloc(
-				mem_ctx, result, char, total_len + num_read);
+				mem_ctx, result, char, total_len + (size_t)num_read);
 		} else {
-			result = talloc_array(mem_ctx, char, num_read);
+			result = talloc_array(mem_ctx, char, (size_t)num_read);
 		}
 
-		memcpy(result + total_len, buf, num_read);
+		if (!result) {
+			return NULL;
+		}
 
-		total_len += num_read;
+		memcpy(result + total_len, buf, (size_t)num_read);
+
+		total_len += (size_t)num_read;
 	}
 
 	if (size)
