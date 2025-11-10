@@ -284,7 +284,9 @@ class gp_gnome_settings_ext(gp_pol_ext, gp_file_applier):
             if os.path.exists(udisk2):
                 with open(udisk2, 'rb') as f:
                     data = f.read()
-                existing_xml = etree.ElementTree(etree.fromstring(data))
+                # Import the secure XML parser from gpclass
+                from samba.gp.gpclass import _safe_xml_fromstring
+                existing_xml = etree.ElementTree(_safe_xml_fromstring(data))
                 root = xml_data.getroot()
                 root.append(existing_xml.find('vendor'))
                 root.append(existing_xml.find('vendor_url'))

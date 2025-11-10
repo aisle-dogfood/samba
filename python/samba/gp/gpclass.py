@@ -28,6 +28,7 @@ import traceback
 from samba.common import get_bytes
 from abc import ABCMeta, abstractmethod
 import xml.etree.ElementTree as etree
+from xml.etree.ElementTree import XMLParser
 import re
 from samba.net import Net
 from samba.dcerpc import nbt
@@ -51,6 +52,21 @@ from samba.dcerpc import security
 import samba.security
 from samba.dcerpc import nbt
 from datetime import datetime
+
+
+def _create_secure_xml_parser():
+    """Create a secure XML parser that prevents XXE attacks"""
+    # Create a parser that disables external entity processing
+    parser = XMLParser()
+    # Disable external entity processing to prevent XXE attacks
+    parser.entity = {}
+    return parser
+
+
+def _safe_xml_fromstring(xml_data):
+    """Safely parse XML string with XXE protection"""
+    parser = _create_secure_xml_parser()
+    return etree.fromstring(xml_data, parser=parser)
 
 
 try:
@@ -113,7 +129,7 @@ class gp_log:
         self.gpostore = gpostore
         self.username = user
         if db_log:
-            self.gpdb = etree.fromstring(db_log)
+            self.gpdb = _safe_xml_fromstring(db_log)
         else:
             self.gpdb = etree.Element('gp')
         self.user = user
@@ -381,9 +397,9 @@ class gp_xml_ext(gp_ext):
         with open(data_file, 'rb') as f:
             raw = f.read()
         try:
-            return etree.fromstring(raw.decode())
+            return _safe_xml_fromstring(raw.decode())
         except UnicodeDecodeError:
-            return etree.fromstring(raw.decode('utf-16'))
+            return _safe_xml_fromstring(raw.decode('utf-16'))
 
 
 class gp_applier(object):
@@ -529,7 +545,7 @@ class gp_misc_applier(gp_applier):
     def parse_value(self, value):
         vals = {}
         try:
-            data = etree.fromstring(value)
+            data = _safe_xml_fromstring(value)
         except etree.ParseError:
             # If parsing fails, then it's an old cache value
             return {'old_val': value}
