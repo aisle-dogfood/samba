@@ -878,10 +878,17 @@ do_CA(struct bx509_request_desc *r, const char *csr)
     }
 
     /* Set CSR */
-    if ((d.data = malloc(strlen(csr2))) == NULL) {
-        krb5_free_principal(r->context, p);
-        free(csr2);
-        return bad_enomem(r, ENOMEM);
+    {
+        size_t input_len = strlen(csr2);
+        /* Calculate buffer size for base64 decoding: (input_len * 3 + 3) / 4 */
+        /* Add extra space to handle edge cases and ensure sufficient buffer */
+        size_t buf_size = (input_len * 3 + 3) / 4 + 1;
+        
+        if ((d.data = malloc(buf_size)) == NULL) {
+            krb5_free_principal(r->context, p);
+            free(csr2);
+            return bad_enomem(r, ENOMEM);
+        }
     }
 
     bytes = rk_base64_decode(csr2, d.data);

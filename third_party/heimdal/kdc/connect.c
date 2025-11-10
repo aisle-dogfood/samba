@@ -683,11 +683,18 @@ handle_http_tcp (krb5_context context,
 	return -1;
     }
 
-    data = malloc(strlen(t));
-    if (data == NULL) {
-	kdc_log(context, config, 1, "Failed to allocate %lu bytes",
-		(unsigned long)strlen(t));
-	return -1;
+    {
+        size_t input_len = strlen(t);
+        /* Calculate buffer size for base64 decoding: (input_len * 3 + 3) / 4 */
+        /* Add extra space to handle edge cases and ensure sufficient buffer */
+        size_t buf_size = (input_len * 3 + 3) / 4 + 1;
+        
+        data = malloc(buf_size);
+        if (data == NULL) {
+            kdc_log(context, config, 1, "Failed to allocate %lu bytes",
+                    (unsigned long)buf_size);
+            return -1;
+        }
     }
     if(*t == '/')
 	t++;

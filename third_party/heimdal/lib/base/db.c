@@ -1149,8 +1149,15 @@ heim_data_t from_base64(heim_string_t s, heim_error_t *error)
     ssize_t len = -1;
     void *buf;
     heim_data_t d;
+    size_t input_len;
+    size_t buf_size;
 
-    buf = malloc(strlen(heim_string_get_utf8(s)));
+    input_len = strlen(heim_string_get_utf8(s));
+    /* Calculate buffer size for base64 decoding: (input_len * 3 + 3) / 4 */
+    /* Add extra space to handle edge cases and ensure sufficient buffer */
+    buf_size = (input_len * 3 + 3) / 4 + 1;
+    
+    buf = malloc(buf_size);
     if (buf)
         len = rk_base64_decode(heim_string_get_utf8(s), buf);
     if (len > -1 && (d = heim_data_ref_create(buf, len, free)))

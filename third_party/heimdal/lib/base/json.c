@@ -1113,8 +1113,15 @@ parse_dict(struct parse_ctx *ctx)
 	if (v != NULL && heim_get_tid(v) == HEIM_TID_STRING) {
 	    void *buf;
 	    size_t len;
+	    size_t input_len;
+	    size_t buf_size;
 
-	    buf = malloc(strlen(heim_string_get_utf8(v)));
+	    input_len = strlen(heim_string_get_utf8(v));
+	    /* Calculate buffer size for base64 decoding: (input_len * 3 + 3) / 4 */
+	    /* Add extra space to handle edge cases and ensure sufficient buffer */
+	    buf_size = (input_len * 3 + 3) / 4 + 1;
+	    
+	    buf = malloc(buf_size);
 	    if (buf == NULL) {
 		heim_release(dict);
 		heim_release(v);
