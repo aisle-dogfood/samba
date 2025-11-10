@@ -1028,10 +1028,40 @@ loop(krb5_context context, krb5_kdc_configuration *config,
 }
 
 #ifdef __APPLE__
+/*
+ * Validate argv0 to prevent command injection attacks.
+ * Returns 1 if valid, 0 if invalid.
+ */
+static int
+validate_argv0(const char *argv0)
+{
+    const char *p;
+    size_t len;
+    
+    if (argv0 == NULL || *argv0 == '\0')
+        return 0;
+    
+    len = strlen(argv0);
+    if (len > 4096)  /* Reasonable path length limit */
+        return 0;
+    
+    /* Check for dangerous characters that could be used for command injection */
+    for (p = argv0; *p; p++) {
+        if (*p == ';' || *p == '|' || *p == '&' || *p == '$' || 
+            *p == '`' || *p == '\n' || *p == '\r' || *p == '\t' ||
+            (*p == '>' && *(p+1) == '>') || (*p == '<' && *(p+1) == '<')) {
+            return 0;
+        }
+    }
+    
+    return 1;
+}
+
 static void
 bonjour_kid(krb5_context context, krb5_kdc_configuration *config, const char *argv0, int *islive)
 {
     char buf;
+    const char *safe_argv0;
 
     if (do_bonjour > 0) {
 	bonjour_announce(context, config);
@@ -1049,7 +1079,16 @@ bonjour_kid(krb5_context context, krb5_kdc_configuration *config, const char *ar
 	err(1, "failed to announce with bonjour (dup)");
     if (islive[1] != 0)
         close(islive[1]);
-    execlp(argv0, "kdc", "--bonjour", NULL);
+    
+    /* Validate argv0 to prevent command injection */
+    if (!validate_argv0(argv0)) {
+        /* Fall back to a safe default if argv0 is suspicious */
+        safe_argv0 = "kdc";
+    } else {
+        safe_argv0 = argv0;
+    }
+    
+    execlp(safe_argv0, "kdc", "--bonjour", NULL);
     err(1, "failed to announce with bonjour (exec)");
 }
 #endif
