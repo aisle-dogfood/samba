@@ -83,6 +83,22 @@ from samba.netcmd.gpcommon import (
     smb_connection,
     get_gpo_dn
 )
+
+
+def secure_xml_fromstring(xml_string):
+    """
+    Secure XML parsing function that disables external entity processing
+    to prevent XXE (XML External Entity) attacks.
+    """
+    # Create a parser with external entity processing disabled
+    parser = ET.XMLParser()
+    # Disable external entity processing
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    # Parse the XML string with the secure parser
+    return ET.fromstring(xml_string, parser)
 from samba.policies import RegistryGroupPolicies
 from samba.dcerpc.misc import REG_MULTI_SZ
 from samba.gp.gpclass import register_gp_extension, list_gp_extensions, \
@@ -1381,7 +1397,7 @@ class cmd_backup(GPOCommand):
                             with open(l_name, 'r') as ltemp:
                                 data = ltemp.read()
 
-                            concrete_xml = ET.fromstring(data)
+                            concrete_xml = secure_xml_fromstring(data)
                             found_entities = parser.generalize_xml(concrete_xml, r_name, entities)
                         except GPGeneralizeException:
                             outf.write('SKIPPING: Generalizing failed for %s\n' % to_parse)
@@ -1608,9 +1624,9 @@ class cmd_restore(cmd_create):
                                     data = data[len(xml_head):]
 
                                     # Load the XML file with the DTD (entity) header
-                                    parser.load_xml(ET.fromstring(xml_head + dtd_header + data))
+                                    parser.load_xml(secure_xml_fromstring(xml_head + dtd_header + data))
                                 else:
-                                    parser.load_xml(ET.fromstring(dtd_header + data))
+                                    parser.load_xml(secure_xml_fromstring(dtd_header + data))
 
                                 # Write out the substituted files in the output
                                 # location, ready to copy over.
@@ -2004,7 +2020,7 @@ fakeu,fakeg% ALL=(ALL) NOPASSWD: ALL
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
@@ -2110,7 +2126,7 @@ samba-tool gpo manage sudoers list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Sudo',
                                 'SudoersConfiguration\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            xml_data = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -2215,7 +2231,7 @@ samba-tool gpo manage sudoers remove {31B2F340-016D-11D2-945F-00C04FB984F9} 'fak
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
@@ -2722,7 +2738,7 @@ samba-tool gpo manage symlink list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Symlink\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            xml_data = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -2791,7 +2807,7 @@ samba-tool gpo manage symlink add {31B2F340-016D-11D2-945F-00C04FB984F9} /tmp/so
                              'MACHINE\\VGP\\VTLA\\Unix\\Symlink'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policy = xml_data.getroot().find('policysetting')
             data = policy.find('data')
         except NTSTATUSError as e:
@@ -2886,7 +2902,7 @@ samba-tool gpo manage symlink remove {31B2F340-016D-11D2-945F-00C04FB984F9} /tmp
                              'MACHINE\\VGP\\VTLA\\Unix\\Symlink'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policy = xml_data.getroot().find('policysetting')
             data = policy.find('data')
         except NTSTATUSError as e:
@@ -2979,7 +2995,7 @@ samba-tool gpo manage files list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Files\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            xml_data = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -3056,7 +3072,7 @@ samba-tool gpo manage files add {31B2F340-016D-11D2-945F-00C04FB984F9} ./source.
                              'MACHINE\\VGP\\VTLA\\Unix\\Files'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policy = xml_data.getroot().find('policysetting')
             data = policy.find('data')
         except NTSTATUSError as e:
@@ -4093,7 +4109,7 @@ samba-tool gpo manage access list {31B2F340-016D-11D2-945F-00C04FB984F9}
                              'MACHINE\\VGP\\VTLA\\VAS',
                              'HostAccessControl\\Allow\\manifest.xml'])
         try:
-            allow = ET.fromstring(conn.loadfile(vgp_xml))
+            allow = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -4118,7 +4134,7 @@ samba-tool gpo manage access list {31B2F340-016D-11D2-945F-00C04FB984F9}
                              'MACHINE\\VGP\\VTLA\\VAS',
                              'HostAccessControl\\Deny\\manifest.xml'])
         try:
-            deny = ET.fromstring(conn.loadfile(vgp_xml))
+            deny = secure_xml_fromstring(conn.loadfile(vgp_xml))
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
