@@ -366,7 +366,20 @@ class package_reader(Context.Context):
 				if hasattr(tarfile, 'data_filter'):
 					f.extractall(temp, filter='data')
 				else:
-					f.extractall(temp)
+					# Safe extraction to prevent tar slip attacks
+					for member in f.getmembers():
+						# Normalize the path and check for directory traversal
+						safe_path = os.path.normpath(member.name)
+						if safe_path.startswith('/') or '..' in safe_path:
+							continue  # Skip dangerous paths
+						
+						# Ensure the path is within the extraction directory
+						full_path = os.path.join(temp, safe_path)
+						if not full_path.startswith(temp + os.sep) and full_path != temp:
+							continue  # Skip paths that escape the extraction directory
+						
+						# Extract the member safely
+						f.extract(member, temp)
 				os.rename(temp, os.path.join(pkgdir, subdir))
 			finally:
 				try:
