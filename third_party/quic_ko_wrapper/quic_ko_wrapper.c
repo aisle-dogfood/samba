@@ -1616,11 +1616,27 @@ static uint64_t qwrap_ngtcp2_timestamp(void)
 {
 	struct timespec tp;
 	int ret;
+	uint64_t sec_ns, total;
 
 	ret = clock_gettime(CLOCK_MONOTONIC, &tp);
 	assert(ret == 0);
 
-	return (uint64_t)tp.tv_sec * NGTCP2_SECONDS + (uint64_t)tp.tv_nsec;
+	/* Check for overflow in multiplication */
+	if (tp.tv_sec > UINT64_MAX / NGTCP2_SECONDS) {
+		/* Return maximum possible value to avoid overflow */
+		return UINT64_MAX;
+	}
+
+	sec_ns = (uint64_t)tp.tv_sec * NGTCP2_SECONDS;
+
+	/* Check for overflow in addition */
+	if (sec_ns > UINT64_MAX - (uint64_t)tp.tv_nsec) {
+		/* Return maximum possible value to avoid overflow */
+		return UINT64_MAX;
+	}
+
+	total = sec_ns + (uint64_t)tp.tv_nsec;
+	return total;
 }
 
 static ngtcp2_encryption_level qwrap_to_ngtcp2_crypto_level(uint8_t level)
