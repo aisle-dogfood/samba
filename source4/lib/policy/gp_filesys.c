@@ -240,7 +240,7 @@ static NTSTATUS gp_get_file (struct smbcli_tree *tree, const char *remote_src,
 
 	/* Copy the contents of the file */
 	while (1) {
-		int n = smbcli_read(tree, fh_remote, buf, nread, buf_size);
+		ssize_t n = smbcli_read(tree, fh_remote, buf, nread, buf_size);
 
 		if (n <= 0) {
 			break;
@@ -253,7 +253,17 @@ static NTSTATUS gp_get_file (struct smbcli_tree *tree, const char *remote_src,
 			talloc_free(buf);
 			return NT_STATUS_UNSUCCESSFUL;
 		}
-		nread += n;
+		
+		/* Check for potential integer overflow before adding to nread */
+		if (nread > SIZE_MAX - (size_t)n) {
+			DEBUG(0, ("Integer overflow detected while copying file.\n"));
+			smbcli_close(tree, fh_remote);
+			close(fh_local);
+			talloc_free(buf);
+			return NT_STATUS_UNSUCCESSFUL;
+		}
+		
+		nread += (size_t)n;
 	}
 
 	/* Close the files */
