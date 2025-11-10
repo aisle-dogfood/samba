@@ -673,14 +673,55 @@ NTSTATUS make_connection_snum(struct smbXsrv_connection *xconn,
 	 * to below */
 	/* execute any "root preexec = " line */
 	if (*lp_root_preexec(talloc_tos(), lp_sub, snum)) {
-		char *cmd = talloc_sub_full(talloc_tos(),
+		char *safe_unix_name = NULL;
+		char *safe_sanitized_username = NULL;
+		char *safe_domain_name = NULL;
+		char *cmd = NULL;
+
+		/* Sanitize user-controlled inputs to prevent command injection */
+		safe_unix_name = escape_shell_string(conn->session_info->unix_info->unix_name);
+		if (safe_unix_name == NULL) {
+			DBG_ERR("Failed to escape unix_name for root preexec\n");
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
+		safe_sanitized_username = escape_shell_string(conn->session_info->unix_info->sanitized_username);
+		if (safe_sanitized_username == NULL) {
+			DBG_ERR("Failed to escape sanitized_username for root preexec\n");
+			SAFE_FREE(safe_unix_name);
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
+		safe_domain_name = escape_shell_string(conn->session_info->info->domain_name);
+		if (safe_domain_name == NULL) {
+			DBG_ERR("Failed to escape domain_name for root preexec\n");
+			SAFE_FREE(safe_unix_name);
+			SAFE_FREE(safe_sanitized_username);
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
+		cmd = talloc_sub_full(talloc_tos(),
 					lp_const_servicename(SNUM(conn)),
-					conn->session_info->unix_info->unix_name,
+					safe_unix_name,
 					conn->connectpath,
 					conn->session_info->unix_token->gid,
-					conn->session_info->unix_info->sanitized_username,
-					conn->session_info->info->domain_name,
+					safe_sanitized_username,
+					safe_domain_name,
 					lp_root_preexec(talloc_tos(), lp_sub, snum));
+
+		SAFE_FREE(safe_unix_name);
+		SAFE_FREE(safe_sanitized_username);
+		SAFE_FREE(safe_domain_name);
+
+		if (cmd == NULL) {
+			DBG_ERR("Failed to build root preexec command\n");
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
 		DBG_INFO("cmd=%s\n",cmd);
 		ret = smbrun(cmd, NULL, NULL);
 		TALLOC_FREE(cmd);
@@ -711,14 +752,55 @@ NTSTATUS make_connection_snum(struct smbXsrv_connection *xconn,
 
 	/* execute any "preexec = " line */
 	if (*lp_preexec(talloc_tos(), lp_sub, snum)) {
-		char *cmd = talloc_sub_full(talloc_tos(),
+		char *safe_unix_name = NULL;
+		char *safe_sanitized_username = NULL;
+		char *safe_domain_name = NULL;
+		char *cmd = NULL;
+
+		/* Sanitize user-controlled inputs to prevent command injection */
+		safe_unix_name = escape_shell_string(conn->session_info->unix_info->unix_name);
+		if (safe_unix_name == NULL) {
+			DBG_ERR("Failed to escape unix_name for preexec\n");
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
+		safe_sanitized_username = escape_shell_string(conn->session_info->unix_info->sanitized_username);
+		if (safe_sanitized_username == NULL) {
+			DBG_ERR("Failed to escape sanitized_username for preexec\n");
+			SAFE_FREE(safe_unix_name);
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
+		safe_domain_name = escape_shell_string(conn->session_info->info->domain_name);
+		if (safe_domain_name == NULL) {
+			DBG_ERR("Failed to escape domain_name for preexec\n");
+			SAFE_FREE(safe_unix_name);
+			SAFE_FREE(safe_sanitized_username);
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
+		cmd = talloc_sub_full(talloc_tos(),
 					lp_const_servicename(SNUM(conn)),
-					conn->session_info->unix_info->unix_name,
+					safe_unix_name,
 					conn->connectpath,
 					conn->session_info->unix_token->gid,
-					conn->session_info->unix_info->sanitized_username,
-					conn->session_info->info->domain_name,
+					safe_sanitized_username,
+					safe_domain_name,
 					lp_preexec(talloc_tos(), lp_sub, snum));
+
+		SAFE_FREE(safe_unix_name);
+		SAFE_FREE(safe_sanitized_username);
+		SAFE_FREE(safe_domain_name);
+
+		if (cmd == NULL) {
+			DBG_ERR("Failed to build preexec command\n");
+			status = NT_STATUS_NO_MEMORY;
+			goto err_root_exit;
+		}
+
 		ret = smbrun(cmd, NULL, NULL);
 		TALLOC_FREE(cmd);
 		if (ret != 0 && lp_preexec_close(snum)) {
@@ -946,32 +1028,107 @@ void close_cnum(connection_struct *conn,
 	/* execute any "postexec = " line */
 	if (*lp_postexec(talloc_tos(), lp_sub, SNUM(conn)) &&
 	    change_to_user_and_service(conn, vuid))  {
-		char *cmd = talloc_sub_full(talloc_tos(),
+		char *safe_unix_name = NULL;
+		char *safe_sanitized_username = NULL;
+		char *safe_domain_name = NULL;
+		char *cmd = NULL;
+
+		/* Sanitize user-controlled inputs to prevent command injection */
+		safe_unix_name = escape_shell_string(conn->session_info->unix_info->unix_name);
+		if (safe_unix_name == NULL) {
+			DBG_ERR("Failed to escape unix_name for postexec\n");
+			change_to_root_user();
+			return;
+		}
+
+		safe_sanitized_username = escape_shell_string(conn->session_info->unix_info->sanitized_username);
+		if (safe_sanitized_username == NULL) {
+			DBG_ERR("Failed to escape sanitized_username for postexec\n");
+			SAFE_FREE(safe_unix_name);
+			change_to_root_user();
+			return;
+		}
+
+		safe_domain_name = escape_shell_string(conn->session_info->info->domain_name);
+		if (safe_domain_name == NULL) {
+			DBG_ERR("Failed to escape domain_name for postexec\n");
+			SAFE_FREE(safe_unix_name);
+			SAFE_FREE(safe_sanitized_username);
+			change_to_root_user();
+			return;
+		}
+
+		cmd = talloc_sub_full(talloc_tos(),
 					lp_const_servicename(SNUM(conn)),
-					conn->session_info->unix_info->unix_name,
+					safe_unix_name,
 					conn->connectpath,
 					conn->session_info->unix_token->gid,
-					conn->session_info->unix_info->sanitized_username,
-					conn->session_info->info->domain_name,
+					safe_sanitized_username,
+					safe_domain_name,
 					lp_postexec(talloc_tos(), lp_sub, SNUM(conn)));
-		smbrun(cmd, NULL, NULL);
-		TALLOC_FREE(cmd);
+
+		SAFE_FREE(safe_unix_name);
+		SAFE_FREE(safe_sanitized_username);
+		SAFE_FREE(safe_domain_name);
+
+		if (cmd != NULL) {
+			smbrun(cmd, NULL, NULL);
+			TALLOC_FREE(cmd);
+		} else {
+			DBG_ERR("Failed to build postexec command\n");
+		}
 		change_to_root_user();
 	}
 
 	change_to_root_user();
 	/* execute any "root postexec = " line */
 	if (*lp_root_postexec(talloc_tos(), lp_sub, SNUM(conn)))  {
-		char *cmd = talloc_sub_full(talloc_tos(),
+		char *safe_unix_name = NULL;
+		char *safe_sanitized_username = NULL;
+		char *safe_domain_name = NULL;
+		char *cmd = NULL;
+
+		/* Sanitize user-controlled inputs to prevent command injection */
+		safe_unix_name = escape_shell_string(conn->session_info->unix_info->unix_name);
+		if (safe_unix_name == NULL) {
+			DBG_ERR("Failed to escape unix_name for root postexec\n");
+			return;
+		}
+
+		safe_sanitized_username = escape_shell_string(conn->session_info->unix_info->sanitized_username);
+		if (safe_sanitized_username == NULL) {
+			DBG_ERR("Failed to escape sanitized_username for root postexec\n");
+			SAFE_FREE(safe_unix_name);
+			return;
+		}
+
+		safe_domain_name = escape_shell_string(conn->session_info->info->domain_name);
+		if (safe_domain_name == NULL) {
+			DBG_ERR("Failed to escape domain_name for root postexec\n");
+			SAFE_FREE(safe_unix_name);
+			SAFE_FREE(safe_sanitized_username);
+			return;
+		}
+
+		cmd = talloc_sub_full(talloc_tos(),
 					lp_const_servicename(SNUM(conn)),
-					conn->session_info->unix_info->unix_name,
+					safe_unix_name,
 					conn->connectpath,
 					conn->session_info->unix_token->gid,
-					conn->session_info->unix_info->sanitized_username,
-					conn->session_info->info->domain_name,
+					safe_sanitized_username,
+					safe_domain_name,
 					lp_root_postexec(talloc_tos(), lp_sub, SNUM(conn)));
-		smbrun(cmd, NULL, NULL);
-		TALLOC_FREE(cmd);
+
+		SAFE_FREE(safe_unix_name);
+		SAFE_FREE(safe_sanitized_username);
+		SAFE_FREE(safe_domain_name);
+
+		if (cmd != NULL) {
+			smbrun(cmd, NULL, NULL);
+			TALLOC_FREE(cmd);
+		} else {
+			DBG_ERR("Failed to build root postexec command\n");
+		}
 	}
 
 	conn_free(conn);
