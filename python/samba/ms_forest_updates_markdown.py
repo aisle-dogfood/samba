@@ -139,7 +139,9 @@ def save_ldif(filename, answers, out_folder):
     :param answers: array of tuples generated with earlier functions
     :param out_folder: folder to prepend
     """
-    path = os.path.join(out_folder, filename)
+    # Sanitize filename to prevent path traversal attacks
+    safe_filename = os.path.basename(filename)
+    path = os.path.join(out_folder, safe_filename)
     with open(path, 'w') as ldif:
         for answer in answers:
             change, dn, attrib, sd = answer
