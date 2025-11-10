@@ -32,6 +32,10 @@ static NTSTATUS fake_password_policy(struct winbindd_response *r,
 	NTTIME min_password_age;
 	NTTIME max_password_age;
 
+	if (validation == NULL) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
 	switch (validation_level) {
 	case 3:
 		bi = &validation->sam3->base;
