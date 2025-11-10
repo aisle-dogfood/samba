@@ -511,6 +511,17 @@ static NTSTATUS push_recursive (struct gp_context *gp_ctx, const char *local_pat
 					status = NT_STATUS_UNSUCCESSFUL;
 					goto done;
 				}
+				/* Check for integer overflow before adding */
+				if (total_read > SSIZE_MAX - nread) {
+					DBG_ERR("Integer overflow detected in total_read\n");
+					status = NT_STATUS_UNSUCCESSFUL;
+					goto done;
+				}
+				if (total_write > SSIZE_MAX - nwrite) {
+					DBG_ERR("Integer overflow detected in total_write\n");
+					status = NT_STATUS_UNSUCCESSFUL;
+					goto done;
+				}
 				total_read += nread;
 				total_write += nwrite;
 			}
