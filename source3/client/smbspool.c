@@ -31,6 +31,8 @@
 #include "libsmb/smbsock_connect.h"
 #include "lib/param/param.h"
 #include "lib/krb5_wrap/krb5_samba.h"
+#include <errno.h>
+#include <limits.h>
 
 /*
  * Starting with CUPS 1.3, Kerberos support is provided by cupsd including
@@ -228,6 +230,7 @@ main(int argc,			/* I - Number of command-line arguments */
 
 	if (print_file != NULL) {
 		char *endp;
+		long copies_long;
 
 		fp = fopen(print_file, "rb");
 		if (fp == NULL) {
@@ -237,11 +240,17 @@ main(int argc,			/* I - Number of command-line arguments */
 			goto done;
 		}
 
-		copies = strtol(print_copies, &endp, 10);
+		errno = 0;
+		copies_long = strtol(print_copies, &endp, 10);
 		if (print_copies == endp) {
 			perror("ERROR: Unable to determine number of copies");
 			goto done;
 		}
+		if (errno == ERANGE || copies_long < 0 || copies_long > INT_MAX) {
+			fprintf(stderr, "ERROR: Invalid number of copies: %s\n", print_copies);
+			goto done;
+		}
+		copies = (int)copies_long;
 	} else {
 		fp = stdin;
 		copies = 1;
@@ -349,9 +358,22 @@ main(int argc,			/* I - Number of command-line arguments */
 	}
 
 	if ((sep = strrchr_m(server, ':')) != NULL) {
+		char *endp;
+		long port_long;
+
 		*sep++ = '\0';
 
-		port = atoi(sep);
+		errno = 0;
+		port_long = strtol(sep, &endp, 10);
+		if (sep == endp || *endp != '\0') {
+			fprintf(stderr, "ERROR: Invalid port number: %s\n", sep);
+			goto done;
+		}
+		if (errno == ERANGE || port_long < 0 || port_long > 65535) {
+			fprintf(stderr, "ERROR: Port number out of range: %s\n", sep);
+			goto done;
+		}
+		port = (int)port_long;
 	} else {
 		port = 0;
 	}
