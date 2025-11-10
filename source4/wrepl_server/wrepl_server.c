@@ -347,8 +347,13 @@ NTSTATUS wreplsrv_add_table(struct wreplsrv_service *service,
 	struct wreplsrv_owner *table = *_table;
 	struct wreplsrv_owner *cur;
 
-	if (!wins_owner || strcmp(wins_owner, "0.0.0.0") == 0) {
-		wins_owner = service->wins_db->local_owner;
+	if (!wins_owner) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+	
+	/* Reject 0.0.0.0 as it could be used to spoof local owner */
+	if (strcmp(wins_owner, "0.0.0.0") == 0) {
+		return NT_STATUS_INVALID_PARAMETER;
 	}
 
 	cur = wreplsrv_find_owner(service, table, wins_owner);
@@ -435,6 +440,11 @@ static NTSTATUS wreplsrv_load_table(struct wreplsrv_service *service)
 	for (i=0; i < res->count; i++) {
 		wins_owner     = ldb_msg_find_attr_as_string(res->msgs[i], "winsOwner", NULL);
 		version        = ldb_msg_find_attr_as_uint64(res->msgs[i], "versionID", 0);
+
+		/* Handle NULL winsOwner in database records as local owner */
+		if (!wins_owner) {
+			wins_owner = service->wins_db->local_owner;
+		}
 
 		status = wreplsrv_add_table(service,
 					    service, &service->table,
