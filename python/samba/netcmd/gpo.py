@@ -2004,7 +2004,9 @@ fakeu,fakeg% ALL=(ALL) NOPASSWD: ALL
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
@@ -2110,7 +2112,9 @@ samba-tool gpo manage sudoers list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Sudo',
                                 'SudoersConfiguration\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -2215,7 +2219,9 @@ samba-tool gpo manage sudoers remove {31B2F340-016D-11D2-945F-00C04FB984F9} 'fak
                              'SudoersConfiguration'])
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser))
             policysetting = xml_data.getroot().find('policysetting')
             data = policysetting.find('data')
         except NTSTATUSError as e:
@@ -2722,7 +2728,9 @@ samba-tool gpo manage symlink list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Symlink\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -2979,7 +2987,9 @@ samba-tool gpo manage files list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Files\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -3262,7 +3272,9 @@ samba-tool gpo manage openssh list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\SshCfg',
                                 'SshD\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -3459,7 +3471,9 @@ samba-tool gpo manage scripts startup list {31B2F340-016D-11D2-945F-00C04FB984F9
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Scripts\\Startup\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -3750,7 +3764,9 @@ samba-tool gpo manage motd list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'MOTD\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -3924,7 +3940,9 @@ samba-tool gpo manage issue list {31B2F340-016D-11D2-945F-00C04FB984F9}
                                 'MACHINE\\VGP\\VTLA\\Unix',
                                 'Issue\\manifest.xml'])
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -3998,7 +4016,9 @@ samba-tool gpo manage issue set {31B2F340-016D-11D2-945F-00C04FB984F9} "Welcome 
             return
 
         try:
-            xml_data = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            xml_data = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -4093,7 +4113,9 @@ samba-tool gpo manage access list {31B2F340-016D-11D2-945F-00C04FB984F9}
                              'MACHINE\\VGP\\VTLA\\VAS',
                              'HostAccessControl\\Allow\\manifest.xml'])
         try:
-            allow = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            allow = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
@@ -4118,7 +4140,9 @@ samba-tool gpo manage access list {31B2F340-016D-11D2-945F-00C04FB984F9}
                              'MACHINE\\VGP\\VTLA\\VAS',
                              'HostAccessControl\\Deny\\manifest.xml'])
         try:
-            deny = ET.fromstring(conn.loadfile(vgp_xml))
+            # Create a secure XML parser to prevent XXE attacks
+            secure_parser = ET.XMLParser(resolve_entities=False, forbid_dtd=True)
+            deny = ET.fromstring(conn.loadfile(vgp_xml), parser=secure_parser)
         except NTSTATUSError as e:
             if e.args[0] in [NT_STATUS_OBJECT_NAME_INVALID,
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
