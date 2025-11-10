@@ -23,7 +23,41 @@
 
 
 import sys
+import os
 from gen_error_common import parseErrorDescriptions
+
+def validate_file_path(file_path, operation="read"):
+    """
+    Validate file path to prevent path traversal attacks.
+    
+    Args:
+        file_path: The file path to validate
+        operation: "read" or "write" to indicate the intended operation
+    
+    Returns:
+        The normalized absolute path if valid
+        
+    Raises:
+        ValueError: If the path is invalid or contains path traversal sequences
+    """
+    if not file_path:
+        raise ValueError("File path cannot be empty")
+    
+    # Check for path traversal sequences
+    if ".." in file_path:
+        raise ValueError(f"Path traversal detected in file path: {file_path}")
+    
+    # Normalize the path to resolve any relative components
+    normalized_path = os.path.normpath(file_path)
+    
+    # Convert to absolute path
+    abs_path = os.path.abspath(normalized_path)
+    
+    # Additional check after normalization to catch encoded traversal attempts
+    if ".." in abs_path:
+        raise ValueError(f"Path traversal detected after normalization: {abs_path}")
+    
+    return abs_path
 
 def write_license(out_file):
     out_file.write("/*\n")
@@ -178,10 +212,14 @@ def main ():
     input_file1 = None
 
     if len(sys.argv) == 5:
-        input_file1 =  sys.argv[1]
-        gen_headerfile_name = sys.argv[2]
-        gen_sourcefile_name = sys.argv[3]
-        gen_pythonfile_name = sys.argv[4]
+        try:
+            input_file1 = validate_file_path(sys.argv[1], "read")
+            gen_headerfile_name = validate_file_path(sys.argv[2], "write")
+            gen_sourcefile_name = validate_file_path(sys.argv[3], "write")
+            gen_pythonfile_name = validate_file_path(sys.argv[4], "write")
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
     else:
         print("usage: %s winerrorfile headerfile sourcefile pythonfile"%(sys.argv[0]))
         sys.exit()
