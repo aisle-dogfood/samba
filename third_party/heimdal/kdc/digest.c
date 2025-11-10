@@ -518,7 +518,16 @@ _kdc_do_digest(krb5_context context,
 	    goto out;
 	}
 
-	krb5_store_stringz(sp, ireq.u.digestRequest.serverNonce);
+	if (ireq.u.digestRequest.serverNonce == NULL) {
+	    ret = EINVAL;
+	    krb5_set_error_message(context, ret, "serverNonce is NULL");
+	    goto out;
+	}
+	ret = krb5_store_stringz(sp, ireq.u.digestRequest.serverNonce);
+	if (ret) {
+	    krb5_clear_error_message(context);
+	    goto out;
+	}
 
 	if (ireq.u.digestRequest.hostname) {
 	    ret = krb5_store_stringz(sp, *ireq.u.digestRequest.hostname);
@@ -528,7 +537,17 @@ _kdc_do_digest(krb5_context context,
 	    }
 	}
 
+	if (ireq.u.digestRequest.opaque == NULL) {
+	    ret = EINVAL;
+	    krb5_set_error_message(context, ret, "opaque is NULL");
+	    goto out;
+	}
 	buf.length = strlen(ireq.u.digestRequest.opaque);
+	if (buf.length > 65536) { /* reasonable limit for hex-encoded data */
+	    ret = EINVAL;
+	    krb5_set_error_message(context, ret, "opaque too long");
+	    goto out;
+	}
 	buf.data = malloc(buf.length);
 	if (buf.data == NULL) {
 	    ret = ENOMEM;
@@ -559,7 +578,13 @@ _kdc_do_digest(krb5_context context,
 	    goto out;
 	}
 
+	/* serverNonce was already validated above for NULL */
 	serverNonce.length = strlen(ireq.u.digestRequest.serverNonce);
+	if (serverNonce.length > 65536) { /* reasonable limit for hex-encoded data */
+	    ret = EINVAL;
+	    krb5_set_error_message(context, ret, "serverNonce too long");
+	    goto out;
+	}
 	serverNonce.data = malloc(serverNonce.length);
 	if (serverNonce.data == NULL) {
 	    ret = ENOMEM;
@@ -844,7 +869,20 @@ _kdc_do_digest(krb5_context context,
 		ssize_t ssize;
 		krb5_data clientNonce;
 
+		if (ireq.u.digestRequest.clientNonce == NULL || 
+		    *ireq.u.digestRequest.clientNonce == NULL) {
+		    ret = EINVAL;
+		    krb5_set_error_message(context, ret, "clientNonce is NULL");
+		    EVP_MD_CTX_destroy(ctp);
+		    goto out;
+		}
 		clientNonce.length = strlen(*ireq.u.digestRequest.clientNonce);
+		if (clientNonce.length > 65536) { /* reasonable limit for hex-encoded data */
+		    ret = EINVAL;
+		    krb5_set_error_message(context, ret, "clientNonce too long");
+		    EVP_MD_CTX_destroy(ctp);
+		    goto out;
+		}
 		clientNonce.data = malloc(clientNonce.length);
 		if (clientNonce.data == NULL) {
 		    ret = ENOMEM;
