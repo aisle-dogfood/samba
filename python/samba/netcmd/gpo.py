@@ -28,6 +28,21 @@ from xml.parsers import expat
 import shutil
 import tempfile
 
+
+def secure_xml_fromstring(xml_string):
+    """
+    Securely parse XML string by disabling external entity processing
+    to prevent XXE (XML External Entity) attacks.
+    """
+    # Create a parser that disables external entity processing
+    parser = ET.XMLParser()
+    # Disable external entity processing
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    return ET.fromstring(xml_string, parser)
+
 from samba.auth import system_session
 from samba.netcmd import (
     Command,
@@ -4335,7 +4350,7 @@ samba-tool gpo manage access remove {31B2F340-016D-11D2-945F-00C04FB984F9} allow
                                "'deny'. Unknown type '%s'" % etype)
         vgp_xml = '\\'.join([vgp_dir, 'manifest.xml'])
         try:
-            xml_data = ET.ElementTree(ET.fromstring(conn.loadfile(vgp_xml)))
+            xml_data = ET.ElementTree(secure_xml_fromstring(conn.loadfile(vgp_xml)))
             policy = xml_data.getroot().find('policysetting')
             data = policy.find('data')
         except NTSTATUSError as e:
