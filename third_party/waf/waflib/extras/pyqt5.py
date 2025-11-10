@@ -150,6 +150,11 @@ class pyrcc(Task.Task):
 			return ([], [])
 
 		parser = make_parser()
+		# Disable external entity processing to prevent XXE attacks
+		parser.setFeature("http://xml.org/sax/features/external-general-entities", False)
+		parser.setFeature("http://xml.org/sax/features/external-parameter-entities", False)
+		# Disable DTD processing
+		parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", True)
 		curHandler = XMLHandler()
 		parser.setContentHandler(curHandler)
 		fi = open(self.inputs[0].abspath(), 'r')
