@@ -98,6 +98,32 @@ from samba.netcmd.gpcommon import (
     smb_connection,
     get_gpo_dn
 )
+
+
+def secure_xml_fromstring(xml_string):
+    """
+    Secure XML parser that prevents XXE (XML External Entity) attacks.
+    
+    This function creates an XML parser with external entity processing disabled
+    to prevent XXE vulnerabilities.
+    
+    Args:
+        xml_string: The XML string to parse
+        
+    Returns:
+        xml.etree.ElementTree.Element: The parsed XML element
+        
+    Raises:
+        xml.etree.ElementTree.ParseError: If the XML is malformed
+    """
+    # Create a parser that forbids external entities and DTDs
+    parser = ET.XMLParser()
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    # Parse the XML string with the secure parser
+    return ET.fromstring(xml_string, parser=parser)
 from samba.policies import RegistryGroupPolicies
 from samba.dcerpc.misc import REG_MULTI_SZ
 from samba.gp.gpclass import register_gp_extension, list_gp_extensions, \
@@ -2909,7 +2935,7 @@ samba-tool gpo manage symlink remove {31B2F340-016D-11D2-945F-00C04FB984F9} /tmp
                              NT_STATUS_OBJECT_NAME_NOT_FOUND,
                              NT_STATUS_OBJECT_PATH_NOT_FOUND]:
                 raise CommandError("Cannot remove link from '%s' to '%s' "
-                    "because it does not exist" % source, target)
+                    "because it does not exist" % (source, target))
             elif e.args[0] == NT_STATUS_ACCESS_DENIED:
                 raise CommandError("The authenticated user does "
                                    "not have sufficient privileges")
