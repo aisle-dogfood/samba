@@ -81,12 +81,18 @@ heim_digest_create(int server, int type);
 #define HEIM_DIGEST_TYPE_RFC2617_MD5			2
 #define HEIM_DIGEST_TYPE_RFC2617_MD5_SESS		4
 #define HEIM_DIGEST_TYPE_RFC2831			8
+/* SHA-256 variants for improved security */
+#define HEIM_DIGEST_TYPE_RFC2617_SHA256			16
+#define HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS		32
 
 #define HEIM_DIGEST_TYPE_RFC2617_OR_RFC2831		12
 
 /* old deprecated names, use the two above instead */
 #define HEIM_DIGEST_TYPE_MD5				2
 #define HEIM_DIGEST_TYPE_MD5_SESS			4
+/* new SHA-256 aliases */
+#define HEIM_DIGEST_TYPE_SHA256				16
+#define HEIM_DIGEST_TYPE_SHA256_SESS			32
 
 void
 heim_digest_init_set_key(heim_digest_t context, const char *key, const char *value);
@@ -111,6 +117,9 @@ heim_digest_set_user_password(heim_digest_t context, const char *password);
 
 void
 heim_digest_set_user_h1hash(heim_digest_t context, void *ptr, size_t size);
+
+int
+heim_digest_set_algorithm(heim_digest_t context, int algorithm);
 
 int
 heim_digest_verify(heim_digest_t context, char **response);
