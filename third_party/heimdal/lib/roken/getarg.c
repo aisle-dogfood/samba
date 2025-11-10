@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "roken.h"
 #include "getarg.h"
 
@@ -193,7 +194,12 @@ mandoc_template(struct getargs *args,
 static int
 check_column(FILE *f, int col, int len, int columns)
 {
-    if(col + len > columns) {
+    /* Check for integer overflow before addition */
+    if(len > 0 && col > INT_MAX - len) {
+	/* Overflow would occur, treat as exceeding columns */
+	fprintf(f, "\n");
+	col = fprintf(f, "  ");
+    } else if(col + len > columns) {
 	fprintf(f, "\n");
 	col = fprintf(f, "  ");
     }
