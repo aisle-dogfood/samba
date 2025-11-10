@@ -213,11 +213,19 @@ main(int argc, char **argv)
             bytes = fread(d, 1, sizeof(d), stdin);
             if (bytes == 0)
                 continue;
+            /* Check for potential integer overflow */
+            if (buflen > SIZE_MAX - bytes)
+                err(1, "Input too large");
             if (buflen + bytes > bufsz) {
-                if ((tmp = realloc(buf, bufsz + (bufsz >> 2) + sizeof(d))) == NULL)
+                size_t new_size = buflen + bytes;
+                /* Add growth factor to avoid frequent reallocations */
+                if (new_size > SIZE_MAX - (new_size >> 2) - sizeof(d))
+                    err(1, "Input too large");
+                new_size += (new_size >> 2) + sizeof(d);
+                if ((tmp = realloc(buf, new_size)) == NULL)
                     err(1, "Could not read stdin");
                 buf = tmp;
-                bufsz = bufsz + (bufsz >> 2) + sizeof(d);
+                bufsz = new_size;
             }
             memcpy(buf + buflen, d, bytes);
             buflen += bytes;
