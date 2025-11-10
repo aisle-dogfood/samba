@@ -30,6 +30,7 @@
 #include "interact.h"
 
 #include <termios.h>
+#include <sys/wait.h>
 
 static const char* get_editor(void) {
 	static char editor[64] = {0};
@@ -104,12 +105,31 @@ char* interact_edit(TALLOC_CTX* mem_ctx, const char* str) {
 	fprintf(file, "%s", str);
 	fclose(file);
 
-	snprintf(buf, sizeof(buf), "%s %s\n", get_editor(), fname);
-	if (system(buf) != 0) {
-		DEBUG(0, ("failed to start editor %s: %s\n", buf,
-			  strerror(errno)));
+	/* Use fork/exec instead of system() to avoid command injection */
+	pid_t pid = fork();
+	if (pid == -1) {
+		DEBUG(0, ("failed to fork: %s\n", strerror(errno)));
 		unlink(fname);
 		return NULL;
+	} else if (pid == 0) {
+		/* Child process */
+		execl(get_editor(), get_editor(), fname, (char *)NULL);
+		/* If execl returns, it failed */
+		DEBUG(0, ("failed to exec editor %s: %s\n", get_editor(), strerror(errno)));
+		_exit(1);
+	} else {
+		/* Parent process */
+		int status;
+		if (waitpid(pid, &status, 0) == -1) {
+			DEBUG(0, ("failed to wait for editor: %s\n", strerror(errno)));
+			unlink(fname);
+			return NULL;
+		}
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			DEBUG(0, ("editor exited with error status\n"));
+			unlink(fname);
+			return NULL;
+		}
 	}
 
 	file = fopen(fname, "r");
