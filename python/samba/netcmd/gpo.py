@@ -130,6 +130,22 @@ from samba.gp.gpclass import register_gp_extension, list_gp_extensions, \
     unregister_gp_extension
 
 
+def secure_xml_fromstring(xml_data):
+    """
+    Securely parse XML data using ElementTree with disabled external entity processing.
+    This prevents XXE (XML External Entity) attacks and other XML-based vulnerabilities.
+    """
+    # Create a secure XMLParser that disables external entity processing
+    parser = ET.XMLParser()
+    # Disable external entity processing to prevent XXE attacks
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    # Parse the XML data with the secure parser
+    return ET.fromstring(xml_data, parser)
+
+
 def gpo_flags_string(value):
     """return gpo flags string"""
     flags = policy.get_gpo_flags(value)
