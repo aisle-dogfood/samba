@@ -340,8 +340,13 @@ static void print_progress(const char *name, time_t start, time_t now,
 		int required = strlen(name),
 		    available = columns - len - strlen("[] ");
 		if (required > available) {
+			int offset = required - available + 3;
+			/* Ensure we don't access memory before the start of name */
+			if (offset > required) {
+				offset = required;
+			}
 			if (asprintf(&filename, "...%s",
-				     name + required - available + 3) == -1) {
+				     name + offset) == -1) {
 				return;
 			}
 		} else {
