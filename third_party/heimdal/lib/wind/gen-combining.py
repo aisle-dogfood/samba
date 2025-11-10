@@ -37,6 +37,7 @@
 import re
 import string
 import sys
+import os
 
 import generate
 import UnicodeData
@@ -45,7 +46,24 @@ if len(sys.argv) != 3:
     print("usage: %s UnicodeData.txt out-dir" % sys.argv[0])
     sys.exit(1)
 
-ud = UnicodeData.read(sys.argv[1])
+# Validate input file path to prevent path traversal attacks
+input_file = sys.argv[1]
+if '..' in input_file or input_file.startswith('/'):
+    print("Error: Invalid file path. Path traversal not allowed.")
+    sys.exit(1)
+
+# Ensure the file exists and is a regular file
+if not os.path.isfile(input_file):
+    print("Error: File does not exist or is not a regular file: %s" % input_file)
+    sys.exit(1)
+
+# Validate output directory path to prevent path traversal attacks
+output_dir = sys.argv[2]
+if '..' in output_dir or output_dir.startswith('/'):
+    print("Error: Invalid output directory path. Path traversal not allowed.")
+    sys.exit(1)
+
+ud = UnicodeData.read(input_file)
 
 trans = {}
 for k,v in ud.items():
@@ -54,8 +72,8 @@ for k,v in ud.items():
 
 # trans = [(x[0], int(x[3]), x[1]) for x in UnicodeData.read() if int(x[3]) != 0]
 
-combining_h = generate.Header('%s/combining_table.h' % sys.argv[2])
-combining_c = generate.Implementation('%s/combining_table.c' % sys.argv[2])
+combining_h = generate.Header('%s/combining_table.h' % output_dir)
+combining_c = generate.Implementation('%s/combining_table.c' % output_dir)
 
 combining_h.file.write(
 '''
