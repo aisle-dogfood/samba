@@ -68,6 +68,37 @@ static void tdb_log(struct tdb_context *tdb, enum tdb_debug_level level, const c
 	fflush(stdout);
 }
 
+/*
+  validate filename to prevent path traversal attacks
+  returns 0 if valid, 1 if invalid
+*/
+static int validate_filename(const char *filename)
+{
+	const char *p;
+	
+	/* reject absolute paths */
+	if (filename[0] == '/') {
+		fprintf(stderr, "Error: Absolute paths are not allowed: %s\n", filename);
+		return 1;
+	}
+	
+	/* check for path traversal sequences */
+	p = filename;
+	while (*p) {
+		if (p[0] == '.' && p[1] == '.') {
+			/* check if this is a real ".." sequence */
+			if ((p == filename || p[-1] == '/') && 
+			    (p[2] == '\0' || p[2] == '/')) {
+				fprintf(stderr, "Error: Path traversal detected in filename: %s\n", filename);
+				return 1;
+			}
+		}
+		p++;
+	}
+	
+	return 0;
+}
+
 static char *add_suffix(const char *name, const char *suffix)
 {
 	char *ret;
@@ -348,6 +379,12 @@ static void usage(void)
 	for (i=0; i<argc; i++) {
 		const char *fname = argv[i];
 		char *bak_name;
+
+		/* validate filename to prevent path traversal attacks */
+		if (validate_filename(fname) != 0) {
+			ret = 1;
+			continue;
+		}
 
 		bak_name = add_suffix(fname, suffix);
 
