@@ -1461,10 +1461,18 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 	}
 
 	/*
-	 * Even with NETLOGON_NEG_SUPPORTS_AES or
-	 * NETLOGON_NEG_ARCFOUR this uses DES
+	 * Use AES encryption if supported, otherwise fall back to DES
+	 * for backward compatibility
 	 */
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds, pass->hash, sizeof(pass->hash));
+		} else {
+			return netlogon_creds_aes_decrypt(creds, pass->hash, sizeof(pass->hash));
+		}
+	}
 
+	/* Fall back to DES for backward compatibility */
 	if (do_encrypt) {
 		return netlogon_creds_des_encrypt(creds, pass);
 	}
