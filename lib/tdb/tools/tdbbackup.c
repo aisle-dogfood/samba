@@ -68,10 +68,32 @@ static void tdb_log(struct tdb_context *tdb, enum tdb_debug_level level, const c
 	fflush(stdout);
 }
 
+static int is_safe_path(const char *path)
+{
+	/* Reject absolute paths */
+	if (path[0] == '/') {
+		return 0;
+	}
+	
+	/* Reject paths containing ".." */
+	if (strstr(path, "..") != NULL) {
+		return 0;
+	}
+	
+	return 1;
+}
+
 static char *add_suffix(const char *name, const char *suffix)
 {
 	char *ret;
 	int len = strlen(name) + strlen(suffix) + 1;
+	
+	/* Validate path to prevent path traversal */
+	if (!is_safe_path(name)) {
+		fprintf(stderr, "Error: Path '%s' contains unsafe characters (absolute path or '..')\n", name);
+		return NULL;
+	}
+	
 	ret = (char *)malloc(len);
 	if (!ret) {
 		fprintf(stderr,"Out of memory!\n");
@@ -114,6 +136,9 @@ static int backup_tdb(const char *old_name, const char *new_name,
 	int count1, count2;
 
 	tmp_name = add_suffix(new_name, ".tmp");
+	if (!tmp_name) {
+		return 1;
+	}
 
 	/* stat the old tdb to find its permissions */
 	if (stat(old_name, &st) != 0) {
@@ -324,6 +349,10 @@ static void usage(void)
 			verify = 1;
 			break;
 		case 's':
+			if (!is_safe_path(optarg)) {
+				fprintf(stderr, "Error: Suffix '%s' contains unsafe characters (absolute path or '..')\n", optarg);
+				exit(1);
+			}
 			suffix = optarg;
 			break;
 		case 'n':
@@ -350,6 +379,10 @@ static void usage(void)
 		char *bak_name;
 
 		bak_name = add_suffix(fname, suffix);
+		if (!bak_name) {
+			ret = 1;
+			continue;
+		}
 
 		if (verify) {
 			if (verify_tdb(fname, bak_name) != 0) {
