@@ -1038,12 +1038,39 @@ _PUBLIC_ DATA_BLOB hexdump_to_data_blob(TALLOC_CTX *mem_ctx, const char *hexdump
 	/* hexdump line length is 77 chars long. We then use the ASCII representation of the bytes
 	 * at the end of the final line to calculate how many are in that line, minus the extra space
 	 * and newline. */
-	size_t hexdump_byte_count = (16 * (hexdump_len / 77));
-	if (hexdump_len % 77) {
-		hexdump_byte_count += ((hexdump_len % 77) - 59 - 2);
+	size_t hexdump_byte_count;
+	size_t remainder;
+	
+	/* Check for potential overflow in multiplication: 16 * (hexdump_len / 77) */
+	if (hexdump_len / 77 > SIZE_MAX / 16) {
+		return ret_blob; /* Return empty blob on overflow */
+	}
+	
+	hexdump_byte_count = (16 * (hexdump_len / 77));
+	remainder = hexdump_len % 77;
+	if (remainder) {
+		/* Check for underflow: remainder must be at least 61 to avoid underflow */
+		if (remainder < 61) {
+			return ret_blob; /* Return empty blob on invalid format */
+		}
+		/* Check for overflow in addition */
+		if (hexdump_byte_count > SIZE_MAX - (remainder - 61)) {
+			return ret_blob; /* Return empty blob on overflow */
+		}
+		hexdump_byte_count += (remainder - 59 - 2);
+	}
+
+	/* Check for overflow in the +1 addition */
+	if (hexdump_byte_count == SIZE_MAX) {
+		return ret_blob; /* Return empty blob on overflow */
 	}
 
 	ret_blob = data_blob_talloc(mem_ctx, NULL, hexdump_byte_count+1);
+	if (ret_blob.data == NULL) {
+		/* Allocation failed, return empty blob */
+		DATA_BLOB empty_blob = { 0 };
+		return empty_blob;
+	}
 	for (; i+1 < hexdump_len && hexdump[i] != 0 && hexdump[i+1] != 0; i++) {
 		if ((i%77) == 0)
 			i += 7; /* Skip the offset at the start of the line */
