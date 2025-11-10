@@ -92,7 +92,17 @@ _gss_string_to_oid(const char* s, gss_OID *oidp)
 			 * bother with anything except base ten.
 			 */
 			while (*p && *p != '.') {
-				number = 10 * number + (*p - '0');
+				unsigned int digit = *p - '0';
+				
+				/* Check for non-digit characters */
+				if (digit > 9)
+					return (EINVAL);
+				
+				/* Check for integer overflow before multiplication and addition */
+				if (number > (UINT_MAX - digit) / 10)
+					return (EINVAL);
+				
+				number = 10 * number + digit;
 				p++;
 			}
 
