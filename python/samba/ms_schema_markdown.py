@@ -49,7 +49,16 @@ def read_ms_markdown(in_file, out_folder):
                 if ldf is not None:
                     ldf.close()
 
-                out_path = os.path.join(out_folder, innertext(node).strip())
+                # Sanitize filename to prevent path traversal attacks
+                filename = innertext(node).strip()
+                # Remove path separators and parent directory references
+                filename = filename.replace('/', '_').replace('\\', '_').replace('..', '_')
+                # Remove any remaining dangerous characters
+                filename = re.sub(r'[<>:"|?*]', '_', filename)
+                # Ensure filename is not empty after sanitization
+                if not filename:
+                    filename = 'unnamed'
+                out_path = os.path.join(out_folder, filename)
                 ldf = open(out_path, 'w')
             elif node.tag == 'h2':
                 if ldf is not None:
