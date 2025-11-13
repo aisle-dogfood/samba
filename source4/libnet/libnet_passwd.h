@@ -33,8 +33,8 @@ union libnet_ChangePassword {
 		struct _libnet_ChangePassword_in {
 			const char *account_name;
 			const char *domain_name;
-			const char *oldpassword;
-			const char *newpassword;
+			const char *oldpassword; /* marked as secret when allocated */
+			const char *newpassword; /* marked as secret when allocated */
 		} in;
 
 		struct _libnet_ChangePassword_out {
@@ -90,7 +90,7 @@ union libnet_SetPassword {
 		struct _libnet_SetPassword_in {
 			const char *account_name;
 			const char *domain_name;
-			const char *newpassword;
+			const char *newpassword; /* marked as secret when allocated */
 		} in;
 
 		struct _libnet_SetPassword_out {
@@ -105,7 +105,7 @@ union libnet_SetPassword {
 			const char           *account_name; /* for debug only */
 			struct policy_handle *user_handle;
 			struct dcerpc_pipe   *dcerpc_pipe;
-			const char           *newpassword;
+			const char           *newpassword; /* marked as secret when allocated */
 			struct samr_UserInfo21 *info21; /* can be NULL,
 			                                 * for level 26,24 it must be NULL
 			                                 * for level 25,23 it must be non-NULL

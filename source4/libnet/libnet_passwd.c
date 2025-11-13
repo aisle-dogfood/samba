@@ -29,6 +29,7 @@
 #include "source3/rpc_client/init_samr.h"
 #include "lib/param/loadparm.h"
 #include "lib/param/param.h"
+#include "lib/util/talloc_keep_secret.h"
 
 #include "lib/crypto/gnutls_helpers.h"
 #include <gnutls/gnutls.h>
@@ -511,8 +512,27 @@ static NTSTATUS libnet_ChangePassword_generic(struct libnet_context *ctx, TALLOC
 	r2.samr.level		= LIBNET_CHANGE_PASSWORD_SAMR;
 	r2.samr.in.account_name	= r->generic.in.account_name;
 	r2.samr.in.domain_name	= r->generic.in.domain_name;
-	r2.samr.in.oldpassword	= r->generic.in.oldpassword;
-	r2.samr.in.newpassword	= r->generic.in.newpassword;
+	
+	/* Create secure copies of passwords to prevent heap inspection */
+	if (r->generic.in.oldpassword != NULL) {
+		r2.samr.in.oldpassword = talloc_strdup(mem_ctx, r->generic.in.oldpassword);
+		if (r2.samr.in.oldpassword == NULL) {
+			return NT_STATUS_NO_MEMORY;
+		}
+		talloc_keep_secret(discard_const_p(char, r2.samr.in.oldpassword));
+	} else {
+		r2.samr.in.oldpassword = NULL;
+	}
+	
+	if (r->generic.in.newpassword != NULL) {
+		r2.samr.in.newpassword = talloc_strdup(mem_ctx, r->generic.in.newpassword);
+		if (r2.samr.in.newpassword == NULL) {
+			return NT_STATUS_NO_MEMORY;
+		}
+		talloc_keep_secret(discard_const_p(char, r2.samr.in.newpassword));
+	} else {
+		r2.samr.in.newpassword = NULL;
+	}
 
 	status = libnet_ChangePassword(ctx, mem_ctx, &r2);
 
@@ -1076,7 +1096,19 @@ static NTSTATUS libnet_SetPassword_samr(struct libnet_context *ctx, TALLOC_CTX *
 	r2.samr_handle.level		= LIBNET_SET_PASSWORD_SAMR_HANDLE;
 	r2.samr_handle.samr_level	= r->samr.samr_level;
 	r2.samr_handle.in.account_name	= r->samr.in.account_name;
-	r2.samr_handle.in.newpassword	= r->samr.in.newpassword;
+	
+	/* Create secure copy of password to prevent heap inspection */
+	if (r->samr.in.newpassword != NULL) {
+		r2.samr_handle.in.newpassword = talloc_strdup(mem_ctx, r->samr.in.newpassword);
+		if (r2.samr_handle.in.newpassword == NULL) {
+			status = NT_STATUS_NO_MEMORY;
+			goto disconnect;
+		}
+		talloc_keep_secret(discard_const_p(char, r2.samr_handle.in.newpassword));
+	} else {
+		r2.samr_handle.in.newpassword = NULL;
+	}
+	
 	r2.samr_handle.in.user_handle   = &u_handle;
 	r2.samr_handle.in.dcerpc_pipe   = c.out.dcerpc_pipe;
 	r2.samr_handle.in.info21	= NULL;
@@ -1102,7 +1134,17 @@ static NTSTATUS libnet_SetPassword_generic(struct libnet_context *ctx, TALLOC_CT
 	r2.samr.samr_level	= r->generic.samr_level;
 	r2.samr.in.account_name	= r->generic.in.account_name;
 	r2.samr.in.domain_name	= r->generic.in.domain_name;
-	r2.samr.in.newpassword	= r->generic.in.newpassword;
+	
+	/* Create secure copy of password to prevent heap inspection */
+	if (r->generic.in.newpassword != NULL) {
+		r2.samr.in.newpassword = talloc_strdup(mem_ctx, r->generic.in.newpassword);
+		if (r2.samr.in.newpassword == NULL) {
+			return NT_STATUS_NO_MEMORY;
+		}
+		talloc_keep_secret(discard_const_p(char, r2.samr.in.newpassword));
+	} else {
+		r2.samr.in.newpassword = NULL;
+	}
 
 	r->generic.out.error_string = "Unknown Error";
 	status = libnet_SetPassword(ctx, mem_ctx, &r2);
