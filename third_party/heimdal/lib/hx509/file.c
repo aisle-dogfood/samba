@@ -261,6 +261,12 @@ hx509_pem_read(hx509_context context,
 		goto out;
 	    }
 
+	    /* Check for integer overflow before adding i to len */
+	    if (len > SIZE_MAX - i) {
+		free(p);
+		goto out;
+	    }
+
 	    data = erealloc(data, len + i);
 	    memcpy(((char *)data) + len, p, i);
 	    free(p);
