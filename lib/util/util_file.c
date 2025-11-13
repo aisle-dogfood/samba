@@ -463,6 +463,13 @@ char *file_ploadv(char * const argl[], size_t *size)
 	total = 0;
 
 	while ((n = sys_read(fd, buf, sizeof(buf))) > 0) {
+		/* Check for integer overflow before reallocation */
+		if (total + n + 1 < total || total + n + 1 < n) {
+			DBG_ERR("integer overflow detected in buffer size calculation!\n");
+			close(fd);
+			TALLOC_FREE(p);
+			return NULL;
+		}
 		p = talloc_realloc(NULL, p, char, total + n + 1);
 		if (p == NULL) {
 		        DBG_ERR("failed to expand buffer!\n");
