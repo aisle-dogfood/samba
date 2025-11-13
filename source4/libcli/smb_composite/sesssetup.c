@@ -376,8 +376,7 @@ static NTSTATUS session_setup_nt1(struct composite_context *c,
 							      NULL, &session_key);
 		NT_STATUS_NOT_OK_RETURN(nt_status);
 	} else if (session->options.plaintext_auth) {
-		const char *password = cli_credentials_get_password(io->in.credentials);
-		state->setup.nt1.in.password1 = data_blob_talloc(state, password, strlen(password));
+		state->setup.nt1.in.password1 = data_blob_talloc(state, cli_credentials_get_password(io->in.credentials), strlen(cli_credentials_get_password(io->in.credentials)));
 		state->setup.nt1.in.password2 = data_blob(NULL, 0);
 	} else {
 		/* could match windows client and return 'cannot logon from this workstation', but it just confuses everybody */
@@ -429,7 +428,7 @@ static NTSTATUS session_setup_old(struct composite_context *c,
 	NTSTATUS nt_status;
 	struct sesssetup_state *state = talloc_get_type(c->private_data,
 							struct sesssetup_state);
-	const char *password = cli_credentials_get_password(io->in.credentials);
+
 
 	/*
 	 * domain controllers tend to reject the NTLM v2 blob
@@ -478,7 +477,7 @@ static NTSTATUS session_setup_old(struct composite_context *c,
 			return nt_status;
 		}
 	} else if (session->options.plaintext_auth) {
-		state->setup.old.in.password = data_blob_talloc(state, password, strlen(password));
+		state->setup.old.in.password = data_blob_talloc(state, cli_credentials_get_password(io->in.credentials), strlen(cli_credentials_get_password(io->in.credentials)));
 	} else {
 		/* could match windows client and return 'cannot logon from this workstation', but it just confuses everybody */
 		return NT_STATUS_INVALID_PARAMETER;
