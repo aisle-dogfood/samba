@@ -284,6 +284,22 @@ static NTSTATUS construct_USER_INFO_X(uint32_t level,
 			return NT_STATUS_INVALID_INFO_CLASS;
 	}
 
+	/* Securely clear password data from source structures to prevent heap inspection */
+	switch (level) {
+		case 1:
+			if (u1 && u1->usri1_password) {
+				size_t password_len = strlen(u1->usri1_password);
+				BURN_PTR_SIZE((char *)u1->usri1_password, password_len);
+			}
+			break;
+		case 2:
+			if (u2 && u2->usri2_password) {
+				size_t password_len = strlen(u2->usri2_password);
+				BURN_PTR_SIZE((char *)u2->usri2_password, password_len);
+			}
+			break;
+	}
+
 	return NT_STATUS_OK;
 }
 
@@ -504,6 +520,12 @@ WERROR NetUserAdd_r(struct libnetapi_ctx *ctx,
 			       &result);
 
  done:
+	/* Securely clear password data from heap to prevent inspection */
+	if (uX.usriX_password != NULL) {
+		size_t password_len = strlen(uX.usriX_password);
+		BURN_PTR_SIZE((char *)uX.usriX_password, password_len);
+	}
+
 	if (is_valid_policy_hnd(&user_handle) && b) {
 		dcerpc_samr_Close(b, talloc_tos(), &user_handle, &result);
 	}
@@ -1973,6 +1995,12 @@ WERROR NetUserSetInfo_r(struct libnetapi_ctx *ctx,
 	werr = WERR_OK;
 
  done:
+	/* Securely clear password data from heap to prevent inspection */
+	if (uX.usriX_password != NULL) {
+		size_t password_len = strlen(uX.usriX_password);
+		BURN_PTR_SIZE((char *)uX.usriX_password, password_len);
+	}
+
 	if (is_valid_policy_hnd(&user_handle) && b) {
 		dcerpc_samr_Close(b, talloc_tos(), &user_handle, &result);
 	}

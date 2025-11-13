@@ -963,6 +963,12 @@ static int rpc_user_add(struct net_context *c, int argc, const char **argv)
 
 	status = NetUserAdd(c->opt_host, 1, (uint8_t *)&info1, &parm_error);
 
+	/* Securely clear password data from local structure to prevent heap inspection */
+	if (info1.usri1_password != NULL) {
+		size_t password_len = strlen(info1.usri1_password);
+		BURN_PTR_SIZE((char *)info1.usri1_password, password_len);
+	}
+
 	if (status != 0) {
 		d_fprintf(stderr,_("Failed to add user '%s' with error: %s.\n"),
 			argv[0], libnetapi_get_error_string(c->netapi_ctx,
