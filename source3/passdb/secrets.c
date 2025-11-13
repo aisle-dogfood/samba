@@ -369,7 +369,7 @@ bool secrets_store_ldap_pw(const char* dn, char* pw)
 		return False;
 	}
 
-	ret = secrets_store(key, pw, strlen(pw)+1);
+	ret = secrets_store(key, pw, strlen(pw));
 
 	SAFE_FREE(key);
 	return ret;
@@ -392,15 +392,28 @@ bool fetch_ldap_pw(char **dn, char** pw)
 		return false;
 	}
 
-	*pw=(char *)secrets_fetch(key, &size);
+	char *raw_data = (char *)secrets_fetch(key, &size);
 	SAFE_FREE(key);
 
-	if (*pw == NULL || size == 0 || (*pw)[size-1] != '\0') {
+	if (raw_data == NULL || size == 0) {
 		DBG_ERR("No valid password for %s\n", *dn);
-		BURN_FREE_STR(*pw);
+		BURN_FREE_STR(raw_data);
 		SAFE_FREE(*dn);
 		return false;
 	}
+
+	/* Allocate space for null terminator */
+	*pw = SMB_MALLOC_ARRAY(char, size + 1);
+	if (*pw == NULL) {
+		DBG_ERR("Memory allocation failed for password\n");
+		BURN_FREE_STR(raw_data);
+		SAFE_FREE(*dn);
+		return false;
+	}
+	
+	memcpy(*pw, raw_data, size);
+	(*pw)[size] = '\0';
+	BURN_FREE_STR(raw_data);
 
 	return true;
 }
@@ -552,7 +565,7 @@ bool secrets_store_generic(const char *owner, const char *key, const char *secre
 		return False;
 	}
 
-	ret = secrets_store(tdbkey, secret, strlen(secret)+1);
+	ret = secrets_store(tdbkey, secret, strlen(secret));
 
 	SAFE_FREE(tdbkey);
 	return ret;
@@ -566,6 +579,8 @@ char *secrets_fetch_generic(const char *owner, const char *key)
 {
 	char *secret = NULL;
 	char *tdbkey = NULL;
+	char *raw_data;
+	size_t size;
 
 	if (( ! owner) || ( ! key)) {
 		DEBUG(1, ("Invalid Parameters\n"));
@@ -577,8 +592,20 @@ char *secrets_fetch_generic(const char *owner, const char *key)
 		return NULL;
 	}
 
-	secret = (char *)secrets_fetch(tdbkey, NULL);
+	raw_data = (char *)secrets_fetch(tdbkey, &size);
 	SAFE_FREE(tdbkey);
+	
+	if (raw_data == NULL) {
+		return NULL;
+	}
+
+	/* Allocate space for null terminator */
+	secret = SMB_MALLOC_ARRAY(char, size + 1);
+	if (secret != NULL) {
+		memcpy(secret, raw_data, size);
+		secret[size] = '\0';
+	}
+	SAFE_FREE(raw_data);
 
 	return secret;
 }

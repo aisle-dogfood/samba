@@ -459,14 +459,14 @@ bool secrets_store_machine_pw_sync(const char *pass, const char *oldpass, const 
 		return true;
 	}
 
-	ret = secrets_store(machine_password_keystr(domain), pass, strlen(pass)+1);
+	ret = secrets_store(machine_password_keystr(domain), pass, strlen(pass));
 	if (!ret) {
 		TALLOC_FREE(frame);
 		return ret;
 	}
 
 	if (oldpass) {
-		ret = secrets_store(machine_prev_password_keystr(domain), oldpass, strlen(oldpass)+1);
+		ret = secrets_store(machine_prev_password_keystr(domain), oldpass, strlen(oldpass));
 	} else {
 		ret = secrets_delete(machine_prev_password_keystr(domain));
 	}
@@ -577,7 +577,7 @@ bool kerberos_secrets_store_des_salt( const char* salt )
 
 	DEBUG(3,("kerberos_secrets_store_des_salt: Storing salt \"%s\"\n", salt));
 
-	ret = secrets_store( key, salt, strlen(salt)+1 );
+	ret = secrets_store( key, salt, strlen(salt) );
 
 	TALLOC_FREE(key);
 
@@ -591,6 +591,8 @@ static
 char* kerberos_secrets_fetch_des_salt( void )
 {
 	char *salt, *key;
+	char *raw_data;
+	size_t size;
 
 	key = des_salt_key(lp_realm());
 	if (key == NULL) {
@@ -598,9 +600,20 @@ char* kerberos_secrets_fetch_des_salt( void )
 		return NULL;
 	}
 
-	salt = (char*)secrets_fetch( key, NULL );
-
+	raw_data = (char*)secrets_fetch( key, &size );
 	TALLOC_FREE(key);
+	
+	if (raw_data == NULL) {
+		return NULL;
+	}
+
+	/* Allocate space for null terminator */
+	salt = SMB_MALLOC_ARRAY(char, size + 1);
+	if (salt != NULL) {
+		memcpy(salt, raw_data, size);
+		salt[size] = '\0';
+	}
+	SAFE_FREE(raw_data);
 
 	return salt;
 }
@@ -631,7 +644,24 @@ char *kerberos_secrets_fetch_salt_princ(void)
 
 char *secrets_fetch_prev_machine_password(const char *domain)
 {
-	return (char *)secrets_fetch(machine_prev_password_keystr(domain), NULL);
+	char *ret;
+	char *raw_data;
+	size_t size;
+	
+	raw_data = (char *)secrets_fetch(machine_prev_password_keystr(domain), &size);
+	if (raw_data == NULL) {
+		return NULL;
+	}
+	
+	/* Allocate space for null terminator */
+	ret = SMB_MALLOC_ARRAY(char, size + 1);
+	if (ret != NULL) {
+		memcpy(ret, raw_data, size);
+		ret[size] = '\0';
+	}
+	SAFE_FREE(raw_data);
+	
+	return ret;
 }
 
 /************************************************************************
@@ -666,7 +696,21 @@ char *secrets_fetch_machine_password(const char *domain,
 				     enum netr_SchannelType *channel)
 {
 	char *ret;
-	ret = (char *)secrets_fetch(machine_password_keystr(domain), NULL);
+	char *raw_data;
+	size_t size;
+	
+	raw_data = (char *)secrets_fetch(machine_password_keystr(domain), &size);
+	if (raw_data == NULL) {
+		ret = NULL;
+	} else {
+		/* Allocate space for null terminator */
+		ret = SMB_MALLOC_ARRAY(char, size + 1);
+		if (ret != NULL) {
+			memcpy(ret, raw_data, size);
+			ret[size] = '\0';
+		}
+		SAFE_FREE(raw_data);
+	}
 
 	if (pass_last_set_time) {
 		*pass_last_set_time = secrets_fetch_pass_last_set_time(domain);
