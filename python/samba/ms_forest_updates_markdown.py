@@ -238,7 +238,13 @@ def read_ms_markdown(in_file, out_folder=None, out_dict=None):
 
     html = html.replace('CN=Schema,%ws', '${SCHEMA_DN}')
 
-    tree = ET.fromstring('<root>' + html + '</root>')
+    # Create a secure XML parser that disables external entity processing
+    # to prevent XXE (XML External Entity) attacks
+    secure_parser = ET.XMLParser()
+    secure_parser.parser.DefaultHandler = lambda data: None
+    secure_parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    
+    tree = ET.fromstring('<root>' + html + '</root>', parser=secure_parser)
 
     for node in tree:
         if not node.text:
