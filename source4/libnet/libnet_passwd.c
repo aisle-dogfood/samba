@@ -523,20 +523,34 @@ static NTSTATUS libnet_ChangePassword_generic(struct libnet_context *ctx, TALLOC
 
 NTSTATUS libnet_ChangePassword(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, union libnet_ChangePassword *r)
 {
+	NTSTATUS status;
+
 	switch (r->generic.level) {
 		case LIBNET_CHANGE_PASSWORD_GENERIC:
-			return libnet_ChangePassword_generic(ctx, mem_ctx, r);
+			status = libnet_ChangePassword_generic(ctx, mem_ctx, r);
+			break;
 		case LIBNET_CHANGE_PASSWORD_SAMR:
-			return libnet_ChangePassword_samr(ctx, mem_ctx, r);
+			status = libnet_ChangePassword_samr(ctx, mem_ctx, r);
+			break;
 		case LIBNET_CHANGE_PASSWORD_KRB5:
-			return NT_STATUS_NOT_IMPLEMENTED;
+			status = NT_STATUS_NOT_IMPLEMENTED;
+			break;
 		case LIBNET_CHANGE_PASSWORD_LDAP:
-			return NT_STATUS_NOT_IMPLEMENTED;
+			status = NT_STATUS_NOT_IMPLEMENTED;
+			break;
 		case LIBNET_CHANGE_PASSWORD_RAP:
-			return NT_STATUS_NOT_IMPLEMENTED;
+			status = NT_STATUS_NOT_IMPLEMENTED;
+			break;
+		default:
+			status = NT_STATUS_INVALID_LEVEL;
+			break;
 	}
 
-	return NT_STATUS_INVALID_LEVEL;
+	/* Clear sensitive password data from memory to prevent heap inspection */
+	BURN_STR((char *)r->generic.in.oldpassword);
+	BURN_STR((char *)r->generic.in.newpassword);
+
+	return status;
 }
 
 static NTSTATUS libnet_SetPassword_samr_handle_26(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, union libnet_SetPassword *r)
@@ -1168,6 +1182,10 @@ NTSTATUS libnet_SetPassword(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, uni
 			status = NT_STATUS_NOT_IMPLEMENTED;
 			break;
 	}
+
+	/* Clear sensitive password data from memory to prevent heap inspection */
+	BURN_STR((char *)r->generic.in.newpassword);
+	BURN_STR((char *)r->samr_handle.in.newpassword);
 
 	GNUTLS_FIPS140_SET_STRICT_MODE();
 	return status;
