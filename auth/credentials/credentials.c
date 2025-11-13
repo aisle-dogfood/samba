@@ -46,6 +46,47 @@ static bool str_is_ascii(const char *s) {
 }
 
 /**
+ * Validate a file path to prevent directory traversal attacks
+ * and access to sensitive system files
+ *
+ * @param path The file path to validate
+ * @return true if the path is safe, false otherwise
+ */
+static bool is_safe_path(const char *path) {
+	if (path == NULL || path[0] == '\0') {
+		return false;
+	}
+
+	/* Reject absolute paths to prevent access to system files */
+	if (path[0] == '/') {
+		return false;
+	}
+
+	/* Check for directory traversal patterns */
+	if (strstr(path, "../") != NULL || 
+	    strstr(path, "..\\") != NULL ||
+	    strcmp(path, "..") == 0) {
+		return false;
+	}
+
+	/* Reject paths containing null bytes */
+	if (strlen(path) != strcspn(path, "\0")) {
+		return false;
+	}
+
+	/* Reject paths to sensitive system files */
+	if (strstr(path, "/etc/") != NULL ||
+	    strstr(path, "/proc/") != NULL ||
+	    strstr(path, "/sys/") != NULL ||
+	    strstr(path, "/dev/") != NULL ||
+	    strstr(path, "/root/") != NULL) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * Create a new credentials structure
  * @param mem_ctx TALLOC_CTX parent for credentials structure
  */
@@ -1496,7 +1537,7 @@ _PUBLIC_ bool cli_credentials_guess(struct cli_credentials *cred,
 	if (env != NULL) {
 		size_t len = strlen(env);
 
-		if (len > 0 && len <= 4096) {
+		if (len > 0 && len <= 4096 && is_safe_path(env)) {
 			(void)cli_credentials_parse_password_file(cred,
 								  env,
 								  CRED_GUESS_FILE);
