@@ -30,6 +30,106 @@
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
 
+/*********************************************************************
+ Secure memory structure for password hashes
+ ********************************************************************/
+struct secure_data_blob {
+	uint8_t *data;
+	size_t length;
+	bool is_locked;
+};
+
+/*********************************************************************
+ Destructor for secure data blob - clears and unlocks memory
+ ********************************************************************/
+static int secure_data_blob_destructor(struct secure_data_blob *sdb)
+{
+	if (sdb->data && sdb->length > 0) {
+		/* Clear the memory */
+		memset(sdb->data, 0, sdb->length);
+		
+#if defined(HAVE_MUNLOCK)
+		/* Unlock the memory if it was locked */
+		if (sdb->is_locked) {
+			if (munlock(sdb->data, sdb->length) == -1) {
+				DEBUG(0, ("secure_data_blob_destructor: failed to munlock memory: %s (%d)\n",
+					strerror(errno), errno));
+			}
+		}
+#endif
+		/* Free the memory */
+		SAFE_FREE(sdb->data);
+	}
+	return 0;
+}
+
+/*********************************************************************
+ Create a secure data blob with mlock protection
+ ********************************************************************/
+static DATA_BLOB data_blob_talloc_secure(TALLOC_CTX *mem_ctx, const void *p, size_t length)
+{
+	DATA_BLOB ret = data_blob_null;
+	struct secure_data_blob *sdb = NULL;
+	
+	if (length == 0) {
+		return ret;
+	}
+
+#if !defined(HAVE_MLOCK)
+	/* Fall back to regular allocation if mlock is not available */
+	return data_blob_talloc(mem_ctx, p, length);
+#else
+	/* Create a secure data blob structure */
+	sdb = talloc_zero(mem_ctx, struct secure_data_blob);
+	if (!sdb) {
+		return ret;
+	}
+	
+	/* Set destructor to clean up securely */
+	talloc_set_destructor(sdb, secure_data_blob_destructor);
+	
+	/* Allocate aligned memory for mlock */
+#if defined(LINUX)
+	sdb->data = SMB_MALLOC_ARRAY(uint8_t, length);
+#else
+	/* On non-linux platforms, mlock()'d memory must be aligned */
+	sdb->data = SMB_MEMALIGN_ARRAY(uint8_t, getpagesize(), length);
+#endif
+	
+	if (!sdb->data) {
+		talloc_free(sdb);
+		return ret;
+	}
+	
+	sdb->length = length;
+	sdb->is_locked = false;
+	
+	/* Clear the memory */
+	memset(sdb->data, 0, length);
+	
+	/* Lock the memory to prevent swapping */
+	if (mlock(sdb->data, length) == 0) {
+		sdb->is_locked = true;
+		DEBUG(10, ("data_blob_talloc_secure: mlocked %zu bytes at %p\n", length, sdb->data));
+	} else {
+		DEBUG(0, ("data_blob_talloc_secure: failed to mlock memory: %s (%d)\n",
+			strerror(errno), errno));
+		/* Continue without mlock protection rather than failing */
+	}
+	
+	/* Copy the data if provided */
+	if (p) {
+		memcpy(sdb->data, p, length);
+	}
+	
+	/* Set up the return blob */
+	ret.data = sdb->data;
+	ret.length = length;
+	
+	return ret;
+#endif
+}
+
 /**
  * @todo Redefine this to NULL, but this changes the API because
  *       much of samba assumes that the pdb_get...() functions
@@ -839,7 +939,7 @@ bool pdb_set_nt_passwd(struct samu *sampass, const uint8_t pwd[NT_HASH_LEN], enu
 
        if (pwd) {
                sampass->nt_pw =
-		       data_blob_talloc(sampass, pwd, NT_HASH_LEN);
+		       data_blob_talloc_secure(sampass, pwd, NT_HASH_LEN);
        } else {
                sampass->nt_pw = data_blob_null;
        }
@@ -858,7 +958,7 @@ bool pdb_set_lanman_passwd(struct samu *sampass, const uint8_t pwd[LM_HASH_LEN],
 	/* on keep the password if we are allowing LANMAN authentication */
 
 	if (pwd && (flag != PDB_CHANGED || lp_lanman_auth())) {
-		sampass->lm_pw = data_blob_talloc(sampass, pwd, LM_HASH_LEN);
+		sampass->lm_pw = data_blob_talloc_secure(sampass, pwd, LM_HASH_LEN);
 	} else {
 		sampass->lm_pw = data_blob_null;
 	}
