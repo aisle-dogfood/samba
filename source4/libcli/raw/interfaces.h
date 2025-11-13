@@ -279,8 +279,8 @@ union smb_tcon {
 			uint16_t options;
 			uint32_t max_access;
 			uint32_t guest_max_access;
-			char *dev_type;
-			char *fs_type;
+			const char *dev_type;
+			const char *fs_type;
 			uint16_t tid;
 		} out;
 	} tconx;
@@ -1195,8 +1195,8 @@ union smb_fsinfo {
 			uint64_t quota_hard;
 			uint64_t quota_flags;
 			struct GUID guid;
-			char *volume_name;
-			char *fs_type;
+			const char *volume_name;
+			const char *fs_type;
 		} out;
 	} generic;
 
