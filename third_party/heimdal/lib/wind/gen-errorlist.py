@@ -37,17 +37,38 @@
 import re
 import string
 import sys
+import os
 
 import generate
 import rfc3454
 import rfc4518
 import stringprep
 
+def validate_path(path, is_output_dir=False):
+    """Validate path to prevent path traversal attacks"""
+    # Normalize the path
+    normalized_path = os.path.normpath(path)
+    
+    # Check for path traversal sequences
+    if '..' in normalized_path.split(os.sep):
+        raise ValueError("Path traversal detected in path: %s" % path)
+    
+    # For output directories, ensure they don't start with /
+    if is_output_dir and os.path.isabs(normalized_path):
+        raise ValueError("Absolute paths not allowed for output directory: %s" % path)
+    
+    return normalized_path
+
 if len(sys.argv) != 3:
     print("usage: %s rfc3454.txt out-dir" % sys.argv[0])
     sys.exit(1)
 
-tables = rfc3454.read(sys.argv[1])
+# Validate input file path
+input_file = validate_path(sys.argv[1])
+# Validate output directory path  
+output_dir = validate_path(sys.argv[2], is_output_dir=True)
+
+tables = rfc3454.read(input_file)
 t2 = rfc4518.read()
 
 for x in t2.keys():
@@ -55,9 +76,9 @@ for x in t2.keys():
 
 error_list = stringprep.get_errorlist()
 
-errorlist_h = generate.Header('%s/errorlist_table.h' % sys.argv[2])
+errorlist_h = generate.Header('%s/errorlist_table.h' % output_dir)
 
-errorlist_c = generate.Implementation('%s/errorlist_table.c' % sys.argv[2])
+errorlist_c = generate.Implementation('%s/errorlist_table.c' % output_dir)
 
 errorlist_h.file.write(
 '''

@@ -36,10 +36,16 @@
 
 import re
 import string
+import os
 
 def read(filename):
     """return a dict of tables from rfc3454"""
-    f = open(filename, 'r')
+    # Validate filename to prevent path traversal
+    normalized_filename = os.path.normpath(filename)
+    if '..' in normalized_filename.split(os.sep):
+        raise ValueError("Path traversal detected in filename: %s" % filename)
+    
+    f = open(normalized_filename, 'r')
     inTable = False
     ret = {}
     while True:

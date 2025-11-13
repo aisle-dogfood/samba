@@ -43,8 +43,13 @@ class GeneratedFile :
     "Represents a generated file"
     def __init__(self, name) :
         "Create a new GeneratedFile with name"
-        self.name  = os.path.basename(name)
-        self.file  = open(name, 'w')
+        # Validate filename to prevent path traversal
+        normalized_name = os.path.normpath(name)
+        if '..' in normalized_name.split(os.sep):
+            raise ValueError("Path traversal detected in filename: %s" % name)
+        
+        self.name  = os.path.basename(normalized_name)
+        self.file  = open(normalized_name, 'w')
         self.file.write('/* ' + name + ' */\n')
         self.file.write('/* Automatically generated at ' +
                         datetime.datetime.now().isoformat() +

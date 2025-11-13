@@ -36,10 +36,16 @@
 
 import re
 import string
+import os
 
 def read(filename):
     """return a dict of unicode characters"""
-    ud = open(filename, 'r')
+    # Validate filename to prevent path traversal
+    normalized_filename = os.path.normpath(filename)
+    if '..' in normalized_filename.split(os.sep):
+        raise ValueError("Path traversal detected in filename: %s" % filename)
+    
+    ud = open(normalized_filename, 'r')
     ret = {}
     while True:
         l = ud.readline()
