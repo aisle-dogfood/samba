@@ -150,6 +150,15 @@ class pyrcc(Task.Task):
 			return ([], [])
 
 		parser = make_parser()
+		# Configure parser to prevent XXE attacks
+		try:
+			parser.setFeature("http://xml.org/sax/features/external-general-entities", False)
+			parser.setFeature("http://xml.org/sax/features/external-parameter-entities", False)
+			parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", True)
+		except Exception:
+			# Some XML parsers may not support all security features
+			# Log a warning but continue processing
+			Logs.warn('XML parser does not support all security features, XXE vulnerabilities may exist')
 		curHandler = XMLHandler()
 		parser.setContentHandler(curHandler)
 		fi = open(self.inputs[0].abspath(), 'r')
