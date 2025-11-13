@@ -1624,6 +1624,7 @@ static char *wbinfo_prompt_pass(TALLOC_CTX *mem_ctx,
 {
 	char *prompt;
 	char buf[1024] = {0};
+	char *result = NULL;
 	int rc;
 
 	prompt = talloc_asprintf(mem_ctx, "Enter %s's ", username);
@@ -1644,10 +1645,13 @@ static char *wbinfo_prompt_pass(TALLOC_CTX *mem_ctx,
 	rc = samba_getpass(prompt, buf, sizeof(buf), false, false);
 	TALLOC_FREE(prompt);
 	if (rc < 0) {
+		ZERO_ARRAY(buf);
 		return NULL;
 	}
 
-	return talloc_strdup(mem_ctx, buf);
+	result = talloc_strdup(mem_ctx, buf);
+	ZERO_ARRAY(buf);
+	return result;
 }
 
 /* Authenticate a user with a plaintext password */
