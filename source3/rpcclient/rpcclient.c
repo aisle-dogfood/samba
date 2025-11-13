@@ -1282,8 +1282,9 @@ out_free:
 	 * from stdin if necessary
 	 */
 
-	if ((server[0] == '/' && server[1] == '/') ||
-			(server[0] == '\\' && server[1] ==  '\\')) {
+	if (strlen(server) >= 2 &&
+	    ((server[0] == '/' && server[1] == '/') ||
+	     (server[0] == '\\' && server[1] ==  '\\'))) {
 		server += 2;
 	}
 
