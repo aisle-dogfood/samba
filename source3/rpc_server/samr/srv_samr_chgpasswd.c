@@ -1377,13 +1377,21 @@ NTSTATUS samr_set_password_aes(TALLOC_CTX *mem_ctx,
 {
 	DATA_BLOB pw_data = data_blob_null;
 	DATA_BLOB new_password = data_blob_null;
-	const DATA_BLOB ciphertext =
-		data_blob_const(pwbuf->cipher, pwbuf->cipher_len);
+	const DATA_BLOB ciphertext;
 	DATA_BLOB iv = data_blob_const(pwbuf->salt, sizeof(pwbuf->salt));
 	NTSTATUS status;
 	bool ok;
 
 	*new_password_str = NULL;
+
+	/* Validate cipher_len to prevent heap inspection attacks */
+	if (pwbuf->cipher_len == 0 || pwbuf->cipher_len > 1024) {
+		DBG_WARNING("samr: Invalid cipher_len %u in AES password buffer\n",
+			    pwbuf->cipher_len);
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	ciphertext = data_blob_const(pwbuf->cipher, pwbuf->cipher_len);
 
 	status = samba_gnutls_aead_aes_256_cbc_hmac_sha512_decrypt(
 		mem_ctx,
