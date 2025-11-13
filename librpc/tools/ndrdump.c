@@ -140,6 +140,12 @@ static char *stdin_load(TALLOC_CTX *mem_ctx, size_t *size)
 
 	while((num_read = read(STDIN_FILENO, buf, 255)) > 0) {
 
+		/* Check for integer overflow before adding num_read to total_len */
+		if (total_len > INT_MAX - num_read) {
+			talloc_free(result);
+			return NULL;
+		}
+
 		if (result) {
 			result = talloc_realloc(
 				mem_ctx, result, char, total_len + num_read);
