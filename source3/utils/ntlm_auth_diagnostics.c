@@ -21,6 +21,19 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/*
+ * SECURITY WARNING: This diagnostic tool tests legacy NTLM authentication
+ * methods that use cryptographically weak algorithms including MD4 and DES.
+ * These algorithms are deprecated and vulnerable to various attacks.
+ * 
+ * This code is intended for diagnostic and compatibility testing purposes only.
+ * Production environments should use stronger authentication methods such as
+ * NTLMv2, Kerberos, or other modern authentication protocols.
+ * 
+ * The weak cryptographic functions used here (E_md4hash, E_deshash) should
+ * not be used in new code or production systems.
+ */
+
 #include "includes.h"
 #include "utils/ntlm_auth.h"
 #include "../libcli/auth/libcli_auth.h"
@@ -69,6 +82,9 @@ static bool test_lm_ntlm_broken(enum ntlm_break break_which,
 	flags |= WBFLAG_PAM_LMKEY;
 	flags |= WBFLAG_PAM_USER_SESSION_KEY;
 
+	/* WARNING: Using weak cryptographic algorithms for NTLM compatibility testing.
+	 * MD4 and DES are cryptographically broken and should not be used in production.
+	 * This code is for diagnostic purposes only to test legacy NTLM authentication. */
 	SMBencrypt(opt_password,chall.data,lm_response.data);
 	E_deshash(opt_password, lm_hash);
 
@@ -207,6 +223,9 @@ static bool test_ntlm_in_lm(bool lanman_support_expected)
 	flags |= WBFLAG_PAM_LMKEY;
 	flags |= WBFLAG_PAM_USER_SESSION_KEY;
 
+	/* WARNING: Using weak cryptographic algorithms for NTLM compatibility testing.
+	 * MD4 and DES are cryptographically broken and should not be used in production.
+	 * This code is for diagnostic purposes only to test legacy NTLM authentication. */
 	SMBNTencrypt(opt_password,chall.data,nt_response.data);
 
 	E_deshash(opt_password, lm_hash);
@@ -300,6 +319,9 @@ static bool test_ntlm_in_both(bool lanman_support_expected)
 	flags |= WBFLAG_PAM_LMKEY;
 	flags |= WBFLAG_PAM_USER_SESSION_KEY;
 
+	/* WARNING: Using weak cryptographic algorithms for NTLM compatibility testing.
+	 * MD4 and DES are cryptographically broken and should not be used in production.
+	 * This code is for diagnostic purposes only to test legacy NTLM authentication. */
 	SMBNTencrypt(opt_password,chall.data,nt_response.data);
 	E_md4hash(opt_password, nt_hash);
 	SMBsesskeygen_ntv1(nt_hash, session_key.data);
@@ -720,6 +742,14 @@ bool diagnose_ntlm_auth(bool lanman_support_expected)
 {
 	unsigned int i;
 	bool pass = True;
+
+	/* WARNING: This diagnostic tool tests legacy NTLM authentication methods
+	 * that use cryptographically weak algorithms (MD4, DES). These algorithms
+	 * are deprecated and should not be used in production environments.
+	 * Consider using NTLMv2 or stronger authentication methods. */
+	DBG_WARNING("NTLM diagnostic tests use weak cryptographic algorithms "
+		    "(MD4, DES) for compatibility testing. These should not be "
+		    "used in production environments.\n");
 
 	for (i=0; test_table[i].fn; i++) {
 		bool test_pass = test_table[i].fn(lanman_support_expected);
