@@ -41,6 +41,31 @@ static void cups_smb_debug(enum cups_smb_dbglvl_e lvl, const char *format, ...)
 #define CUPS_SMB_DEBUG(...) cups_smb_debug(CUPS_SMB_LOG_DEBUG, __VA_ARGS__)
 #define CUPS_SMB_ERROR(...) cups_smb_debug(CUPS_SMB_LOG_DEBUG, __VA_ARGS__)
 
+/*
+ * Validate environment variable value to prevent injection attacks.
+ * Returns true if the value is safe to use, false otherwise.
+ */
+static bool validate_env_value(const char *value)
+{
+	if (value == NULL) {
+		return false;
+	}
+
+	/* Check for null bytes and other dangerous characters */
+	for (const char *p = value; *p != '\0'; p++) {
+		/* Reject null bytes which could be used for injection */
+		if (*p == '\0') {
+			return false;
+		}
+		/* Reject control characters except tab */
+		if ((*p < 0x20 && *p != '\t') || *p == 0x7F) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static void cups_smb_debug(enum cups_smb_dbglvl_e lvl, const char *format, ...)
 {
 	const char *prefix = "DEBUG";
@@ -322,10 +347,18 @@ create_env:
 	CUPS_SMB_DEBUG("Setting KRB5CCNAME to '%s'", gen_cc);
 	setenv("KRB5CCNAME", gen_cc, 1);
 	if (device_uri[0] != '\0') {
-		setenv("DEVICE_URI", device_uri, 1);
+		if (validate_env_value(device_uri)) {
+			setenv("DEVICE_URI", device_uri, 1);
+		} else {
+			CUPS_SMB_ERROR("Invalid DEVICE_URI value detected, skipping");
+		}
 	}
 	if (auth_info_required[0] != '\0') {
-		setenv("AUTH_INFO_REQUIRED", auth_info_required, 1);
+		if (validate_env_value(auth_info_required)) {
+			setenv("AUTH_INFO_REQUIRED", auth_info_required, 1);
+		} else {
+			CUPS_SMB_ERROR("Invalid AUTH_INFO_REQUIRED value detected, skipping");
+		}
 	}
 
 smbspool:
