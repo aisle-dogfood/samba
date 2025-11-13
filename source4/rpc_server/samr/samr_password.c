@@ -595,6 +595,15 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
+	/*
+	 * Disallow RC4 encryption when weak crypto is disabled.
+	 * RC4 is cryptographically broken and should not be used.
+	 */
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(3,("samr: RC4 encryption disallowed due to weak crypto policy\n"));
+		return NT_STATUS_DOWNGRADE_DETECTED;
+	}
+
 	nt_status = dcesrv_transport_session_key(dce_call, &session_key);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		DBG_NOTICE("samr: failed to get session key: %s\n",
@@ -686,6 +695,15 @@ NTSTATUS samr_set_password_ex(struct dcesrv_call_state *dce_call,
 	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED &&
 	    !encrypted) {
 		return NT_STATUS_ACCESS_DENIED;
+	}
+
+	/*
+	 * Disallow RC4 encryption when weak crypto is disabled.
+	 * RC4 is cryptographically broken and should not be used.
+	 */
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(3,("samr: RC4 encryption disallowed due to weak crypto policy\n"));
+		return NT_STATUS_DOWNGRADE_DETECTED;
 	}
 
 	GNUTLS_FIPS140_SET_LAX_MODE();
