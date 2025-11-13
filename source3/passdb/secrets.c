@@ -115,19 +115,16 @@ void *secrets_fetch(const char *key, size_t *size)
 		return NULL;
 	}
 
-	result = smb_memdup(dbuf.dptr, dbuf.dsize);
+	result = talloc_memdup(talloc_tos(), dbuf.dptr, dbuf.dsize);
 	if (result == NULL) {
 		return NULL;
 	}
 	/*
 	 * secrets_fetch() is a generic code and may be used for sensitive data,
-	 * so clear the local dbuf.dptr memory via BURN_PTR_SIZE().
-	 * The future plan is to convert secrets_fetch() to talloc.
-	 * That would improve performance via:
-	 * - avoid smb_memdup() above, instead directly return dbuf.dptr
-	 * - BURN_PTR_SIZE() will be done not here but in the caller and only
-	 *   if the caller asks for sensitive data.
+	 * so mark the returned memory as secret to ensure it's securely cleared
+	 * when freed, and clear the local dbuf.dptr memory via BURN_PTR_SIZE().
 	 */
+	talloc_keep_secret(result);
 	BURN_PTR_SIZE(dbuf.dptr, dbuf.dsize);
 	TALLOC_FREE(dbuf.dptr);
 
@@ -397,7 +394,7 @@ bool fetch_ldap_pw(char **dn, char** pw)
 
 	if (*pw == NULL || size == 0 || (*pw)[size-1] != '\0') {
 		DBG_ERR("No valid password for %s\n", *dn);
-		BURN_FREE_STR(*pw);
+		TALLOC_FREE(*pw);
 		SAFE_FREE(*dn);
 		return false;
 	}
@@ -524,7 +521,7 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		}
 
 		if (!*password || !**password) {
-			BURN_FREE_STR(*password);
+			TALLOC_FREE(*password);
 			*password = smb_xstrdup("");
 		}
 
@@ -535,7 +532,7 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		DEBUG(3, ("IPC$ connections done anonymously\n"));
 		SAFE_FREE(*username);
 		SAFE_FREE(*domain);
-		BURN_FREE_STR(*password);
+		TALLOC_FREE(*password);
 		*username = smb_xstrdup("");
 		*domain = smb_xstrdup("");
 		*password = smb_xstrdup("");
