@@ -50,11 +50,18 @@ int strv_add(TALLOC_CTX *mem_ctx, char **strv, const char *string)
 
 int strv_addn(TALLOC_CTX *mem_ctx, char **strv, const char *string, size_t n)
 {
-        char t[n+1];
+        char *t;
+
+        t = talloc_array(mem_ctx, char, n+1);
+        if (t == NULL) {
+                return ENOMEM;
+        }
 
         memcpy(t, string, n);
         t[n] = '\0';
-        return _strv_append(mem_ctx, strv, t, n+1);
+        int ret = _strv_append(mem_ctx, strv, t, n+1);
+        talloc_free(t);
+        return ret;
 }
 
 int strv_append(TALLOC_CTX *mem_ctx, char **strv, const char *src)
