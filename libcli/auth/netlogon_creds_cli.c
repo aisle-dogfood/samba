@@ -3619,6 +3619,9 @@ struct tevent_req *netlogon_creds_cli_ServerGetTrustInfo_send(TALLOC_CTX *mem_ct
 	state->context = context;
 	state->binding_handle = b;
 
+	ZERO_STRUCT(state->new_owf_password);
+	ZERO_STRUCT(state->old_owf_password);
+
 	state->srv_name_slash = talloc_asprintf(state, "\\\\%s",
 						context->server.computer);
 	if (tevent_req_nomem(state->srv_name_slash, req)) {
