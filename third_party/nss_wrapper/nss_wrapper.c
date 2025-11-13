@@ -6417,6 +6417,11 @@ static int nwrap_gethostname(char *name, size_t len)
 {
 	const char *hostname = getenv("NSS_WRAPPER_HOSTNAME");
 
+	if (hostname == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	if (strlen(hostname) >= len) {
 		errno = ENAMETOOLONG;
 		return -1;
