@@ -376,9 +376,28 @@ _PUBLIC_ int tdb_check(struct tdb_context *tdb,
 	}
 
 	/* One big malloc: pointers then bit arrays. */
-	hashes = (unsigned char **)calloc(
-			1, sizeof(hashes[0]) * (1+tdb->hash_size)
-			+ BITMAP_BITS / CHAR_BIT * (1+tdb->hash_size));
+	/* Check for potential integer overflow in allocation size calculation */
+	/* Each hash entry needs sizeof(hashes[0]) + BITMAP_BITS/CHAR_BIT bytes */
+	/* Limit hash_size to prevent overflow: use conservative limit */
+	if (tdb->hash_size > 0x1000000) { /* 16M entries max */
+		tdb->ecode = TDB_ERR_OOM;
+		TDB_LOG((tdb, TDB_DEBUG_ERROR, "Hash size too large for allocation\n"));
+		goto unlock;
+	}
+	
+	/* Calculate allocation size with overflow protection */
+	unsigned long ptr_size = sizeof(hashes[0]) * (1+tdb->hash_size);
+	unsigned long bitmap_size = (BITMAP_BITS / CHAR_BIT) * (1+tdb->hash_size);
+	unsigned long total_size = ptr_size + bitmap_size;
+	
+	/* Additional overflow check */
+	if (total_size < ptr_size || total_size < bitmap_size) {
+		tdb->ecode = TDB_ERR_OOM;
+		TDB_LOG((tdb, TDB_DEBUG_ERROR, "Hash size causes allocation overflow\n"));
+		goto unlock;
+	}
+	
+	hashes = (unsigned char **)calloc(1, total_size);
 	if (!hashes) {
 		tdb->ecode = TDB_ERR_OOM;
 		goto unlock;
