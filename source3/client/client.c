@@ -6176,10 +6176,7 @@ static int process_stdin(void)
 
 		/* special case - first char is ! */
 		if (*line == '!') {
-			if (system(line + 1) == -1) {
-				d_printf("system() command %s failed.\n",
-					line+1);
-			}
+			d_printf("Shell escape commands are disabled for security reasons.\n");
 			SAFE_FREE(line);
 			TALLOC_FREE(frame);
 			continue;
