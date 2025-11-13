@@ -1444,11 +1444,15 @@ static struct functable net_func[] = {
  	argv_new = (const char **)poptGetArgs(pc);
 
 	argc_new = argc;
-	for (i=0; i<argc; i++) {
-		if (argv_new[i] == NULL) {
-			argc_new = i;
-			break;
+	if (argv_new != NULL) {
+		for (i=0; i<argc; i++) {
+			if (argv_new[i] == NULL) {
+				argc_new = i;
+				break;
+			}
 		}
+	} else {
+		argc_new = 0;
 	}
 
 	if (c->do_talloc_report) {
@@ -1471,7 +1475,11 @@ static struct functable net_func[] = {
 
 	samba_cmdline_burn(argc, argv);
 
-	rc = net_run_function(c, argc_new-1, argv_new+1, "net", net_func);
+	if (argv_new != NULL && argc_new > 0) {
+		rc = net_run_function(c, argc_new-1, argv_new+1, "net", net_func);
+	} else {
+		rc = net_run_function(c, -1, NULL, "net", net_func);
+	}
 
 	DEBUG(2,("return code = %d\n", rc));
 
