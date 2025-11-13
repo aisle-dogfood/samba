@@ -69,8 +69,7 @@ static bool eventd_context_init(TALLOC_CTX *mem_ctx,
 				struct eventd_context **out)
 {
 	struct eventd_context *ectx;
-	const char *eventd = CTDB_HELPER_BINDIR "/ctdb-eventd";
-	const char *value;
+	static char eventd_path[PATH_MAX+1] = "";
 	int ret;
 
 	ectx = talloc_zero(mem_ctx, struct eventd_context);
@@ -80,12 +79,17 @@ static bool eventd_context_init(TALLOC_CTX *mem_ctx,
 
 	ectx->ev = ctdb->ev;
 
-	value = getenv("CTDB_EVENTD");
-	if (value != NULL) {
-		eventd = value;
+	if (!ctdb_set_helper("event daemon",
+			     eventd_path, sizeof(eventd_path),
+			     "CTDB_EVENTD",
+			     CTDB_HELPER_BINDIR, "ctdb-eventd")) {
+		DEBUG(DEBUG_ERR,
+		      ("Unable to set event daemon helper\n"));
+		talloc_free(ectx);
+		return false;
 	}
 
-	ectx->path = talloc_strdup(ectx, eventd);
+	ectx->path = talloc_strdup(ectx, eventd_path);
 	if (ectx->path == NULL) {
 		talloc_free(ectx);
 		return false;
