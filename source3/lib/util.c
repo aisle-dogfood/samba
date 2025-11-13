@@ -642,7 +642,7 @@ char *gidtoname(gid_t gid)
 
 uid_t nametouid(const char *name)
 {
-	struct passwd *pass;
+	struct passwd *pass = NULL;
 	char *p;
 	uid_t u;
 
@@ -666,7 +666,7 @@ uid_t nametouid(const char *name)
 
 gid_t nametogid(const char *name)
 {
-	struct group *grp;
+	struct group *grp = NULL;
 	char *p;
 	gid_t g;
 
