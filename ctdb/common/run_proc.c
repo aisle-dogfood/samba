@@ -191,6 +191,12 @@ static void proc_read_handler(struct tevent_context *ev,
 	if (nread == -1) {
 		goto fail;
 	}
+	
+	/* Check for integer overflow before accessing array */
+	if (nread < 0 || offset > SIZE_MAX - (size_t)nread) {
+		goto fail;
+	}
+	
 	proc->output[offset+nread] = '\0';
 	return;
 
