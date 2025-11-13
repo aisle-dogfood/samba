@@ -33,6 +33,7 @@
 #include "librpc/gen_ndr/ndr_samr_c.h"
 #include "param/param.h"
 #include "param/provision.h"
+#include "lib/util/talloc_keep_secret.h"
 #include "system/kerberos.h"
 #include "auth/kerberos/kerberos.h"
 
@@ -859,6 +860,7 @@ NTSTATUS libnet_JoinDomain(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, stru
 		talloc_free(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
+	talloc_keep_secret(password_str);
 
 	/* set full_name and reset flags */
 	ZERO_STRUCT(u_info21);
@@ -898,6 +900,7 @@ NTSTATUS libnet_JoinDomain(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, stru
 	/* Finish out by pushing various bits of status data out for the caller to use */
 	r->out.join_password = password_str;
 	talloc_steal(mem_ctx, r->out.join_password);
+	talloc_keep_secret(r->out.join_password);
 
 	r->out.domain_sid = connect_with_info->out.domain_sid;
 	talloc_steal(mem_ctx, r->out.domain_sid);
@@ -1021,6 +1024,7 @@ NTSTATUS libnet_Join_member(struct libnet_context *ctx,
 
 	/* move all out parameter to the callers TALLOC_CTX */
 	r->out.join_password	= talloc_move(mem_ctx, &r2->out.join_password);
+	talloc_keep_secret(r->out.join_password);
 	r->out.domain_sid	= talloc_move(mem_ctx, &r2->out.domain_sid);
 	r->out.domain_name      = talloc_move(mem_ctx, &r2->out.domain_name);
 	status = NT_STATUS_OK;
