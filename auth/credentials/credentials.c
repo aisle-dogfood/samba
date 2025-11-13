@@ -1786,8 +1786,17 @@ _PUBLIC_ bool cli_credentials_parse_file(struct cli_credentials *cred, const cha
 
 _PUBLIC_ bool cli_credentials_parse_password_file(struct cli_credentials *credentials, const char *file, enum credentials_obtained obtained)
 {
-	int fd = open(file, O_RDONLY, 0);
+	int fd;
 	bool ret;
+
+	/* Security check: prevent path traversal attacks */
+	if (file == NULL || strstr(file, "../") != NULL || file[0] == '/') {
+		fprintf(stderr, "Invalid password file path: %s\n", 
+				file ? file : "(null)");
+		return false;
+	}
+
+	fd = open(file, O_RDONLY, 0);
 
 	if (fd < 0) {
 		fprintf(stderr, "Error opening password file %s: %s\n",
