@@ -2244,8 +2244,9 @@ static bool pdb_samba_dsdb_get_trusteddom_pw(struct pdb_methods *m,
 		return false;
 	}
 
-	password_utf16 = data_blob_const(auth_array->array[i].AuthInfo.clear.password,
-					 auth_array->array[i].AuthInfo.clear.size);
+	password_utf16 = data_blob_talloc(tmp_ctx,
+					  auth_array->array[i].AuthInfo.clear.password,
+					  auth_array->array[i].AuthInfo.clear.size);
 
 	/*
 	 * In the future, make this function return a
