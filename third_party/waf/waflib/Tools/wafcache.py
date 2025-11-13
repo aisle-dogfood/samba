@@ -95,7 +95,9 @@ if not os.path.isdir(base_cache):
 	base_cache = '/tmp/'
 default_wafcache_dir = os.path.join(base_cache, 'wafcache_' + getpass.getuser())
 
-CACHE_DIR = os.environ.get('WAFCACHE', default_wafcache_dir)
+# Sanitize CACHE_DIR to prevent path traversal attacks
+cache_dir_raw = os.environ.get('WAFCACHE', default_wafcache_dir)
+CACHE_DIR = os.path.realpath(os.path.abspath(cache_dir_raw))
 WAFCACHE_CMD = os.environ.get('WAFCACHE_CMD')
 TRIM_MAX_FOLDERS = int(os.environ.get('WAFCACHE_TRIM_MAX_FOLDER', 1000000))
 EVICT_INTERVAL_MINUTES = int(os.environ.get('WAFCACHE_EVICT_INTERVAL_MINUTES', 3))
