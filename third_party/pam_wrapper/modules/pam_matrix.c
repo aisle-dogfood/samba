@@ -225,6 +225,36 @@ fail:
 	return rv;
 }
 
+/* Validate database path to prevent path traversal attacks */
+static int pam_matrix_validate_db_path(const char *db)
+{
+	const char *p;
+	
+	if (db == NULL || db[0] == '\0') {
+		return PAM_AUTHINFO_UNAVAIL;
+	}
+	
+	/* Reject absolute paths */
+	if (db[0] == '/') {
+		return PAM_AUTHINFO_UNAVAIL;
+	}
+	
+	/* Check for path traversal sequences */
+	p = db;
+	while (*p != '\0') {
+		if (p[0] == '.' && p[1] == '.') {
+			/* Check if this is a real ".." sequence */
+			if ((p == db || p[-1] == '/') && 
+			    (p[2] == '\0' || p[2] == '/')) {
+				return PAM_AUTHINFO_UNAVAIL;
+			}
+		}
+		p++;
+	}
+	
+	return PAM_SUCCESS;
+}
+
 /* Replace authtok of user in the database with the one from pli */
 static int pam_matrix_lib_items_put(const char *db,
 				    struct pam_lib_items *pli)
