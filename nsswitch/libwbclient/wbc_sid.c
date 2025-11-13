@@ -50,17 +50,32 @@ int wbcSidToStringBuf(const struct wbcDomainSid *sid, char *buf, int buflen)
 		((uint64_t)sid->id_auth[0] << 40);
 
 	ofs = snprintf(buf, buflen, "S-%hhu-", (unsigned char)sid->sid_rev_num);
+	if (ofs < 0) {
+		return ofs;
+	}
 	if (id_auth >= UINT32_MAX) {
-		ofs += snprintf(buf + ofs, MAX(buflen - ofs, 0), "0x%llx",
+		int ret = snprintf(buf + ofs, MAX(buflen - ofs, 0), "0x%llx",
 				(unsigned long long)id_auth);
+		if (ret < 0) {
+			return ret;
+		}
+		ofs += ret;
 	} else {
-		ofs += snprintf(buf + ofs, MAX(buflen - ofs, 0), "%llu",
+		int ret = snprintf(buf + ofs, MAX(buflen - ofs, 0), "%llu",
 				(unsigned long long)id_auth);
+		if (ret < 0) {
+			return ret;
+		}
+		ofs += ret;
 	}
 
 	for (i = 0; i < sid->num_auths; i++) {
-		ofs += snprintf(buf + ofs, MAX(buflen - ofs, 0), "-%u",
+		int ret = snprintf(buf + ofs, MAX(buflen - ofs, 0), "-%u",
 				(unsigned int)sid->sub_auths[i]);
+		if (ret < 0) {
+			return ret;
+		}
+		ofs += ret;
 	}
 	return ofs;
 }
