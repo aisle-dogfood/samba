@@ -703,6 +703,7 @@ NTSTATUS samu_alloc_rid_unix(struct pdb_methods *methods,
 			     struct samu *user, const struct passwd *pwd);
 char *pdb_encode_acct_ctrl(uint32_t acct_ctrl, size_t length);
 uint32_t pdb_decode_acct_ctrl(const char *p);
+void pdb_sethexpwd_raw(char p[33], const unsigned char *pwd, uint32_t acct_ctrl);
 void pdb_sethexpwd(char p[33], const unsigned char *pwd, uint32_t acct_ctrl);
 bool pdb_gethexpwd(const char *p, unsigned char *pwd);
 void pdb_sethexhours(char *p, const unsigned char *hours);

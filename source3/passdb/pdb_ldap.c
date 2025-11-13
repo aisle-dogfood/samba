@@ -1313,7 +1313,7 @@ static bool init_ldap_from_sam (struct ldapsam_privates *ldap_state,
 			const uchar *lm_pw = pdb_get_lanman_passwd(sampass);
 			if (lm_pw) {
 				char pwstr[34];
-				pdb_sethexpwd(pwstr, lm_pw,
+				pdb_sethexpwd_raw(pwstr, lm_pw,
 					      pdb_get_acct_ctrl(sampass));
 				smbldap_make_mod(
 					smbldap_get_ldap(
@@ -1334,7 +1334,7 @@ static bool init_ldap_from_sam (struct ldapsam_privates *ldap_state,
 			const uchar *nt_pw = pdb_get_nt_passwd(sampass);
 			if (nt_pw) {
 				char pwstr[34];
-				pdb_sethexpwd(pwstr, nt_pw,
+				pdb_sethexpwd_raw(pwstr, nt_pw,
 					      pdb_get_acct_ctrl(sampass));
 				smbldap_make_mod(
 					smbldap_get_ldap(
@@ -1374,9 +1374,9 @@ static bool init_ldap_from_sam (struct ldapsam_privates *ldap_state,
 					pwHistLen = MIN(pwHistLen, ((1024-1)/64));
 					for (i=0; i< pwHistLen && i < currHistLen; i++) {
 						/* Store the salt. */
-						pdb_sethexpwd(&pwstr[i*64], &pwhist[i*PW_HISTORY_ENTRY_LEN], 0);
+						pdb_sethexpwd_raw(&pwstr[i*64], &pwhist[i*PW_HISTORY_ENTRY_LEN], 0);
 						/* Followed by the md5 hash of salt + md4 hash */
-						pdb_sethexpwd(&pwstr[(i*64)+32],
+						pdb_sethexpwd_raw(&pwstr[(i*64)+32],
 							&pwhist[(i*PW_HISTORY_ENTRY_LEN)+PW_HISTORY_SALT_LEN], 0);
 						DEBUG(100, ("pwstr=%s\n", pwstr));
 					}
