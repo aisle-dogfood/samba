@@ -1263,7 +1263,17 @@ static NTSTATUS do_mget(struct cli_state *cli_state, struct file_info *finfo,
 	client_cwd = client_get_cur_dir();
 	client_cwd_len = strlen(client_cwd);
 
-	local_path = talloc_strdup(ctx, path + client_cwd_len);
+	/* 
+	 * Ensure we don't read beyond the end of path and that path
+	 * actually starts with the current directory prefix
+	 */
+	if (client_cwd_len < strlen(path) && 
+	    strncmp(path, client_cwd, client_cwd_len) == 0) {
+		local_path = talloc_strdup(ctx, path + client_cwd_len);
+	} else {
+		/* If path doesn't start with current directory, use the full path */
+		local_path = talloc_strdup(ctx, path);
+	}
 	if (local_path == NULL) {
 		TALLOC_FREE(path);
 		return NT_STATUS_NO_MEMORY;
