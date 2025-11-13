@@ -469,6 +469,20 @@ static struct recdb_context *recdb_create(TALLOC_CTX *mem_ctx, uint32_t db_id,
 		db_dir_state = getenv("CTDB_DBDIR_STATE");
 	}
 
+	/* Validate db_name to prevent path traversal attacks */
+	if (db_name == NULL || strlen(db_name) == 0) {
+		D_ERR("Invalid database name: empty or NULL\n");
+		talloc_free(recdb);
+		return NULL;
+	}
+
+	/* Check for path traversal sequences */
+	if (strchr(db_name, '/') != NULL || strstr(db_name, "..") != NULL) {
+		D_ERR("Invalid database name '%s': contains path traversal sequences\n", db_name);
+		talloc_free(recdb);
+		return NULL;
+	}
+
 	recdb->db_name = db_name;
 	recdb->db_id = db_id;
 	recdb->db_path = talloc_asprintf(recdb, "%s/recdb.%s",
