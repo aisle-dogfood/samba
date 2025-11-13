@@ -425,6 +425,10 @@ int main(int argc, const char **argv)
 	}
 
 	program_args = (char * const *)discard_const_p(char *, args);
+	if (program_args[0] == NULL) {
+		poptPrintHelp(pc, stderr, 0);
+		goto out;
+	}
 	program = program_args[0];
 
 	if (opt_verbose) {
