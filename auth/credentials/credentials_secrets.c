@@ -454,6 +454,13 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 								 lp_ctx,
 								 "secrets");
 			if (secrets_tdb_path == NULL) {
+				/* Clear sensitive password data from heap memory before returning */
+				if (secrets_tdb_password != NULL) {
+					memset(secrets_tdb_password, '\0', strlen(secrets_tdb_password));
+				}
+				if (secrets_tdb_old_password != NULL) {
+					memset(secrets_tdb_old_password, '\0', strlen(secrets_tdb_old_password));
+				}
 				return NT_STATUS_NO_MEMORY;
 			}
 
@@ -468,6 +475,14 @@ _PUBLIC_ NTSTATUS cli_credentials_set_machine_account_db_ctx(struct cli_credenti
 			  nt_errstr(status)));
 		/* set anonymous as the fallback, if the machine account won't work */
 		cli_credentials_set_anonymous(cred);
+	}
+
+	/* Clear sensitive password data from heap memory before returning */
+	if (secrets_tdb_password != NULL) {
+		memset(secrets_tdb_password, '\0', strlen(secrets_tdb_password));
+	}
+	if (secrets_tdb_old_password != NULL) {
+		memset(secrets_tdb_old_password, '\0', strlen(secrets_tdb_old_password));
 	}
 
 	TALLOC_FREE(tmp_ctx);
