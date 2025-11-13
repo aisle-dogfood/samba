@@ -86,7 +86,7 @@ char *get_user_home_dir(TALLOC_CTX *mem_ctx, const char *user)
 
 	/* Return home directory from struct passwd. */
 
-	result = talloc_move(mem_ctx, &pass->pw_dir);
+	result = talloc_strdup(mem_ctx, pass->pw_dir);
 
 	TALLOC_FREE(pass);
 	return result;
