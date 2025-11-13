@@ -55,6 +55,33 @@ static int failed;
 
 static struct tdb_logging_context log_ctx;
 
+/*
+  validate that a filename doesn't contain path traversal sequences
+  returns 0 if valid, 1 if invalid
+*/
+static int validate_filename(const char *filename)
+{
+	/* Check for absolute paths */
+	if (filename[0] == '/') {
+		fprintf(stderr, "Error: Absolute paths are not allowed: %s\n", filename);
+		return 1;
+	}
+
+	/* Check for path traversal sequences */
+	if (strstr(filename, "../") != NULL || strstr(filename, "..\\") != NULL) {
+		fprintf(stderr, "Error: Path traversal sequences are not allowed: %s\n", filename);
+		return 1;
+	}
+
+	/* Check for filename starting with .. */
+	if (strncmp(filename, "..", 2) == 0 && (filename[2] == '\0' || filename[2] == '/' || filename[2] == '\\')) {
+		fprintf(stderr, "Error: Path traversal sequences are not allowed: %s\n", filename);
+		return 1;
+	}
+
+	return 0;
+}
+
 #ifdef PRINTF_ATTRIBUTE
 static void tdb_log(struct tdb_context *tdb, enum tdb_debug_level level, const char *format, ...) PRINTF_ATTRIBUTE(3,4);
 #endif
@@ -348,6 +375,12 @@ static void usage(void)
 	for (i=0; i<argc; i++) {
 		const char *fname = argv[i];
 		char *bak_name;
+
+		/* Validate filename to prevent path traversal */
+		if (validate_filename(fname) != 0) {
+			ret = 1;
+			continue;
+		}
 
 		bak_name = add_suffix(fname, suffix);
 
