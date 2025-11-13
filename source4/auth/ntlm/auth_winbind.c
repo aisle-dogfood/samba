@@ -313,7 +313,8 @@ static const struct auth_operations winbind_ops = {
 	.name			= "winbind",
 	.want_check		= winbind_want_check,
 	.check_password_send	= winbind_check_password_send,
-	.check_password_recv	= winbind_check_password_recv
+	.check_password_recv	= winbind_check_password_recv,
+	.magic			= AUTH_OPERATIONS_MAGIC,
 };
 
 _PUBLIC_ NTSTATUS auth4_winbind_init(TALLOC_CTX *ctx)

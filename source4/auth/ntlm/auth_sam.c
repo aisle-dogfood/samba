@@ -1422,6 +1422,7 @@ static const struct auth_operations sam_ignoredomain_ops = {
 	.want_check	           = authsam_ignoredomain_want_check,
 	.check_password_send	   = authsam_check_password_send,
 	.check_password_recv	   = authsam_check_password_recv,
+	.magic			   = AUTH_OPERATIONS_MAGIC,
 };
 
 static const struct auth_operations sam_ops = {
@@ -1429,6 +1430,7 @@ static const struct auth_operations sam_ops = {
 	.want_check	           = authsam_want_check,
 	.check_password_send	   = authsam_check_password_send,
 	.check_password_recv	   = authsam_check_password_recv,
+	.magic			   = AUTH_OPERATIONS_MAGIC,
 };
 
 _PUBLIC_ NTSTATUS auth4_sam_init(TALLOC_CTX *);

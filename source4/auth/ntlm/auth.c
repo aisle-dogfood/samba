@@ -300,6 +300,13 @@ static void auth_check_password_next(struct tevent_req *req)
 		return;
 	}
 
+	/* Validate auth_operations structure before using function pointers */
+	if (!auth_operations_validate(state->method->ops)) {
+		DEBUG(0, ("auth_check_password_next: Invalid auth_operations structure\n"));
+		tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
+		return;
+	}
+
 	/* check if the module wants to check the password */
 	status = state->method->ops->want_check(state->method, state,
 						state->user_info);
@@ -313,6 +320,13 @@ static void auth_check_password_next(struct tevent_req *req)
 	}
 
 	if (tevent_req_nterror(req, status)) {
+		return;
+	}
+
+	/* Validate auth_operations structure before using function pointers */
+	if (!auth_operations_validate(state->method->ops)) {
+		DEBUG(0, ("auth_check_password_next: Invalid auth_operations structure\n"));
+		tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
 		return;
 	}
 
@@ -334,6 +348,14 @@ static void auth_check_password_done(struct tevent_req *subreq)
 		struct auth_check_password_state);
 	bool authoritative = true;
 	NTSTATUS status;
+
+	/* Validate auth_operations structure before using function pointers */
+	if (!auth_operations_validate(state->method->ops)) {
+		DEBUG(0, ("auth_check_password_done: Invalid auth_operations structure\n"));
+		TALLOC_FREE(subreq);
+		tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
+		return;
+	}
 
 	status = state->method->ops->check_password_recv(subreq, state,
 							 &state->user_info_dc,
@@ -812,6 +834,9 @@ _PUBLIC_ NTSTATUS auth_register(TALLOC_CTX *mem_ctx,
 	NT_STATUS_HAVE_NO_MEMORY(new_ops);
 	new_ops->name = talloc_strdup(new_ops, ops->name);
 	NT_STATUS_HAVE_NO_MEMORY(new_ops->name);
+	
+	/* Set magic number for structure validation */
+	new_ops->magic = AUTH_OPERATIONS_MAGIC;
 
 	backends[num_backends].ops = new_ops;
 
@@ -871,4 +896,29 @@ _PUBLIC_ NTSTATUS auth4_init(void)
 	run_init_functions(NULL, static_init);
 
 	return NT_STATUS_OK;
+}
+
+/*
+  Validate auth_operations structure integrity
+*/
+_PUBLIC_ bool auth_operations_validate(const struct auth_operations *ops)
+{
+	if (ops == NULL) {
+		return false;
+	}
+	
+	/* Check magic number */
+	if (ops->magic != AUTH_OPERATIONS_MAGIC) {
+		DEBUG(0, ("auth_operations_validate: Invalid magic number 0x%x, expected 0x%x\n",
+			  ops->magic, AUTH_OPERATIONS_MAGIC));
+		return false;
+	}
+	
+	/* Check that required function pointers are not NULL */
+	if (ops->check_password_send == NULL || ops->check_password_recv == NULL) {
+		DEBUG(0, ("auth_operations_validate: Required function pointers are NULL\n"));
+		return false;
+	}
+	
+	return true;
 }

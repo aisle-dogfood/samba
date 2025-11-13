@@ -150,6 +150,7 @@ static const struct auth_operations anonymous_auth_ops = {
 	.want_check		= anonymous_want_check,
 	.check_password_send	= anonymous_check_password_send,
 	.check_password_recv	= anonymous_check_password_recv,
+	.magic			= AUTH_OPERATIONS_MAGIC,
 };
 
 _PUBLIC_ NTSTATUS auth4_anonymous_init(TALLOC_CTX *ctx)
