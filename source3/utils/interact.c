@@ -30,6 +30,37 @@
 #include "interact.h"
 
 #include <termios.h>
+#include <ctype.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+static bool is_safe_editor_path(const char *editor) {
+	const char *p;
+	
+	if (editor == NULL || editor[0] == '\0') {
+		return false;
+	}
+	
+	/* Check for dangerous characters that could be used for command injection */
+	for (p = editor; *p != '\0'; p++) {
+		if (*p == ';' || *p == '|' || *p == '&' || *p == '`' || 
+		    *p == '$' || *p == '(' || *p == ')' || *p == '<' || 
+		    *p == '>' || *p == '\n' || *p == '\r') {
+			return false;
+		}
+	}
+	
+	/* Only allow alphanumeric characters, spaces, hyphens, underscores, 
+	   forward slashes, and dots for a reasonable editor path */
+	for (p = editor; *p != '\0'; p++) {
+		if (!isalnum(*p) && *p != ' ' && *p != '-' && *p != '_' && 
+		    *p != '/' && *p != '.') {
+			return false;
+		}
+	}
+	
+	return true;
+}
 
 static const char* get_editor(void) {
 	static char editor[64] = {0};
@@ -42,6 +73,13 @@ static const char* get_editor(void) {
 		if (tmp == NULL) {
 			tmp = "vi";
 		}
+		
+		/* Validate the editor path for security */
+		if (!is_safe_editor_path(tmp)) {
+			DEBUG(0, ("Unsafe editor path detected, falling back to vi: %s\n", tmp));
+			tmp = "vi";
+		}
+		
 		snprintf(editor, sizeof(editor), "%s", tmp);
 	}
 
@@ -104,12 +142,31 @@ char* interact_edit(TALLOC_CTX* mem_ctx, const char* str) {
 	fprintf(file, "%s", str);
 	fclose(file);
 
-	snprintf(buf, sizeof(buf), "%s %s\n", get_editor(), fname);
-	if (system(buf) != 0) {
-		DEBUG(0, ("failed to start editor %s: %s\n", buf,
-			  strerror(errno)));
+	/* Use execl instead of system to avoid shell interpretation */
+	pid_t pid = fork();
+	if (pid == -1) {
+		DEBUG(0, ("failed to fork: %s\n", strerror(errno)));
 		unlink(fname);
 		return NULL;
+	} else if (pid == 0) {
+		/* Child process */
+		execl(get_editor(), get_editor(), fname, (char *)NULL);
+		/* If execl fails, exit the child process */
+		_exit(127);
+	} else {
+		/* Parent process */
+		int status;
+		if (waitpid(pid, &status, 0) == -1) {
+			DEBUG(0, ("failed to wait for editor: %s\n", strerror(errno)));
+			unlink(fname);
+			return NULL;
+		}
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			DEBUG(0, ("editor exited with error status: %d\n", 
+				  WIFEXITED(status) ? WEXITSTATUS(status) : -1));
+			unlink(fname);
+			return NULL;
+		}
 	}
 
 	file = fopen(fname, "r");
