@@ -2529,7 +2529,12 @@ bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
 		return false;
 	}
 
+	/* Clear the output buffer before copying sensitive data */
+	BURN_PTR_SIZE(ret_pwd, 16);
 	memcpy(ret_pwd, current_nt_hash.hash, sizeof(current_nt_hash.hash));
+	
+	/* Clear the local hash after use */
+	BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 	return true;
 }
 
