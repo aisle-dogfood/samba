@@ -118,8 +118,11 @@ static void copy64(uint32_t *M, const uint8_t *in)
 			((uint32_t)in[i*4+0] << 0);
 }
 
-static void copy4(uint8_t *out, uint32_t x)
+static void copy4(uint8_t *out, uint32_t x, size_t out_size)
 {
+	if (out_size < 4) {
+		return; /* Prevent buffer overflow */
+	}
 	out[0] = x&0xFF;
 	out[1] = (x>>8)&0xFF;
 	out[2] = (x>>16)&0xFF;
@@ -155,11 +158,11 @@ _PUBLIC_ void mdfour(uint8_t *out, const uint8_t *in, int n)
 	buf[n] = 0x80;
 	
 	if (n <= 55) {
-		copy4(buf+56, b);
+		copy4(buf+56, b, 128-56);
 		copy64(M, buf);
 		mdfour64(&state, M);
 	} else {
-		copy4(buf+120, b); 
+		copy4(buf+120, b, 128-120); 
 		copy64(M, buf);
 		mdfour64(&state, M);
 		copy64(M, buf+64);
@@ -170,10 +173,10 @@ _PUBLIC_ void mdfour(uint8_t *out, const uint8_t *in, int n)
 		buf[i] = 0;
 	copy64(M, buf);
 
-	copy4(out, state.A);
-	copy4(out+4, state.B);
-	copy4(out+8, state.C);
-	copy4(out+12, state.D);
+	copy4(out, state.A, 16);
+	copy4(out+4, state.B, 12);
+	copy4(out+8, state.C, 8);
+	copy4(out+12, state.D, 4);
 }
 
 
