@@ -1335,10 +1335,25 @@ static int cmd_more(void)
 
 	pager=getenv("PAGER");
 
+	/* Escape the filename to prevent command injection */
+	char *escaped_lname = talloc_strdup(ctx, "");
+	const char *p = lname;
+	escaped_lname = talloc_strdup_append(escaped_lname, "'");
+	while (*p) {
+		if (*p == '\'') {
+			/* Escape single quotes by ending the quoted string, adding an escaped quote, and starting a new quoted string */
+			escaped_lname = talloc_strdup_append(escaped_lname, "'\\''");
+		} else {
+			escaped_lname = talloc_strndup_append(escaped_lname, p, 1);
+		}
+		p++;
+	}
+	escaped_lname = talloc_strdup_append(escaped_lname, "'");
+
 	pager_cmd = talloc_asprintf(ctx,
 				"%s %s",
 				(pager? pager:PAGER),
-				lname);
+				escaped_lname);
 	if (!pager_cmd) {
 		return 1;
 	}
