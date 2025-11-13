@@ -114,6 +114,13 @@ static void smb2cli_write_done(struct tevent_req *subreq)
 	if (tevent_req_nterror(req, status)) {
 		return;
 	}
+
+	/* Validate iov[1] before accessing it */
+	if (iov[1].iov_base == NULL || iov[1].iov_len < 8) {
+		tevent_req_nterror(req, NT_STATUS_INVALID_NETWORK_RESPONSE);
+		return;
+	}
+
 	state->written = IVAL(iov[1].iov_base, 4);
 	tevent_req_done(req);
 }
