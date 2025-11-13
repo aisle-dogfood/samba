@@ -1807,9 +1807,22 @@ WERROR encode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 		return gnutls_error_to_werror(rc, WERR_CONTENT_BLOCKED);
 	}
 
+	/* Validate buffer sizes to prevent heap overflow */
+	if (confounder.length > sizeof(pwd_buf->data)) {
+		ZERO_ARRAY(_confounder);
+		TALLOC_FREE(pwd_buf);
+		return WERR_INVALID_PARAMETER;
+	}
+	
+	if (confounder.length + encrypt_pwbuf.length > sizeof(pwd_buf->data)) {
+		ZERO_ARRAY(_confounder);
+		TALLOC_FREE(pwd_buf);
+		return WERR_INVALID_PARAMETER;
+	}
+
 	memcpy(&pwd_buf->data[0], confounder.data, confounder.length);
 	ZERO_ARRAY(_confounder);
-	memcpy(&pwd_buf->data[8], encrypt_pwbuf.data, encrypt_pwbuf.length);
+	memcpy(&pwd_buf->data[confounder.length], encrypt_pwbuf.data, encrypt_pwbuf.length);
 	ZERO_ARRAY(pwbuf);
 
 	*out_pwd_buf = pwd_buf;
