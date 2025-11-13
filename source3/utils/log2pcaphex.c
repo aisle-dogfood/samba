@@ -296,6 +296,54 @@ static long read_log_data(FILE *in, unsigned char *buffer, long data_length)
 	return data_length;
 }
 
+/*
+ * Validate file path to prevent directory traversal attacks
+ * Returns 1 if path is safe, 0 if dangerous
+ */
+static int validate_file_path(const char *path)
+{
+	if (!path) {
+		return 0;
+	}
+
+	/* Check for null bytes */
+	if (strlen(path) != strcspn(path, "\0")) {
+		return 0;
+	}
+
+	/* Check for excessively long paths */
+	if (strlen(path) > 255) {
+		return 0;
+	}
+
+	/* Check for absolute paths */
+	if (path[0] == '/') {
+		return 0;
+	}
+
+	/* Check for Windows-style absolute paths */
+	if (strlen(path) >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/')) {
+		return 0;
+	}
+
+	/* Check for directory traversal sequences */
+	if (strstr(path, "../") != NULL || strstr(path, "..\\") != NULL) {
+		return 0;
+	}
+
+	/* Check for paths starting with .. */
+	if (strncmp(path, "..", 2) == 0 && (path[2] == '/' || path[2] == '\\' || path[2] == '\0')) {
+		return 0;
+	}
+
+	/* Check for dangerous characters */
+	if (strcspn(path, "<>:\"|?*") != strlen(path)) {
+		return 0;
+	}
+
+	return 1;
+}
+
 int main(int argc, const char **argv)
 {
 	const char *infile, *outfile;
@@ -348,6 +396,11 @@ int main(int argc, const char **argv)
 	infile = poptGetArg(pc);
 
 	if(infile) {
+		if (!validate_file_path(infile)) {
+			fprintf(stderr, "Error: Invalid input file path '%s'. Path contains dangerous characters or directory traversal sequences.\n", infile);
+			poptFreeContext(pc);
+			return 1;
+		}
 		in  = fopen(infile, "r");
 		if(!in) {
 			perror("fopen");
@@ -359,6 +412,11 @@ int main(int argc, const char **argv)
 	outfile = poptGetArg(pc);
 
 	if(outfile) {
+		if (!validate_file_path(outfile)) {
+			fprintf(stderr, "Error: Invalid output file path '%s'. Path contains dangerous characters or directory traversal sequences.\n", outfile);
+			poptFreeContext(pc);
+			return 1;
+		}
 		out = fopen(outfile, "w+");
 		if(!out) {
 			perror("fopen");
