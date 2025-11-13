@@ -24,6 +24,7 @@
 #include <popt.h>
 #include <talloc.h>
 #include <tevent.h>
+#include <ctype.h>
 
 #include "lib/util/debug.h"
 
@@ -41,6 +42,34 @@ struct event_tool_context {
 	struct tevent_context *ev;
 	struct ctdb_event_context *eclient;
 };
+
+static bool is_valid_script_name(const char *name)
+{
+	const char *p;
+
+	if (name == NULL || name[0] == '\0') {
+		return false;
+	}
+
+	/* Check for absolute path */
+	if (name[0] == '/') {
+		return false;
+	}
+
+	/* Check for path traversal sequences */
+	if (strstr(name, "../") != NULL || strstr(name, "/..") != NULL) {
+		return false;
+	}
+
+	/* Check for invalid characters */
+	for (p = name; *p != '\0'; p++) {
+		if (!isalnum(*p) && *p != '_' && *p != '-' && *p != '.') {
+			return false;
+		}
+	}
+
+	return true;
+}
 
 static int compact_args(TALLOC_CTX *mem_ctx,
 			const char **argv,
@@ -592,6 +621,17 @@ static int event_command_script_enable(TALLOC_CTX *mem_ctx,
 		return 1;
 	}
 
+	/* Validate script component and name for path traversal */
+	if (!is_valid_script_name(argv[0])) {
+		printf("Invalid script component: %s\n", argv[0]);
+		return EINVAL;
+	}
+
+	if (!is_valid_script_name(argv[1])) {
+		printf("Invalid script name: %s\n", argv[1]);
+		return EINVAL;
+	}
+
 	script = talloc_asprintf(mem_ctx, "events/%s/%s.script", argv[0], argv[1]);
 	if (script == NULL) {
 		return ENOMEM;
@@ -680,6 +720,17 @@ static int event_command_script_disable(TALLOC_CTX *mem_ctx,
 	if (argc != 2) {
 		cmdline_usage(ctx->cmdline, "script disable");
 		return 1;
+	}
+
+	/* Validate script component and name for path traversal */
+	if (!is_valid_script_name(argv[0])) {
+		printf("Invalid script component: %s\n", argv[0]);
+		return EINVAL;
+	}
+
+	if (!is_valid_script_name(argv[1])) {
+		printf("Invalid script name: %s\n", argv[1]);
+		return EINVAL;
 	}
 
 	script = talloc_asprintf(mem_ctx, "events/%s/%s.script", argv[0], argv[1]);
