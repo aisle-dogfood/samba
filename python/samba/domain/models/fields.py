@@ -483,7 +483,11 @@ class PossibleClaimValuesField(Field):
     def from_db_value(self, samdb, value):
         """Parse MessageElement with XML to list of dicts."""
         if value is not None:
-            root = ElementTree.fromstring(str(value))
+            # Create a secure XML parser that disables external entity processing
+            parser = ElementTree.XMLParser()
+            parser.parser.DefaultHandler = lambda data: None
+            parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+            root = ElementTree.fromstring(str(value), parser)
             string_list = root.find("StringList", self.NAMESPACE)
 
             values = []
