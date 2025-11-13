@@ -2485,6 +2485,7 @@ static bool get_trust_pw_hash2(const char *domain,
 
 		previous_nt_hash = SMB_MALLOC_P(struct samr_Password);
 		if (previous_nt_hash == NULL) {
+			ZERO_STRUCTP(current_nt_hash);
 			return false;
 		}
 
@@ -2526,10 +2527,12 @@ bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
 	ok = get_trust_pw_hash2(domain, account_name, channel,
 				&current_nt_hash, NULL, NULL);
 	if (!ok) {
+		ZERO_STRUCT(current_nt_hash);
 		return false;
 	}
 
 	memcpy(ret_pwd, current_nt_hash.hash, sizeof(current_nt_hash.hash));
+	ZERO_STRUCT(current_nt_hash);
 	return true;
 }
 
