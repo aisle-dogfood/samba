@@ -107,6 +107,8 @@ static krb5_error_code winbind_userok(krb5_context context,
 	switch (wbc_status) {
 	case WBC_ERR_SUCCESS:
 		princ_uid = pwd->pw_uid;
+		wbcFreeMemory(pwd);
+		pwd = NULL;
 		code = 0;
 		break;
 	case WBC_ERR_UNKNOWN_USER:
@@ -120,8 +122,6 @@ static krb5_error_code winbind_userok(krb5_context context,
 		code = EIO;
 		break;
 	}
-	wbcFreeMemory(pwd);
-	pwd = NULL;
 	if (code != 0) {
 		goto out;
 	}
@@ -132,6 +132,7 @@ static krb5_error_code winbind_userok(krb5_context context,
 	switch (wbc_status) {
 	case WBC_ERR_SUCCESS:
 		lname_uid = pwd->pw_uid;
+		wbcFreeMemory(pwd);
 		break;
 	case WBC_ERR_UNKNOWN_USER:
 	/* match other insane libwbclient return codes */
@@ -144,7 +145,6 @@ static krb5_error_code winbind_userok(krb5_context context,
 		code = EIO;
 		break;
 	}
-	wbcFreeMemory(pwd);
 	if (code != 0) {
 		goto out;
 	}
