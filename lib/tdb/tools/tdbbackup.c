@@ -46,6 +46,7 @@
 #include "system/filesys.h"
 #include "system/wait.h"
 #include "tdb.h"
+#include <libgen.h>
 
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
@@ -112,8 +113,54 @@ static int backup_tdb(const char *old_name, const char *new_name,
 	char *tmp_name;
 	struct stat st;
 	int count1, count2;
+	char *new_name_copy, *dir_name, *base_name;
+	char *safe_tmp_name;
 
-	tmp_name = add_suffix(new_name, ".tmp");
+	/* Create a safe temporary filename by extracting directory and basename */
+	new_name_copy = strdup(new_name);
+	if (!new_name_copy) {
+		fprintf(stderr, "Out of memory!\n");
+		return 1;
+	}
+	
+	/* Get directory name - need separate copy for dirname */
+	char *new_name_copy2 = strdup(new_name);
+	if (!new_name_copy2) {
+		fprintf(stderr, "Out of memory!\n");
+		free(new_name_copy);
+		return 1;
+	}
+	dir_name = dirname(new_name_copy2);
+	
+	/* Get base name and ensure it doesn't contain path traversal */
+	base_name = basename(new_name_copy);
+	if (!base_name || strstr(base_name, "..") != NULL || strchr(base_name, '/') != NULL) {
+		fprintf(stderr, "Invalid filename: contains path traversal sequences\n");
+		free(new_name_copy);
+		free(new_name_copy2);
+		return 1;
+	}
+	
+	/* Create safe temporary name */
+	safe_tmp_name = malloc(strlen(dir_name) + strlen(base_name) + 6); /* "/", ".tmp", null */
+	if (!safe_tmp_name) {
+		fprintf(stderr, "Out of memory!\n");
+		free(new_name_copy);
+		free(new_name_copy2);
+		return 1;
+	}
+	
+	if (strcmp(dir_name, ".") == 0) {
+		snprintf(safe_tmp_name, strlen(base_name) + 5, "%s.tmp", base_name);
+	} else {
+		snprintf(safe_tmp_name, strlen(dir_name) + strlen(base_name) + 6, "%s/%s.tmp", dir_name, base_name);
+	}
+	
+	tmp_name = safe_tmp_name;
+	
+	/* Clean up temporary variables */
+	free(new_name_copy);
+	free(new_name_copy2);
 
 	/* stat the old tdb to find its permissions */
 	if (stat(old_name, &st) != 0) {
