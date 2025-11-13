@@ -48,6 +48,63 @@
 
 #include "ctdb_cluster_mutex.h"
 
+/* Secure random number generation */
+static bool secure_random_init_done = false;
+
+static void secure_random_init(void)
+{
+	int fd;
+	unsigned int seed;
+	ssize_t ret;
+
+	if (secure_random_init_done) {
+		return;
+	}
+
+	fd = open("/dev/urandom", O_RDONLY);
+	if (fd == -1) {
+		/* Fallback to time-based seed if /dev/urandom is not available */
+		seed = (unsigned int)(time(NULL) ^ getpid());
+		DEBUG(DEBUG_WARNING, ("Failed to open /dev/urandom, using fallback seed\n"));
+	} else {
+		ret = read(fd, &seed, sizeof(seed));
+		close(fd);
+		if (ret != sizeof(seed)) {
+			/* Fallback if read fails */
+			seed = (unsigned int)(time(NULL) ^ getpid());
+			DEBUG(DEBUG_WARNING, ("Failed to read from /dev/urandom, using fallback seed\n"));
+		}
+	}
+
+	srandom(seed);
+	secure_random_init_done = true;
+}
+
+static uint32_t secure_random_uint32(void)
+{
+	int fd;
+	uint32_t value;
+	ssize_t ret;
+
+	fd = open("/dev/urandom", O_RDONLY);
+	if (fd == -1) {
+		/* Fallback to standard random if /dev/urandom is not available */
+		secure_random_init();
+		return (uint32_t)random();
+	}
+
+	ret = read(fd, &value, sizeof(value));
+	close(fd);
+	
+	if (ret != sizeof(value)) {
+		/* Fallback if read fails */
+		secure_random_init();
+		return (uint32_t)random();
+	}
+
+	return value;
+}
+
 /* List of SRVID requests that need to be processed */
 struct srvid_list {
 	struct srvid_list *next, *prev;
@@ -851,7 +908,7 @@ static uint32_t new_generation(void)
 	uint32_t generation;
 
 	while (1) {
-		generation = random();
+		generation = secure_random_uint32();
 
 		if (generation != INVALID_GENERATION) {
 			break;
@@ -3261,7 +3318,7 @@ int ctdb_start_recoverd(struct ctdb_context *ctdb)
 
 	close(fd[1]);
 
-	srandom(getpid() ^ time(NULL));
+	secure_random_init();
 
 	ret = logging_init(ctdb, NULL, NULL, "ctdb-recoverd");
 	if (ret != 0) {
