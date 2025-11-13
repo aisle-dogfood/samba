@@ -49,10 +49,11 @@ struct heim_digest_desc {
 #define F_HAVE_HASH	2
 #define F_HAVE_HA1	4
 #define F_USE_PREFIX	8
+#define F_USE_SHA256	16
     int flags;
     int type;
     char *password;
-    uint8_t SecretHash[CC_MD5_DIGEST_LENGTH];
+    uint8_t SecretHash[CC_SHA256_DIGEST_LENGTH]; /* Use larger buffer to accommodate SHA-256 */
     char *serverNonce;
     char *serverRealm;
     char *serverQOP;
@@ -85,7 +86,7 @@ clear_context(heim_digest_t context)
 {
     MEMSET_FREE_AND_CLEAR(context->password);
     memset(context->SecretHash, 0, sizeof(context->SecretHash));
-    context->flags &= ~(F_HAVE_HASH);
+    context->flags &= ~(F_HAVE_HASH | F_USE_SHA256);
     FREE_AND_CLEAR(context->serverNonce);
     FREE_AND_CLEAR(context->serverRealm);
     FREE_AND_CLEAR(context->serverQOP);
@@ -109,30 +110,41 @@ clear_context(heim_digest_t context)
 
 static void
 digest_userhash(const char *user, const char *realm, const char *password,
-		unsigned char md[CC_MD5_DIGEST_LENGTH])
+		unsigned char *md, int use_sha256)
 {
-    CC_MD5_CTX ctx;
-
-    CC_MD5_Init(&ctx);
-    CC_MD5_Update(&ctx, user, (CC_LONG)strlen(user));
-    CC_MD5_Update(&ctx, ":", 1);
-    CC_MD5_Update(&ctx, realm, (CC_LONG)strlen(realm));
-    CC_MD5_Update(&ctx, ":", 1);
-    CC_MD5_Update(&ctx, password, (CC_LONG)strlen(password));
-    CC_MD5_Final(md, &ctx);
+    if (use_sha256) {
+        CC_SHA256_CTX ctx;
+        CC_SHA256_Init(&ctx);
+        CC_SHA256_Update(&ctx, user, (CC_LONG)strlen(user));
+        CC_SHA256_Update(&ctx, ":", 1);
+        CC_SHA256_Update(&ctx, realm, (CC_LONG)strlen(realm));
+        CC_SHA256_Update(&ctx, ":", 1);
+        CC_SHA256_Update(&ctx, password, (CC_LONG)strlen(password));
+        CC_SHA256_Final(md, &ctx);
+    } else {
+        CC_MD5_CTX ctx;
+        CC_MD5_Init(&ctx);
+        CC_MD5_Update(&ctx, user, (CC_LONG)strlen(user));
+        CC_MD5_Update(&ctx, ":", 1);
+        CC_MD5_Update(&ctx, realm, (CC_LONG)strlen(realm));
+        CC_MD5_Update(&ctx, ":", 1);
+        CC_MD5_Update(&ctx, password, (CC_LONG)strlen(password));
+        CC_MD5_Final(md, &ctx);
+    }
 }
 
 static char *
 build_A1_hash(heim_digest_t context)
 {
-    unsigned char md[CC_MD5_DIGEST_LENGTH];
-    CC_MD5_CTX ctx;
+    unsigned char md[CC_SHA256_DIGEST_LENGTH];
+    int use_sha256 = (context->flags & F_USE_SHA256) != 0;
+    int hash_len = use_sha256 ? CC_SHA256_DIGEST_LENGTH : CC_MD5_DIGEST_LENGTH;
     char *A1;
 
     if (context->flags & F_HAVE_HA1) {
-	memcpy(md, context->SecretHash, sizeof(md));
+	memcpy(md, context->SecretHash, hash_len);
     } else if (context->flags & F_HAVE_HASH) {
-	memcpy(md, context->SecretHash, sizeof(md));
+	memcpy(md, context->SecretHash, hash_len);
     } else if (context->password) {
 	if (context->clientUsername == NULL)
 	    return NULL;
@@ -141,30 +153,51 @@ build_A1_hash(heim_digest_t context)
 	digest_userhash(context->clientUsername,
 			context->serverRealm,
 			context->password,
-			md);
+			md, use_sha256);
     } else
 	return NULL;
     
-    if ((context->type == HEIM_DIGEST_TYPE_RFC2617_MD5_SESS || context->type == HEIM_DIGEST_TYPE_RFC2831) && (context->flags & F_HAVE_HA1) == 0) {
+    if ((context->type == HEIM_DIGEST_TYPE_RFC2617_MD5_SESS || 
+         context->type == HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS ||
+         context->type == HEIM_DIGEST_TYPE_RFC2831) && (context->flags & F_HAVE_HA1) == 0) {
 	if (context->serverNonce == NULL)
 	    return NULL;
 
-	CC_MD5_Init(&ctx);
-	CC_MD5_Update(&ctx, md, sizeof(md));
-	memset(md, 0, sizeof(md));
-	CC_MD5_Update(&ctx, ":", 1);
-	CC_MD5_Update(&ctx, context->serverNonce, (CC_LONG)strlen(context->serverNonce));
-	if (context->clientNonce) {
-	    CC_MD5_Update(&ctx, ":", 1);
-	    CC_MD5_Update(&ctx, context->clientNonce, (CC_LONG)strlen(context->clientNonce));
-	}
-	if (context->type == HEIM_DIGEST_TYPE_RFC2831 && context->auth_id) {
-	    CC_MD5_Update(&ctx, ":", 1);
-	    CC_MD5_Update(&ctx, context->auth_id, (CC_LONG)strlen(context->auth_id));
-	}
-	CC_MD5_Final(md, &ctx);
+        if (use_sha256) {
+            CC_SHA256_CTX ctx;
+            CC_SHA256_Init(&ctx);
+            CC_SHA256_Update(&ctx, md, hash_len);
+            memset(md, 0, sizeof(md));
+            CC_SHA256_Update(&ctx, ":", 1);
+            CC_SHA256_Update(&ctx, context->serverNonce, (CC_LONG)strlen(context->serverNonce));
+            if (context->clientNonce) {
+                CC_SHA256_Update(&ctx, ":", 1);
+                CC_SHA256_Update(&ctx, context->clientNonce, (CC_LONG)strlen(context->clientNonce));
+            }
+            if (context->type == HEIM_DIGEST_TYPE_RFC2831 && context->auth_id) {
+                CC_SHA256_Update(&ctx, ":", 1);
+                CC_SHA256_Update(&ctx, context->auth_id, (CC_LONG)strlen(context->auth_id));
+            }
+            CC_SHA256_Final(md, &ctx);
+        } else {
+            CC_MD5_CTX ctx;
+            CC_MD5_Init(&ctx);
+            CC_MD5_Update(&ctx, md, hash_len);
+            memset(md, 0, sizeof(md));
+            CC_MD5_Update(&ctx, ":", 1);
+            CC_MD5_Update(&ctx, context->serverNonce, (CC_LONG)strlen(context->serverNonce));
+            if (context->clientNonce) {
+                CC_MD5_Update(&ctx, ":", 1);
+                CC_MD5_Update(&ctx, context->clientNonce, (CC_LONG)strlen(context->clientNonce));
+            }
+            if (context->type == HEIM_DIGEST_TYPE_RFC2831 && context->auth_id) {
+                CC_MD5_Update(&ctx, ":", 1);
+                CC_MD5_Update(&ctx, context->auth_id, (CC_LONG)strlen(context->auth_id));
+            }
+            CC_MD5_Final(md, &ctx);
+        }
     }
-    hex_encode(md, sizeof(md), &A1);
+    hex_encode(md, hash_len, &A1);
     if (A1)
       strlwr(A1);
 
@@ -174,32 +207,55 @@ build_A1_hash(heim_digest_t context)
 static char *
 build_A2_hash(heim_digest_t context, const char *method)
 {
-    unsigned char md[CC_MD5_DIGEST_LENGTH];
-    CC_MD5_CTX ctx;
+    unsigned char md[CC_SHA256_DIGEST_LENGTH];
+    int use_sha256 = (context->flags & F_USE_SHA256) != 0;
+    int hash_len = use_sha256 ? CC_SHA256_DIGEST_LENGTH : CC_MD5_DIGEST_LENGTH;
     char *A2;
   
-    CC_MD5_Init(&ctx);
-    if (method)
-	CC_MD5_Update(&ctx, method, (CC_LONG)strlen(method));
-    CC_MD5_Update(&ctx, ":", 1);
-    CC_MD5_Update(&ctx, context->clientURI, (CC_LONG)strlen(context->clientURI));
-	
-    /* conf|int */
-    if (context->type == HEIM_DIGEST_TYPE_RFC2831) {
-	if (strcasecmp(context->clientQOP, "auth-int") == 0 || strcasecmp(context->clientQOP, "auth-conf") == 0) {
-	    /* XXX if we have a body hash, use that */
-	    static char conf_zeros[] = ":00000000000000000000000000000000";
-	    CC_MD5_Update(&ctx, conf_zeros, sizeof(conf_zeros) - 1);
-	}
+    if (use_sha256) {
+        CC_SHA256_CTX ctx;
+        CC_SHA256_Init(&ctx);
+        if (method)
+            CC_SHA256_Update(&ctx, method, (CC_LONG)strlen(method));
+        CC_SHA256_Update(&ctx, ":", 1);
+        CC_SHA256_Update(&ctx, context->clientURI, (CC_LONG)strlen(context->clientURI));
+        
+        /* conf|int */
+        if (context->type == HEIM_DIGEST_TYPE_RFC2831) {
+            if (strcasecmp(context->clientQOP, "auth-int") == 0 || strcasecmp(context->clientQOP, "auth-conf") == 0) {
+                /* XXX if we have a body hash, use that */
+                static char conf_zeros[] = ":0000000000000000000000000000000000000000000000000000000000000000";
+                CC_SHA256_Update(&ctx, conf_zeros, sizeof(conf_zeros) - 1);
+            }
+        } else {
+            /* support auth-int ? */
+        }
+        CC_SHA256_Final(md, &ctx);
     } else {
-	/* support auth-int ? */
-	if (context->clientQOP && strcasecmp(context->clientQOP, "auth") != 0)
-	    return NULL;
+        CC_MD5_CTX ctx;
+        CC_MD5_Init(&ctx);
+        if (method)
+            CC_MD5_Update(&ctx, method, (CC_LONG)strlen(method));
+        CC_MD5_Update(&ctx, ":", 1);
+        CC_MD5_Update(&ctx, context->clientURI, (CC_LONG)strlen(context->clientURI));
+        
+        /* conf|int */
+        if (context->type == HEIM_DIGEST_TYPE_RFC2831) {
+            if (strcasecmp(context->clientQOP, "auth-int") == 0 || strcasecmp(context->clientQOP, "auth-conf") == 0) {
+                /* XXX if we have a body hash, use that */
+                static char conf_zeros[] = ":00000000000000000000000000000000";
+                CC_MD5_Update(&ctx, conf_zeros, sizeof(conf_zeros) - 1);
+            }
+        } else {
+            /* support auth-int ? */
+            if (context->clientQOP && strcasecmp(context->clientQOP, "auth") != 0)
+                return NULL;
+        }
+        
+        CC_MD5_Final(md, &ctx);
     }
-	
-    CC_MD5_Final(md, &ctx);
 
-    hex_encode(md, sizeof(md), &A2);
+    hex_encode(md, hash_len, &A2);
     if (A2)
       strlwr(A2);
 
@@ -402,6 +458,15 @@ heim_digest_create(int server, int type)
     context->flags |= F_SERVER;
     context->type = type;
 
+    /* Warn about MD5 usage and suggest SHA-256 */
+    if (type == HEIM_DIGEST_TYPE_RFC2617_MD5 ||
+        type == HEIM_DIGEST_TYPE_RFC2617_MD5_SESS ||
+        type == HEIM_DIGEST_TYPE_MD5 ||
+        type == HEIM_DIGEST_TYPE_MD5_SESS ||
+        type == HEIM_DIGEST_TYPE_RFC2831) {
+        fprintf(stderr, "Warning: MD5 digest algorithm is cryptographically weak and deprecated. Consider using HEIM_DIGEST_TYPE_RFC2617_SHA256 or HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS.\n");
+    }
+
     return context;
 }
 
@@ -465,6 +530,17 @@ heim_digest_generate_challenge(heim_digest_t context)
 	    asprintf(&challenge, "realm=\"%s\",nonce=\"%s\",algorithm=md5-sess,qop=\"%s\"",
 		     context->serverRealm, context->serverNonce, context->serverQOP);
 	    break;
+	case HEIM_DIGEST_TYPE_RFC2617_SHA256:
+	    context->flags |= F_USE_SHA256;
+	    asprintf(&challenge, "realm=\"%s\",nonce=\"%s\",algorithm=sha-256,qop=\"%s\"",
+		     context->serverRealm, context->serverNonce,
+		     context->serverQOP);
+	    break;
+	case HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS:
+	    context->flags |= F_USE_SHA256;
+	    asprintf(&challenge, "realm=\"%s\",nonce=\"%s\",algorithm=sha-256-sess,qop=\"%s\"",
+		     context->serverRealm, context->serverNonce, context->serverQOP);
+	    break;
 	case HEIM_DIGEST_TYPE_RFC2069:
 	    asprintf(&challenge, "realm=\"%s\",nonce=\"%s\"",
 		     context->serverRealm, context->serverNonce);
@@ -511,6 +587,12 @@ heim_digest_parse_challenge(heim_digest_t context, const char *challenge)
 	type = HEIM_DIGEST_TYPE_RFC2617_MD5;
     } else if (strcasecmp(context->serverAlgorithm, "md5-sess") == 0) {
 	type = HEIM_DIGEST_TYPE_RFC2617_OR_RFC2831;
+    } else if (strcasecmp(context->serverAlgorithm, "sha-256") == 0) {
+	type = HEIM_DIGEST_TYPE_RFC2617_SHA256;
+	context->flags |= F_USE_SHA256;
+    } else if (strcasecmp(context->serverAlgorithm, "sha-256-sess") == 0) {
+	type = HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS;
+	context->flags |= F_USE_SHA256;
     } else {
 	goto out;
     }
@@ -574,6 +656,9 @@ heim_digest_parse_response(heim_digest_t context, const char *response)
 	}
     } else if (context->type == HEIM_DIGEST_TYPE_RFC2831) {
 	context->clientURI = values_find(&val, "digest-uri");
+    } else if (context->type == HEIM_DIGEST_TYPE_RFC2617_SHA256 || 
+               context->type == HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS) {
+	context->clientURI = values_find(&val, "uri");
     } else {
 	context->clientURI = values_find(&val, "uri");
     }
@@ -989,6 +1074,46 @@ heim_digest_set_key(heim_digest_t context, const char *key, const char *value)
 	if (n == sizeof(keys) / sizeof(keys[0]))
 	    return ENOENT;
     }
+    return 0;
+}
+
+/**
+ * Set the preferred hash algorithm for digest authentication.
+ * This function allows configuring stronger algorithms like SHA-256
+ * instead of the default MD5.
+ *
+ * @param context digest context
+ * @param algorithm algorithm type (HEIM_DIGEST_TYPE_SHA256, etc.)
+ * @return 0 on success, error code on failure
+ */
+
+int
+heim_digest_set_algorithm(heim_digest_t context, int algorithm)
+{
+    if (context == NULL)
+        return EINVAL;
+    
+    /* Warn about MD5 usage */
+    if (algorithm == HEIM_DIGEST_TYPE_RFC2617_MD5 ||
+        algorithm == HEIM_DIGEST_TYPE_RFC2617_MD5_SESS ||
+        algorithm == HEIM_DIGEST_TYPE_MD5 ||
+        algorithm == HEIM_DIGEST_TYPE_MD5_SESS) {
+        /* Log warning about weak algorithm - in a real implementation,
+         * this would use proper logging facilities */
+        fprintf(stderr, "Warning: MD5 digest algorithm is cryptographically weak and deprecated. Consider using SHA-256.\n");
+    }
+    
+    /* Set SHA-256 flag for SHA-256 variants */
+    if (algorithm == HEIM_DIGEST_TYPE_RFC2617_SHA256 ||
+        algorithm == HEIM_DIGEST_TYPE_RFC2617_SHA256_SESS ||
+        algorithm == HEIM_DIGEST_TYPE_SHA256 ||
+        algorithm == HEIM_DIGEST_TYPE_SHA256_SESS) {
+        context->flags |= F_USE_SHA256;
+    } else {
+        context->flags &= ~F_USE_SHA256;
+    }
+    
+    context->type = algorithm;
     return 0;
 }
 
