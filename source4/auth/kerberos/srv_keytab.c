@@ -81,6 +81,8 @@ static krb5_error_code keytab_add_keys(TALLOC_CTX *parent_ctx,
 		if (ret != 0) {
 			*error_string = talloc_strdup(parent_ctx,
 						      "Failed to create key from string");
+			/* Clear password from memory before returning */
+			memset(discard_const_p(char, password_s), 0, password.length);
 			return ret;
 		}
 
@@ -101,6 +103,8 @@ static krb5_error_code keytab_add_keys(TALLOC_CTX *parent_ctx,
 			if (ret != 0) {
 				krb5_free_keyblock_contents(context,
 							    KRB5_KT_KEY(&entry));
+				/* Clear password from memory before returning */
+				memset(discard_const_p(char, password_s), 0, password.length);
 				return ret;
 			}
 
@@ -131,6 +135,8 @@ static krb5_error_code keytab_add_keys(TALLOC_CTX *parent_ctx,
 				talloc_free(k5_error_string);
 				krb5_free_keyblock_contents(context,
 							    KRB5_KT_KEY(&entry));
+				/* Clear password from memory before returning */
+				memset(discard_const_p(char, password_s), 0, password.length);
 				return ret;
 			}
 
@@ -139,6 +145,9 @@ static krb5_error_code keytab_add_keys(TALLOC_CTX *parent_ctx,
 		}
 		krb5_free_keyblock_contents(context, KRB5_KT_KEY(&entry));
 	}
+	
+	/* Clear password from memory before returning */
+	memset(discard_const_p(char, password_s), 0, password.length);
 	return 0;
 }
 
