@@ -239,7 +239,8 @@ _PUBLIC_ NTSTATUS cli_credentials_get_ntlm_response(struct cli_credentials *cred
 		/* LM Key is incompatible... */
 		*flags &= ~CLI_CRED_LANMAN_AUTH;
 	} else {
-		const char *password = cli_credentials_get_password(cred);
+		const char *password_ref = cli_credentials_get_password(cred);
+		char *password = NULL;
 		uint8_t lm_hash[16];
 		bool do_lm = false;
 
@@ -266,8 +267,23 @@ _PUBLIC_ NTSTATUS cli_credentials_get_ntlm_response(struct cli_credentials *cred
 		/* lanman auth is insecure, it may be disabled.
 		   We may also not have a password */
 
-		if (password != NULL) {
+		if (password_ref != NULL) {
+			/* Create a local copy of the password for secure handling */
+			password = talloc_strdup(frame, password_ref);
+			if (password == NULL) {
+				TALLOC_FREE(frame);
+				return NT_STATUS_NO_MEMORY;
+			}
+			talloc_keep_secret(password);
+			
 			do_lm = E_deshash(password, lm_hash);
+			
+			/* Clear the local password copy immediately after use */
+			if (password != NULL) {
+				memset(password, 0, strlen(password));
+				TALLOC_FREE(password);
+				password = NULL;
+			}
 		}
 
 		if (*flags & CLI_CRED_LANMAN_AUTH && do_lm) {
