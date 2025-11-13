@@ -150,6 +150,7 @@ static krb5_error_code kpasswd_set_password(struct kdc_server *kdc,
 	if ((chpw.targname != NULL && chpw.targrealm == NULL) ||
 	    (chpw.targname == NULL && chpw.targrealm != NULL)) {
 		free_ChangePasswdDataMS(&chpw);
+		data_blob_clear_free(&password);
 		ok = kpasswd_make_error_reply(mem_ctx,
 					      KRB5_KPASSWD_MALFORMED,
 					      "Realm and principal must be "
@@ -164,13 +165,15 @@ static krb5_error_code kpasswd_set_password(struct kdc_server *kdc,
 
 	if (chpw.targname == NULL || chpw.targrealm == NULL) {
 		free_ChangePasswdDataMS(&chpw);
-		return kpasswd_change_password(kdc,
+		code = kpasswd_change_password(kdc,
 					       mem_ctx,
 					       gensec_security,
 					       session_info,
 					       &password,
 					       kpasswd_reply,
 					       error_string);
+		data_blob_clear_free(&password);
+		return code;
 	}
 	code = krb5_build_principal_ext(context,
 					&target_principal,
@@ -179,6 +182,7 @@ static krb5_error_code kpasswd_set_password(struct kdc_server *kdc,
 					0);
 	if (code != 0) {
 		free_ChangePasswdDataMS(&chpw);
+		data_blob_clear_free(&password);
 		return kpasswd_make_error_reply(mem_ctx,
 						KRB5_KPASSWD_MALFORMED,
 						"Failed to parse principal",
@@ -189,6 +193,7 @@ static krb5_error_code kpasswd_set_password(struct kdc_server *kdc,
 	free_ChangePasswdDataMS(&chpw);
 	if (code != 0) {
 		krb5_free_principal(context, target_principal);
+		data_blob_clear_free(&password);
 		return kpasswd_make_error_reply(mem_ctx,
 						KRB5_KPASSWD_MALFORMED,
 						"Failed to parse principal",
@@ -208,6 +213,7 @@ static krb5_error_code kpasswd_set_password(struct kdc_server *kdc,
 	}
 	krb5_free_principal(context, target_principal);
 	if (code != 0) {
+		data_blob_clear_free(&password);
 		ok = kpasswd_make_error_reply(mem_ctx,
 					      KRB5_KPASSWD_MALFORMED,
 					      "Failed to parse principal",
@@ -240,10 +246,12 @@ static krb5_error_code kpasswd_set_password(struct kdc_server *kdc,
 					 dominfo,
 					 kpasswd_reply);
 	if (!ok) {
+		data_blob_clear_free(&password);
 		*error_string = "Failed to create reply";
 		return KRB5_KPASSWD_HARDERROR;
 	}
 
+	data_blob_clear_free(&password);
 	return 0;
 }
 
