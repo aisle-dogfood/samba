@@ -2463,10 +2463,22 @@ struct tevent_req *netlogon_creds_cli_ServerPasswordSet_send(TALLOC_CTX *mem_ctx
 	if (new_version != NULL) {
 		struct NL_PASSWORD_VERSION version;
 		uint32_t len = IVAL(state->samr_crypt_password.data, 512);
-		uint32_t ofs = 512 - len;
+		uint32_t ofs;
 		uint8_t *p;
 
+		/* 
+		 * Ensure we have enough space for both the password and the 
+		 * 12-byte version structure. The password length should not
+		 * exceed 500 bytes to leave room for the version structure.
+		 */
 		if (len > 500) {
+			tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER_MIX);
+			return tevent_req_post(req, ev);
+		}
+		
+		ofs = 512 - len;
+		/* Ensure we have at least 12 bytes available before the password */
+		if (ofs < 12) {
 			tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER_MIX);
 			return tevent_req_post(req, ev);
 		}
