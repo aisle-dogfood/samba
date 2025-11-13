@@ -103,7 +103,6 @@ COMMAND_TABLE cmd_table[] = {
 	{"check",	CMD_CHECK},
 	{"quit",	CMD_QUIT},
 	{"q",		CMD_QUIT},
-	{"!",		CMD_SYSTEM},
 	{"repack",	CMD_REPACK},
 	{NULL,		CMD_HELP}
 };
@@ -730,13 +729,9 @@ static int do_command(void)
 		bIterate = 0;
 		return open_tdb(arg1);
 	case CMD_SYSTEM:
-		/* Shell command */
-		ret = system(arg1);
-		if (ret != 0) {
-			terror("system() call failed\n");
-			return ret;
-		}
-		return 0;
+		/* Shell command functionality disabled for security reasons */
+		terror("system command disabled for security reasons\n");
+		return -1;
 	case CMD_QUIT:
 		return 1;
 	default:
