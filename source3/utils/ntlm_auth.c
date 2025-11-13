@@ -2488,7 +2488,7 @@ static bool check_auth_crap(void)
 					      &error_string, NULL);
 
 	if (!NT_STATUS_IS_OK(nt_status)) {
-		printf("%s (0x%x)\n", error_string,
+		printf("Authentication failed (0x%x)\n",
 		       NT_STATUS_V(nt_status));
 		SAFE_FREE(error_string);
 		return False;
