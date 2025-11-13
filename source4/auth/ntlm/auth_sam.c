@@ -284,7 +284,7 @@ static const struct samr_Password *hide_invalid_nthash(const struct samr_Passwor
 	 * value.
 	 */
 	if (mem_equal_const_time(in->hash, zero_string_hash.hash, 16)) {
-		in = NULL;
+		return NULL;
 	}
 
 	return in;
