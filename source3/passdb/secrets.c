@@ -316,12 +316,19 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
                                            const struct dom_sid *sid)
 {
 	bool ret;
+	char *pwd_copy = NULL;
 
 	/* packing structures */
 	DATA_BLOB blob;
 	enum ndr_err_code ndr_err;
 	struct TRUSTED_DOM_PASS pass;
 	ZERO_STRUCT(pass);
+
+	/* Create a local copy of the password for secure handling */
+	pwd_copy = talloc_strdup(talloc_tos(), pwd);
+	if (pwd_copy == NULL) {
+		return false;
+	}
 
 	pass.uni_name = domain;
 	pass.uni_name_len = strlen(domain)+1;
@@ -330,8 +337,8 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 	pass.mod_time = time(NULL);
 
 	/* password of the trust */
-	pass.pass_len = strlen(pwd);
-	pass.pass = pwd;
+	pass.pass_len = strlen(pwd_copy);
+	pass.pass = pwd_copy;
 
 	/* domain sid */
 	sid_copy(&pass.domain_sid, sid);
@@ -339,10 +346,19 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 	ndr_err = ndr_push_struct_blob(&blob, talloc_tos(), &pass,
 			(ndr_push_flags_fn_t)ndr_push_TRUSTED_DOM_PASS);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+		/* Clear sensitive data before returning */
+		BURN_STR(pwd_copy);
+		ZERO_STRUCT(pass);
+		talloc_free(pwd_copy);
 		return false;
 	}
 
 	ret = secrets_store(trustdom_keystr(domain), blob.data, blob.length);
+
+	/* Clear sensitive data from memory */
+	BURN_STR(pwd_copy);
+	ZERO_STRUCT(pass);
+	talloc_free(pwd_copy);
 
 	/* This blob is talloc based. */
 	data_blob_clear_free(&blob);
