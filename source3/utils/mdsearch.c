@@ -121,8 +121,9 @@ int main(int argc, char **argv)
 
 	samba_cmdline_burn(argc, argv);
 
-	if ((server[0] == '/' && server[1] == '/') ||
-	    (server[0] == '\\' && server[1] ==  '\\'))
+	if (strlen(server) >= 2 &&
+	    ((server[0] == '/' && server[1] == '/') ||
+	     (server[0] == '\\' && server[1] ==  '\\')))
 	{
 		server += 2;
 	}
