@@ -326,6 +326,10 @@ bool make_user_info_for_reply(TALLOC_CTX *mem_ctx,
 						   (const char *)plaintext_password.data,
 						   plaintext_password.length);
 	if (!plaintext_password_string) {
+		/* Clear sensitive data before returning */
+		if (local_lm_blob.data) {
+			memset(local_lm_response, 0, sizeof(local_lm_response));
+		}
 		return false;
 	}
 
@@ -341,9 +345,15 @@ bool make_user_info_for_reply(TALLOC_CTX *mem_ctx,
 		plaintext_password_string,
 		AUTH_PASSWORD_PLAIN);
 
+	/* Clear sensitive data from memory */
 	if (plaintext_password_string) {
-		memset(plaintext_password_string, '\0', strlen(plaintext_password_string));
+		memset(plaintext_password_string, 0, plaintext_password.length);
 		talloc_free(plaintext_password_string);
+	}
+	
+	/* Clear the local LM response array */
+	if (local_lm_blob.data) {
+		memset(local_lm_response, 0, sizeof(local_lm_response));
 	}
 
 	data_blob_free(&local_lm_blob);
