@@ -1025,10 +1025,10 @@ static virusfilter_action virusfilter_treat_infected_file(
 		}
 	}
 
-	command = virusfilter_string_sub(mem_ctx, conn,
-					 config->infected_file_command);
+	command = virusfilter_string_sub_safe(mem_ctx, conn,
+					      config->infected_file_command);
 	if (command == NULL) {
-		DBG_ERR("virusfilter_string_sub failed\n");
+		DBG_ERR("virusfilter_string_sub_safe failed\n");
 		goto done;
 	}
 
@@ -1095,10 +1095,10 @@ static void virusfilter_treat_scan_error(
 		}
 	}
 
-	command = virusfilter_string_sub(mem_ctx, conn,
-					 config->scan_error_command);
+	command = virusfilter_string_sub_safe(mem_ctx, conn,
+					      config->scan_error_command);
 	if (command == NULL) {
-		DBG_ERR("virusfilter_string_sub failed\n");
+		DBG_ERR("virusfilter_string_sub_safe failed\n");
 		goto done;
 	}
 
