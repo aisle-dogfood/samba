@@ -5096,6 +5096,8 @@ static int cmd_logon(void)
 	char *l_username, *l_password;
 	struct cli_credentials *creds = NULL;
 	NTSTATUS nt_status;
+	char pwd[256] = {0};
+	bool pwd_allocated = false;
 
 	if (!next_token_talloc(ctx, &cmd_ptr,&l_username,NULL)) {
 		d_printf("logon <username> [<password>]\n");
@@ -5103,15 +5105,16 @@ static int cmd_logon(void)
 	}
 
 	if (!next_token_talloc(ctx, &cmd_ptr,&l_password,NULL)) {
-		char pwd[256] = {0};
 		int rc;
 
 		rc = samba_getpass("Password: ", pwd, sizeof(pwd), false, false);
 		if (rc == 0) {
 			l_password = talloc_strdup(ctx, pwd);
+			pwd_allocated = true;
 		}
 	}
 	if (!l_password) {
+		memset(pwd, 0, sizeof(pwd));
 		return 1;
 	}
 
@@ -5126,10 +5129,22 @@ static int cmd_logon(void)
 				       false); /* password_is_nt_hash */
 	if (creds == NULL) {
 		d_printf("cli_session_creds_init() failed.\n");
+		/* Securely clear password data from memory */
+		if (pwd_allocated && l_password != NULL) {
+			memset(l_password, 0, strlen(l_password));
+		}
+		memset(pwd, 0, sizeof(pwd));
 		return -1;
 	}
 	nt_status = cli_session_setup_creds(cli, creds);
 	TALLOC_FREE(creds);
+	
+	/* Securely clear password data from memory */
+	if (pwd_allocated && l_password != NULL) {
+		memset(l_password, 0, strlen(l_password));
+	}
+	memset(pwd, 0, sizeof(pwd));
+	
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		d_printf("session setup failed: %s\n", nt_errstr(nt_status));
 		return -1;

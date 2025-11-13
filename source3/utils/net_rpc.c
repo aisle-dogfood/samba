@@ -1113,6 +1113,8 @@ static int rpc_user_password(struct net_context *c, int argc, const char **argv)
 	struct USER_INFO_1003 u1003;
 	uint32_t parm_err = 0;
 	int ret;
+	char pwd[256] = {0};
+	bool pwd_allocated = false;
 
 	if (argc < 1 || c->display_usage) {
 		rpc_user_usage(c, argc, argv);
@@ -1122,7 +1124,6 @@ static int rpc_user_password(struct net_context *c, int argc, const char **argv)
 	if (argv[1]) {
 		u1003.usri1003_password = argv[1];
 	} else {
-		char pwd[256] = {0};
 		ret = asprintf(&prompt, _("Enter new password for %s:"),
 			       argv[0]);
 		if (ret == -1) {
@@ -1132,16 +1133,25 @@ static int rpc_user_password(struct net_context *c, int argc, const char **argv)
 		ret = samba_getpass(prompt, pwd, sizeof(pwd), false, false);
 		SAFE_FREE(prompt);
 		if (ret < 0) {
+			memset(pwd, 0, sizeof(pwd));
 			return -1;
 		}
 
 		u1003.usri1003_password = talloc_strdup(c, pwd);
 		if (u1003.usri1003_password == NULL) {
+			memset(pwd, 0, sizeof(pwd));
 			return -1;
 		}
+		pwd_allocated = true;
 	}
 
 	status = NetUserSetInfo(c->opt_host, argv[0], 1003, (uint8_t *)&u1003, &parm_err);
+
+	/* Securely clear password data from memory */
+	if (pwd_allocated && u1003.usri1003_password != NULL) {
+		memset((char *)u1003.usri1003_password, 0, strlen(u1003.usri1003_password));
+	}
+	memset(pwd, 0, sizeof(pwd));
 
 	/* Display results */
 	if (status != 0) {
