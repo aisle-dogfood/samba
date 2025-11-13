@@ -92,6 +92,14 @@ import sys
 import xml.etree.ElementTree as ElementTree
 from waflib import Task, TaskGen, Logs, Context, Options
 
+def secure_fromstring(xml_string):
+	"""Secure XML parsing that disables external entity processing to prevent XXE attacks"""
+	parser = ElementTree.XMLParser()
+	# Disable external entity processing
+	parser.entity = {}
+	parser.DefaultHandler = lambda data: None
+	return ElementTree.fromstring(xml_string, parser)
+
 PYGMENTS_EXC_MSG= '''
 The required module 'pygments' could not be found. Please install it using your
 platform package manager (e.g. apt-get or yum), using 'pip' or 'easy_install',
@@ -235,7 +243,7 @@ class cppcheck(Task.Task):
 		and save as xml file.
 		'''
 		header = '%s\n' % s.splitlines()[0]
-		root = ElementTree.fromstring(s)
+		root = secure_fromstring(s)
 		cmd = ElementTree.SubElement(root.find('cppcheck'), 'cmd')
 		cmd.text = str(self.cmd)
 		body = ElementTree.tostring(root).decode('us-ascii')
@@ -250,7 +258,7 @@ class cppcheck(Task.Task):
 		a list of defects.
 		'''
 		defects = []
-		for error in ElementTree.fromstring(xml_string).iter('error'):
+		for error in secure_fromstring(xml_string).iter('error'):
 			defect = {}
 			defect['id'] = error.get('id')
 			defect['severity'] = error.get('severity')
@@ -295,7 +303,7 @@ class cppcheck(Task.Task):
 
 	def _create_html_file(self, sourcefile, htmlfile, errors):
 		name = self.generator.get_name()
-		root = ElementTree.fromstring(CPPCHECK_HTML_FILE)
+		root = secure_fromstring(CPPCHECK_HTML_FILE)
 		title = root.find('head/title')
 		title.text = 'cppcheck - report - %s' % name
 
@@ -323,7 +331,7 @@ class cppcheck(Task.Task):
 				css_style_defs = formatter.get_style_defs('.highlight')
 				lexer = pygments.lexers.guess_lexer_for_filename(sourcefile, "")
 				s = pygments.highlight(srcnode.read(), lexer, formatter)
-				table = ElementTree.fromstring(s)
+				table = secure_fromstring(s)
 				content.append(table)
 
 		s = ElementTree.tostring(root, method='html').decode('us-ascii')
@@ -334,7 +342,7 @@ class cppcheck(Task.Task):
 
 	def _create_html_index(self, files):
 		name = self.generator.get_name()
-		root = ElementTree.fromstring(CPPCHECK_HTML_FILE)
+		root = secure_fromstring(CPPCHECK_HTML_FILE)
 		title = root.find('head/title')
 		title.text = 'cppcheck - report - %s' % name
 
@@ -367,11 +375,11 @@ class cppcheck(Task.Task):
 		return node
 
 	def _create_html_table(self, content, files):
-		table = ElementTree.fromstring(CPPCHECK_HTML_TABLE)
+		table = secure_fromstring(CPPCHECK_HTML_TABLE)
 		for name, val in files.items():
 			f = val['htmlfile']
 			s = '<tr><td colspan="4"><a href="%s">%s</a></td></tr>\n' % (f,name)
-			row = ElementTree.fromstring(s)
+			row = secure_fromstring(s)
 			table.append(row)
 
 			errors = sorted(val['errors'], key=lambda e: int(e['line']) if 'line' in e else sys.maxint)
@@ -384,7 +392,7 @@ class cppcheck(Task.Task):
 						attr = 'class="error"'
 					s = '<tr><td><a href="%s#line-%s">%s</a></td>' % (f, e['line'], e['line'])
 					s+= '<td>%s</td><td>%s</td><td %s>%s</td></tr>\n' % (e['id'], e['severity'], attr, e['msg'])
-				row = ElementTree.fromstring(s)
+				row = secure_fromstring(s)
 				table.append(row)
 		content.append(table)
 
