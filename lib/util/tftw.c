@@ -60,7 +60,6 @@ int tftw(TALLOC_CTX *mem_ctx, const char *fpath, tftw_walker_fn fn, size_t depth
 		/* skip "." and ".." */
 		if (d_name[0] == '.' && (d_name[1] == '\0'
 					|| (d_name[1] == '.' && d_name[2] == '\0'))) {
-			dirent = NULL;
 			continue;
 		}
 
@@ -71,7 +70,6 @@ int tftw(TALLOC_CTX *mem_ctx, const char *fpath, tftw_walker_fn fn, size_t depth
 
 		rc = lstat(filename, &sb);
 		if (rc < 0) {
-			dirent = NULL;
 			goto error;
 		}
 
@@ -113,7 +111,6 @@ int tftw(TALLOC_CTX *mem_ctx, const char *fpath, tftw_walker_fn fn, size_t depth
 			}
 		}
 		TALLOC_FREE(filename);
-		dirent = NULL;
 	}
 	closedir(dh);
 
