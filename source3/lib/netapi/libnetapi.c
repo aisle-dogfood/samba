@@ -455,6 +455,9 @@ NET_API_STATUS NetComposeOfflineDomainJoin(const char *dns_domain_name /* [in] [
 		NDR_PRINT_OUT_DEBUG(NetComposeOfflineDomainJoin, &r);
 	}
 
+	/* Securely clear sensitive data from memory */
+	ZERO_STRUCT(r);
+
 	TALLOC_FREE(frame);
 	return (NET_API_STATUS)r.out.result;
 }
