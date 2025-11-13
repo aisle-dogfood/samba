@@ -2015,7 +2015,7 @@ static void manage_ntlm_server_1_request(enum stdio_helper_mode stdio_helper_mod
 		SAFE_FREE(full_username);
 		SAFE_FREE(username);
 		SAFE_FREE(domain);
-		SAFE_FREE(plaintext_password);
+		BURN_FREE_STR(plaintext_password);
 		ntlm_server_1_user_session_key = False;
 		ntlm_server_1_lm_session_key = False;
 		printf(".\n");
@@ -2268,8 +2268,8 @@ static void manage_ntlm_change_password_1_request(enum stdio_helper_mode stdio_h
 		SAFE_FREE(full_username);
 		SAFE_FREE(username);
 		SAFE_FREE(domain);
-		SAFE_FREE(newpswd);
-		SAFE_FREE(oldpswd);
+		BURN_FREE_STR(newpswd);
+		BURN_FREE_STR(oldpswd);
 		printf(".\n");
 
 		return;
