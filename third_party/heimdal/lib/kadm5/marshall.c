@@ -647,13 +647,14 @@ eval_recipe1(krb5_storage *sp, const char *typ, const char *val)
     }
     if (strcmp(typ, "rawdata") == 0) {
         ssize_t dsz = strlen(val);
+        ssize_t alloc_size = (dsz + 1) / 2;  /* Calculate actual needed size for hex decode */
         void *d;
 
         /* Store the data w/o a length prefix */
-        d = malloc(dsz);
+        d = malloc(alloc_size);
         if (d == NULL)
             return ENOMEM;
-        dsz = hex_decode(val, d, dsz);
+        dsz = hex_decode(val, d, alloc_size);
         if (dsz < 0)
             return EINVAL;
         ret = krb5_store_datalen(sp, d, dsz);
