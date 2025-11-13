@@ -908,7 +908,7 @@ krb5_error_code mit_samba_kpasswd_change_password(struct mit_samba_context *ctx,
 	*ctx->db_ctx->current_nttime_ull = p->current_nttime;
 
 #ifdef DEBUG_PASSWORD
-	DBG_WARNING("mit_samba_kpasswd_change_password called with: %s\n", pwd);
+	DBG_WARNING("mit_samba_kpasswd_change_password called with password (length: %zu)\n", strlen(pwd));
 #endif
 
 	tmp_ctx = talloc_named(ctx, 0, "mit_samba_kpasswd_change_password");
