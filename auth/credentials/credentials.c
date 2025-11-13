@@ -1463,7 +1463,7 @@ _PUBLIC_ bool cli_credentials_guess(struct cli_credentials *cred,
 							   env,
 							   CRED_GUESS_ENV);
 			if ((p = strchr_m(env, '%'))) {
-				memset(p, '\0', strlen(cred->password));
+				memset(p, '\0', strlen(p));
 			}
 		}
 	}
