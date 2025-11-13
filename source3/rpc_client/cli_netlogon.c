@@ -599,6 +599,10 @@ NTSTATUS rpccli_netlogon_password_logon(
 
 	logon = talloc_zero(frame, union netr_LogonLevel);
 	if (logon == NULL) {
+		ZERO_STRUCT(lmpassword);
+		ZERO_STRUCT(ntpassword);
+		ZERO_ARRAY(local_nt_response);
+		ZERO_ARRAY(local_lm_response);
 		TALLOC_FREE(frame);
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -609,6 +613,10 @@ NTSTATUS rpccli_netlogon_password_logon(
 
 	workstation_slash = talloc_asprintf(frame, "\\\\%s", workstation);
 	if (workstation_slash == NULL) {
+		ZERO_STRUCT(lmpassword);
+		ZERO_STRUCT(ntpassword);
+		ZERO_ARRAY(local_nt_response);
+		ZERO_ARRAY(local_lm_response);
 		TALLOC_FREE(frame);
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -624,6 +632,10 @@ NTSTATUS rpccli_netlogon_password_logon(
 
 		password_info = talloc_zero(frame, struct netr_PasswordInfo);
 		if (password_info == NULL) {
+			ZERO_STRUCT(lmpassword);
+			ZERO_STRUCT(ntpassword);
+			ZERO_ARRAY(local_nt_response);
+			ZERO_ARRAY(local_lm_response);
 			TALLOC_FREE(frame);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -654,6 +666,10 @@ NTSTATUS rpccli_netlogon_password_logon(
 
 		network_info = talloc_zero(frame, struct netr_NetworkInfo);
 		if (network_info == NULL) {
+			ZERO_STRUCT(lmpassword);
+			ZERO_STRUCT(ntpassword);
+			ZERO_ARRAY(local_nt_response);
+			ZERO_ARRAY(local_lm_response);
 			TALLOC_FREE(frame);
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -663,6 +679,10 @@ NTSTATUS rpccli_netlogon_password_logon(
 		SMBencrypt(password, chal, local_lm_response);
 		rc = SMBNTencrypt(password, chal, local_nt_response);
 		if (rc != 0) {
+			ZERO_STRUCT(lmpassword);
+			ZERO_STRUCT(ntpassword);
+			ZERO_ARRAY(local_nt_response);
+			ZERO_ARRAY(local_lm_response);
 			TALLOC_FREE(frame);
 			return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
 		}
@@ -690,6 +710,10 @@ NTSTATUS rpccli_netlogon_password_logon(
 	default:
 		DEBUG(0, ("switch value %d not supported\n",
 			logon_type));
+		ZERO_STRUCT(lmpassword);
+		ZERO_STRUCT(ntpassword);
+		ZERO_ARRAY(local_nt_response);
+		ZERO_ARRAY(local_lm_response);
 		TALLOC_FREE(frame);
 		return NT_STATUS_INVALID_INFO_CLASS;
 	}
@@ -704,10 +728,18 @@ NTSTATUS rpccli_netlogon_password_logon(
 						  authoritative,
 						  flags);
 	if (!NT_STATUS_IS_OK(status)) {
+		ZERO_STRUCT(lmpassword);
+		ZERO_STRUCT(ntpassword);
+		ZERO_ARRAY(local_nt_response);
+		ZERO_ARRAY(local_lm_response);
 		TALLOC_FREE(frame);
 		return status;
 	}
 
+	ZERO_STRUCT(lmpassword);
+	ZERO_STRUCT(ntpassword);
+	ZERO_ARRAY(local_nt_response);
+	ZERO_ARRAY(local_lm_response);
 	TALLOC_FREE(frame);
 	*_validation_level = validation_level;
 	*_validation = validation;
