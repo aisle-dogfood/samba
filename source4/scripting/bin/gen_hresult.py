@@ -23,6 +23,7 @@
 
 
 import sys
+import os
 from gen_error_common import parseErrorDescriptions
 
 def write_license(out_file):
@@ -165,6 +166,24 @@ def generatePythonFile(out_file, errors):
 def transformErrorName(error_name):
     return "HRES_" + error_name
 
+def validate_output_path(file_path):
+    """
+    Validate that the output file path is safe and doesn't contain path traversal sequences.
+    Returns the normalized path if safe, raises ValueError if unsafe.
+    """
+    # Normalize the path to resolve any ".." sequences
+    normalized_path = os.path.normpath(file_path)
+    
+    # Check for path traversal attempts
+    if ".." in normalized_path or normalized_path.startswith("/"):
+        raise ValueError(f"Unsafe file path detected: {file_path}")
+    
+    # Ensure the path doesn't start with a path separator after normalization
+    if os.path.isabs(normalized_path):
+        raise ValueError(f"Absolute paths not allowed: {file_path}")
+    
+    return normalized_path
+
 # Very simple script to generate files hresult.c & hresult.h
 # This script takes four inputs:
 # [1]: The name of the text file which is the content of an HTML table
@@ -179,9 +198,14 @@ def main ():
 
     if len(sys.argv) == 5:
         input_file1 =  sys.argv[1]
-        gen_headerfile_name = sys.argv[2]
-        gen_sourcefile_name = sys.argv[3]
-        gen_pythonfile_name = sys.argv[4]
+        # Validate output file paths to prevent path traversal attacks
+        try:
+            gen_headerfile_name = validate_output_path(sys.argv[2])
+            gen_sourcefile_name = validate_output_path(sys.argv[3])
+            gen_pythonfile_name = validate_output_path(sys.argv[4])
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
     else:
         print("usage: %s winerrorfile headerfile sourcefile pythonfile"%(sys.argv[0]))
         sys.exit()
