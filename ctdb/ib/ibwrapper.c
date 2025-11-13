@@ -925,7 +925,7 @@ static int ibw_process_init_attrs(struct ibw_initattr *attr, int nattr, struct i
 		else if (strcmp(name, "recv_threshold")==0)
 			opts->recv_threshold = atoi(value);
 		else {
-			sprintf(ibw_lasterr, "ibw_init: unknown name %s\n", name);
+			snprintf(ibw_lasterr, IBW_LASTERR_BUFSIZE, "ibw_init: unknown name %s\n", name);
 			return -1;
 		}
 	}
