@@ -871,22 +871,25 @@ static NTSTATUS store_memory_creds(struct WINBINDD_MEMORY_CREDS *memcredp,
 
 static NTSTATUS delete_memory_creds(struct WINBINDD_MEMORY_CREDS *memcredp)
 {
-#if !defined(HAVE_MUNLOCK)
-	return NT_STATUS_OK;
-#else
-	if (munlock(memcredp->nt_hash, memcredp->len) == -1) {
+	/* Always clear sensitive memory before freeing, regardless of munlock support */
+	if (memcredp->nt_hash != NULL) {
+		memset(memcredp->nt_hash, '\0', memcredp->len);
+	}
+
+#if defined(HAVE_MUNLOCK)
+	if (memcredp->nt_hash != NULL && munlock(memcredp->nt_hash, memcredp->len) == -1) {
 		DEBUG(0,("failed to munlock memory: %s (%d)\n",
 			strerror(errno), errno));
-		return map_nt_error_from_unix(errno);
+		/* Continue with cleanup even if munlock fails */
 	}
-	memset(memcredp->nt_hash, '\0', memcredp->len);
+#endif
+
 	SAFE_FREE(memcredp->nt_hash);
 	memcredp->nt_hash = NULL;
 	memcredp->lm_hash = NULL;
 	memcredp->pass = NULL;
 	memcredp->len = 0;
 	return NT_STATUS_OK;
-#endif
 }
 
 /***********************************************************
