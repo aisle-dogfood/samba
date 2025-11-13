@@ -53,6 +53,20 @@ static int sesssetup_state_destructor(struct sesssetup_state *state)
 		state->req = NULL;
 	}
 
+	/* Clear sensitive password data from memory before freeing */
+	switch (state->setup.old.level) {
+	case RAW_SESSSETUP_OLD:
+		data_blob_clear_free(&state->setup.old.in.password);
+		break;
+	case RAW_SESSSETUP_NT1:
+		data_blob_clear_free(&state->setup.nt1.in.password1);
+		data_blob_clear_free(&state->setup.nt1.in.password2);
+		break;
+	default:
+		/* Other session setup types don't have password blobs to clear */
+		break;
+	}
+
 	return 0;
 }
 
