@@ -441,6 +441,11 @@ bool pdb_gethexpwd(const char *p, unsigned char *pwd)
 	if (!p)
 		return false;
 
+	/* Ensure the input string is at least 32 characters long */
+	if (strlen(p) < 32) {
+		return false;
+	}
+
 	for (i = 0; i < 32; i += 2) {
 		bool ok = hex_byte(p + i, &pwd[i / 2]);
 		if (!ok) {
