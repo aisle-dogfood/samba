@@ -891,6 +891,11 @@ static NTSTATUS msrpc_password_policy(struct winbindd_domain *domain,
 		goto done;
 	}
 
+	if (password_policy == NULL) {
+		status = NT_STATUS_INVALID_PARAMETER;
+		goto done;
+	}
+
 	*password_policy = info->info1;
 
 	DEBUG(10,("msrpc_password_policy: min_length_password %d\n",

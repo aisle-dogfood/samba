@@ -1261,6 +1261,11 @@ again:
 		goto error;
 	}
 
+	if (passwd_policy == NULL) {
+		status = NT_STATUS_INVALID_PARAMETER;
+		goto error;
+	}
+
 	*passwd_policy = info->info1;
 
 error:
