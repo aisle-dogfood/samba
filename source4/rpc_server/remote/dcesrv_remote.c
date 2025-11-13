@@ -62,11 +62,11 @@ static NTSTATUS remote_get_private(struct dcesrv_call_state *dce_call,
 	struct dcesrv_remote_private *priv = NULL;
 	struct dcesrv_remote_assoc *assoc = NULL;
 	const char *binding = NULL;
-	const char *user, *pass, *domain;
-	struct cli_credentials *credentials;
+	const char *user = NULL, *pass = NULL, *domain = NULL;
+	struct cli_credentials *credentials = NULL;
 	bool must_free_credentials = false;
-	bool machine_account;
-	bool allow_anonymous;
+	bool machine_account = false;
+	bool allow_anonymous = false;
 	struct dcerpc_binding		*b;
 	struct composite_context	*pipe_conn_req;
 	uint32_t flags = 0;
