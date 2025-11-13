@@ -288,7 +288,7 @@ struct samu {
 	DATA_BLOB lm_pw; /* .data is Null if no password */
 	DATA_BLOB nt_pw; /* .data is Null if no password */
 	DATA_BLOB nt_pw_his; /* nt hashed password history .data is Null if not available */
-	char* plaintext_pw; /* is Null if not available */
+	DATA_BLOB plaintext_pw; /* .data is Null if not available */
 
 	uint32_t acct_ctrl; /* account info (ACB_xxxx bit-mask) */
 	uint32_t fields_present; /* 0x00ff ffff */

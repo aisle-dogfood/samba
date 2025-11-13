@@ -204,7 +204,10 @@ const uint8_t *pdb_get_pw_history(const struct samu *sampass, uint32_t *current_
 */
 const char *pdb_get_plaintext_passwd(const struct samu *sampass)
 {
-	return sampass->plaintext_pw;
+	if (sampass->plaintext_pw.data == NULL) {
+		return NULL;
+	}
+	return (const char *)sampass->plaintext_pw.data;
 }
 
 const struct dom_sid *pdb_get_user_sid(const struct samu *sampass)
@@ -906,17 +909,17 @@ bool pdb_set_pw_history(struct samu *sampass, const uint8_t *pwd, uint32_t histo
 
 bool pdb_set_plaintext_pw_only(struct samu *sampass, const char *password, enum pdb_value_state flag)
 {
-	BURN_STR(sampass->plaintext_pw);
+	data_blob_clear_free(&sampass->plaintext_pw);
 
 	if (password != NULL) {
-		sampass->plaintext_pw = talloc_strdup(sampass, password);
+		sampass->plaintext_pw = data_blob_talloc(sampass, password, strlen(password) + 1);
 
-		if (!sampass->plaintext_pw) {
-			DEBUG(0, ("pdb_set_unknown_str: talloc_strdup() failed!\n"));
+		if (sampass->plaintext_pw.data == NULL) {
+			DEBUG(0, ("pdb_set_plaintext_pw_only: data_blob_talloc() failed!\n"));
 			return False;
 		}
 	} else {
-		sampass->plaintext_pw = NULL;
+		sampass->plaintext_pw = data_blob_null;
 	}
 
 	return pdb_set_init_flags(sampass, PDB_PLAINTEXT_PW, flag);
