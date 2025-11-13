@@ -359,14 +359,47 @@ class package_reader(Context.Context):
 					break
 				f.write(buf)
 
+	def _is_safe_path(self, path, base_path):
+		"""Check if the path is safe for extraction (no directory traversal)."""
+		# Resolve both paths to absolute paths
+		abs_base = os.path.abspath(base_path)
+		abs_path = os.path.abspath(os.path.join(base_path, path))
+		
+		# Check if the resolved path is within the base directory
+		return abs_path.startswith(abs_base + os.sep) or abs_path == abs_base
+
+	def _safe_extract_member(self, tarfile_obj, member, path):
+		"""Safely extract a single member, checking for path traversal."""
+		# Check for absolute paths
+		if os.path.isabs(member.name):
+			raise ValueError(f"Absolute path in tar member: {member.name}")
+		
+		# Check for path traversal attempts
+		if ".." in member.name or not self._is_safe_path(member.name, path):
+			raise ValueError(f"Path traversal attempt in tar member: {member.name}")
+		
+		# Check for unsafe symlinks
+		if member.issym() and not self._is_safe_path(member.linkname, path):
+			raise ValueError(f"Unsafe symlink in tar member: {member.name} -> {member.linkname}")
+		
+		# Check for unsafe hard links
+		if member.islnk() and not self._is_safe_path(member.linkname, path):
+			raise ValueError(f"Unsafe hard link in tar member: {member.name} -> {member.linkname}")
+		
+		# Extract the member
+		tarfile_obj.extract(member, path)
+
 	def extract_tar(self, subdir, pkgdir, tmpfile):
 		with tarfile.open(tmpfile) as f:
 			temp = tempfile.mkdtemp(dir=pkgdir)
 			try:
+				# Use modern filter if available (Python 3.11.4+)
 				if hasattr(tarfile, 'data_filter'):
 					f.extractall(temp, filter='data')
 				else:
-					f.extractall(temp)
+					# Fallback to manual safe extraction
+					for member in f.getmembers():
+						self._safe_extract_member(f, member, temp)
 				os.rename(temp, os.path.join(pkgdir, subdir))
 			finally:
 				try:
