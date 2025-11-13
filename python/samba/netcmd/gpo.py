@@ -343,6 +343,18 @@ def find_parser(name, flags=re.IGNORECASE):
     return GPParser()
 
 
+def secure_xml_fromstring(xml_data):
+    """Securely parse XML data by disabling external entity processing to prevent XXE attacks."""
+    # Create a secure XML parser that disables external entity processing
+    parser = ET.XMLParser()
+    # Disable external entity processing to prevent XXE attacks
+    parser.parser.DefaultHandler = lambda data: None
+    parser.parser.ExternalEntityRefHandler = lambda context, base, sysId, notationName: False
+    parser.parser.EntityDeclHandler = lambda entityName, is_parameter_entity, value, base, systemId, publicId, notationName: False
+    
+    return ET.fromstring(xml_data, parser)
+
+
 def backup_directory_remote_to_local(conn, remotedir, localdir):
     SUFFIX = '.SAMBABACKUP'
     if not os.path.isdir(localdir):
