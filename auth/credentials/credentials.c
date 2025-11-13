@@ -46,6 +46,62 @@ static bool str_is_ascii(const char *s) {
 }
 
 /**
+ * Destructor for cli_credentials structure to securely clear sensitive data
+ */
+static int cli_credentials_destructor(struct cli_credentials *cred)
+{
+	/* Clear sensitive string fields */
+	if (cred->password != NULL) {
+		BURN_PTR_SIZE((void *)cred->password, strlen(cred->password));
+	}
+	if (cred->old_password != NULL) {
+		BURN_PTR_SIZE((void *)cred->old_password, strlen(cred->old_password));
+	}
+	if (cred->salt_principal != NULL) {
+		BURN_PTR_SIZE(cred->salt_principal, strlen(cred->salt_principal));
+	}
+	if (cred->impersonate_principal != NULL) {
+		BURN_PTR_SIZE(cred->impersonate_principal, strlen(cred->impersonate_principal));
+	}
+	if (cred->self_service != NULL) {
+		BURN_PTR_SIZE(cred->self_service, strlen(cred->self_service));
+	}
+	if (cred->target_service != NULL) {
+		BURN_PTR_SIZE(cred->target_service, strlen(cred->target_service));
+	}
+	if (cred->bind_dn != NULL) {
+		BURN_PTR_SIZE((void *)cred->bind_dn, strlen(cred->bind_dn));
+	}
+	
+	/* Clear sensitive hash structures */
+	if (cred->nt_hash != NULL) {
+		ZERO_STRUCTP(cred->nt_hash);
+	}
+	if (cred->old_nt_hash != NULL) {
+		ZERO_STRUCTP(cred->old_nt_hash);
+	}
+	
+	/* Clear session keys and responses */
+	if (cred->lm_response.data != NULL) {
+		BURN_PTR_SIZE(cred->lm_response.data, cred->lm_response.length);
+	}
+	if (cred->lm_session_key.data != NULL) {
+		BURN_PTR_SIZE(cred->lm_session_key.data, cred->lm_session_key.length);
+	}
+	if (cred->nt_response.data != NULL) {
+		BURN_PTR_SIZE(cred->nt_response.data, cred->nt_response.length);
+	}
+	if (cred->nt_session_key.data != NULL) {
+		BURN_PTR_SIZE(cred->nt_session_key.data, cred->nt_session_key.length);
+	}
+	
+	/* Clear password metadata that could be sensitive */
+	cred->password_last_changed_time = 0;
+	
+	return 0;
+}
+
+/**
  * Create a new credentials structure
  * @param mem_ctx TALLOC_CTX parent for credentials structure
  */
@@ -55,6 +111,9 @@ _PUBLIC_ struct cli_credentials *cli_credentials_init(TALLOC_CTX *mem_ctx)
 	if (cred == NULL) {
 		return cred;
 	}
+
+	/* Set destructor to securely clear sensitive data */
+	talloc_set_destructor(cred, cli_credentials_destructor);
 
 	cred->winbind_separator = '\\';
 
