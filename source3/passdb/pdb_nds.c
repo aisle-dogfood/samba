@@ -624,6 +624,12 @@ static int nmasldap_get_password(
 
 	if (!err && pwdBufLen != 0)
 	{
+		/* Ensure pwdBufLen doesn't exceed the allocated buffer size to prevent buffer overflow */
+		if (pwdBufLen > bufferLen)
+		{
+			pwdBufLen = bufferLen;
+		}
+		
 		if (*pwdSize >= pwdBufLen+1 && pwd != NULL)
 		{
 			memcpy(pwd, pwdBuf, pwdBufLen);
