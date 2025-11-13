@@ -829,8 +829,27 @@ static NTSTATUS libnet_SetPassword_samr_handle_18(struct libnet_context *ctx, TA
 		return NT_STATUS_INVALID_PARAMETER_MIX;
 	}
 
+	/*
+	 * Check if weak crypto is allowed. SAMR level 18 uses MD4 hashing
+	 * which is cryptographically weak and deprecated.
+	 */
+	if (lpcfg_weak_crypto(ctx->lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		r->samr_handle.out.error_string = talloc_asprintf(mem_ctx,
+			"SAMR level 18 password setting uses weak MD4 encryption "
+			"which is disabled by security policy. "
+			"Use 'weak crypto = allowed' to enable legacy compatibility.");
+		return NT_STATUS_NOT_SUPPORTED;
+	}
+
 	/* prepare samr_SetUserInfo2 level 18 (nt_hash) */
 	ZERO_STRUCT(u_info);
+	
+	/* WARNING: Using MD4 hash for password - this is cryptographically weak
+	 * and should only be used for compatibility with legacy systems.
+	 * Consider upgrading to more secure authentication methods. */
+	DBG_WARNING("Using weak MD4 hash for password setting (SAMR level 18). "
+		    "This method is deprecated due to inadequate encryption strength.\n");
+	
 	E_md4hash(r->samr_handle.in.newpassword, ntpwd.hash);
 	ntpwd_in = data_blob_const(ntpwd.hash, sizeof(ntpwd.hash));
 	ntpwd_out = data_blob_const(u_info.info18.nt_pwd.hash,
