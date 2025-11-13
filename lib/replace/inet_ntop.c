@@ -40,12 +40,22 @@ static const char *inet_ntop6(const unsigned char *src, char *dst,
  *	convert a network format address to presentation format.
  * return:
  *	pointer to presentation format address (`dst'), or NULL (see errno).
+ * notes:
+ *	src must point to a valid address structure for the specified family:
+ *	- AF_INET: struct in_addr (4 bytes)
+ *	- AF_INET6: struct in6_addr (16 bytes)
  * author:
  *	Paul Vixie, 1996.
  */
 const char *
 rep_inet_ntop(int af, const void *src, char *dst, socklen_t size)
 {
+	/* Validate input parameters */
+	if (src == NULL || dst == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
 	switch (af) {
 	case AF_INET:
 		return (inet_ntop4(src, dst, size));
@@ -65,6 +75,8 @@ rep_inet_ntop(int af, const void *src, char *dst, socklen_t size)
  *	format an IPv4 address
  * return:
  *	`dst' (as a const)
+ * notes:
+ *	src must point to a valid 4-byte IPv4 address (struct in_addr)
  * author:
  *	Paul Vixie, 1996.
  */
@@ -73,6 +85,12 @@ inet_ntop4(const unsigned char *src, char *dst, socklen_t size)
 {
 	char tmp[sizeof("255.255.255.255")];
 	size_t len;
+
+	/* Validate that src is not NULL - IPv4 addresses are exactly 4 bytes */
+	if (src == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
 
 	len = snprintf(tmp,
 		       sizeof(tmp),
@@ -93,6 +111,8 @@ inet_ntop4(const unsigned char *src, char *dst, socklen_t size)
 /* const char *
  * isc_inet_ntop6(src, dst, size)
  *	convert IPv6 binary address into presentation (printable) format
+ * notes:
+ *	src must point to a valid 16-byte IPv6 address (struct in6_addr)
  * author:
  *	Paul Vixie, 1996.
  */
@@ -111,6 +131,12 @@ inet_ntop6(const unsigned char *src, char *dst, socklen_t size)
 	struct { int base, len; } best, cur;
 	unsigned int words[NS_IN6ADDRSZ / NS_INT16SZ];
 	int i, inc;
+
+	/* Validate that src is not NULL - IPv6 addresses are exactly 16 bytes */
+	if (src == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
 
 	/*
 	 * Preprocess:
