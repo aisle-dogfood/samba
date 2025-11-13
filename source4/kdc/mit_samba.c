@@ -186,11 +186,14 @@ int mit_samba_generate_random_password(krb5_data *pwd)
 		return ENOMEM;
 	}
 
-	data = strdup(password);
-	talloc_free(tmp_ctx);
+	data = malloc(length + 1);
 	if (data == NULL) {
+		talloc_free(tmp_ctx);
 		return ENOMEM;
 	}
+	memcpy(data, password, length);
+	data[length] = '\0';
+	talloc_free(tmp_ctx);
 
 	*pwd = smb_krb5_make_data(data, length);
 
