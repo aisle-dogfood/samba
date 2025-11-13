@@ -1053,6 +1053,15 @@ bool pdb_set_plaintext_passwd(struct samu *sampass, const char *plaintext)
 
 	ok = pdb_update_history(sampass, new_nt_p16);
 	ZERO_STRUCT(new_nt_p16);
+	
+	/* 
+	 * Security fix: Clear plaintext password from memory immediately
+	 * after password setting operations are complete to minimize
+	 * exposure window for plaintext credentials.
+	 */
+	BURN_STR(sampass->plaintext_pw);
+	sampass->plaintext_pw = NULL;
+	
 	return ok;
 }
 
