@@ -859,6 +859,9 @@ NTSTATUS libnet_JoinDomain(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, stru
 		talloc_free(tmp_ctx);
 		return NT_STATUS_NO_MEMORY;
 	}
+	/* Protect sensitive password data from heap inspection */
+	talloc_keep_secret(password_str);
+	talloc_set_name_const(password_str, "machine password (protected)");
 
 	/* set full_name and reset flags */
 	ZERO_STRUCT(u_info21);

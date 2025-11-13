@@ -33,7 +33,7 @@ struct provision_settings {
 	const char *realm;
 	const char *domain;
 	const char *ntds_dn_str;
-	const char *machine_password;
+	const char *machine_password; /* SECURITY: Must use talloc_keep_secret() to protect from heap inspection */
 	const char *targetdir;
 	bool use_ntvfs;
 };
@@ -50,7 +50,7 @@ struct provision_store_self_join_settings {
 	const char *realm;
 	const char *netbios_name;
 	enum netr_SchannelType secure_channel_type;
-	const char *machine_password;
+	const char *machine_password; /* SECURITY: Must use talloc_keep_secret() to protect from heap inspection */
 	int key_version_number;
 	struct dom_sid *domain_sid;
 };
