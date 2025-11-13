@@ -443,7 +443,7 @@ int main(int argc, const char **argv)
 	extra_argv = poptGetArgs(pc);
 	if (extra_argv) {
 		extra_argv++;
-		while (extra_argv[extra_argc]) extra_argc++;
+		while (extra_argv[extra_argc] && extra_argc < 1000) extra_argc++;
 	}
 
 	if ((extra_argc < 2) || (extra_argc > 5)) {
