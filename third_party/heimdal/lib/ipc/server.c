@@ -795,9 +795,16 @@ handle_http_tcp(struct client *c)
     if (t == NULL)
 	return NULL;
 
-    data = malloc(strlen(t));
-    if (data == NULL)
-	return NULL;
+    {
+        size_t input_len = strlen(t);
+        /* Calculate buffer size for base64 decoding: (input_len * 3 + 3) / 4 */
+        /* Add extra space to handle edge cases and ensure sufficient buffer */
+        size_t buf_size = (input_len * 3 + 3) / 4 + 1;
+        
+        data = malloc(buf_size);
+        if (data == NULL)
+            return NULL;
+    }
 
     if(*t == '/')
 	t++;

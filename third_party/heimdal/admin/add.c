@@ -253,8 +253,12 @@ json2keytab_entry(heim_dict_t d, krb5_keytab kt, size_t idx)
     {
         const char *s = heim_string_get_utf8(v);
         int declen;
+        size_t input_len = strlen(s);
+        /* Calculate buffer size for base64 decoding: (input_len * 3 + 3) / 4 */
+        /* Add extra space to handle edge cases and ensure sufficient buffer */
+        size_t buf_size = (input_len * 3 + 3) / 4 + 1;
 
-        if ((buf = malloc(strlen(s))) == NULL)
+        if ((buf = malloc(buf_size)) == NULL)
             err(1, "Out of memory");
         declen = rk_base64_decode(s, buf);
         if (declen < 0)
