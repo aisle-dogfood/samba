@@ -1547,6 +1547,10 @@ struct dcerpc_binding_handle *irpc_binding_handle_by_name(TALLOC_CTX *mem_ctx,
 		errno = EADDRNOTAVAIL;
 		return NULL;
 	}
+	if (num_sids == 0) {
+		errno = EADDRNOTAVAIL;
+		return NULL;
+	}
 	sid = sids[0];
 	talloc_free(sids);
 
