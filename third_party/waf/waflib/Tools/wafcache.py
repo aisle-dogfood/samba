@@ -426,11 +426,23 @@ def lru_trim():
 	taken by files is less than EVICT_MAX_BYTES
 	"""
 	lst = []
+	cache_dir_real = os.path.realpath(CACHE_DIR)
 	for up in os.listdir(CACHE_DIR):
-		if len(up) == 2:
+		if len(up) == 2 and up.isalnum():  # Validate directory name is alphanumeric
 			sub = os.path.join(CACHE_DIR, up)
+			sub_real = os.path.realpath(sub)
+			# Ensure the subdirectory is within the cache directory
+			if not sub_real.startswith(cache_dir_real + os.sep) and sub_real != cache_dir_real:
+				continue
 			for hval in os.listdir(sub):
+				# Validate hash value contains only valid characters
+				if not re.match(r'^[a-fA-F0-9]+$', hval):
+					continue
 				path = os.path.join(sub, hval)
+				path_real = os.path.realpath(path)
+				# Ensure the path is within the cache directory
+				if not path_real.startswith(cache_dir_real + os.sep) and path_real != cache_dir_real:
+					continue
 
 				size = 0
 				for fname in os.listdir(path):
@@ -448,7 +460,17 @@ def lru_trim():
 		_, tmp_size, path = lst.pop()
 		tot -= tmp_size
 
+		# Additional safety check: ensure path is still within cache directory
+		path_real = os.path.realpath(path)
+		if not path_real.startswith(cache_dir_real + os.sep) and path_real != cache_dir_real:
+			continue
+
 		tmp = path + '.remove'
+		# Ensure tmp path is also within cache directory
+		tmp_real = os.path.realpath(tmp)
+		if not tmp_real.startswith(cache_dir_real + os.sep) and tmp_real != cache_dir_real:
+			continue
+
 		try:
 			shutil.rmtree(tmp)
 		except OSError:
@@ -594,9 +616,18 @@ class fcache(object):
 		and the copy is atomic only for a given file, not for all files
 		that belong to a given task object
 		"""
+		# Validate signature format to prevent path traversal
+		if not re.match(r'^[a-fA-F0-9]+$', sig) or len(sig) < 2:
+			return "Invalid signature format"
+		
 		try:
 			for i, x in enumerate(files_from):
 				dest = os.path.join(CACHE_DIR, sig[:2], sig, str(i))
+				# Ensure destination path is within cache directory
+				dest_real = os.path.realpath(dest)
+				cache_dir_real = os.path.realpath(CACHE_DIR)
+				if not dest_real.startswith(cache_dir_real + os.sep) and dest_real != cache_dir_real:
+					return "Invalid destination path"
 				atomic_copy(x, dest)
 		except Exception:
 			return traceback.format_exc()
@@ -613,13 +644,25 @@ class fcache(object):
 		"""
 		Copy files from the cache
 		"""
+		# Validate signature format to prevent path traversal
+		if not re.match(r'^[a-fA-F0-9]+$', sig) or len(sig) < 2:
+			return "Invalid signature format"
+		
 		try:
 			for i, x in enumerate(files_to):
 				orig = os.path.join(CACHE_DIR, sig[:2], sig, str(i))
+				# Ensure source path is within cache directory
+				orig_real = os.path.realpath(orig)
+				cache_dir_real = os.path.realpath(CACHE_DIR)
+				if not orig_real.startswith(cache_dir_real + os.sep) and orig_real != cache_dir_real:
+					return "Invalid source path"
 				atomic_copy(orig, x)
 
 			# success! update the cache time
-			os.utime(os.path.join(CACHE_DIR, sig[:2], sig), None)
+			cache_time_path = os.path.join(CACHE_DIR, sig[:2], sig)
+			cache_time_real = os.path.realpath(cache_time_path)
+			if cache_time_real.startswith(cache_dir_real + os.sep) or cache_time_real == cache_dir_real:
+				os.utime(cache_time_path, None)
 		except Exception:
 			return traceback.format_exc()
 		return OK
@@ -647,18 +690,36 @@ class bucket_cache(object):
 				source, target, cmd, proc.returncode, out.decode(errors='replace'), err.decode(errors='replace')))
 
 	def copy_to_cache(self, sig, files_from, files_to):
+		# Validate signature format to prevent path traversal
+		if not re.match(r'^[a-fA-F0-9]+$', sig) or len(sig) < 2:
+			return "Invalid signature format"
+		
 		try:
 			for i, x in enumerate(files_from):
 				dest = os.path.join(CACHE_DIR, sig[:2], sig, str(i))
+				# Ensure destination path is within cache directory
+				dest_real = os.path.realpath(dest)
+				cache_dir_real = os.path.realpath(CACHE_DIR)
+				if not dest_real.startswith(cache_dir_real + os.sep) and dest_real != cache_dir_real:
+					return "Invalid destination path"
 				self.bucket_copy(x, dest)
 		except Exception:
 			return traceback.format_exc()
 		return OK
 
 	def copy_from_cache(self, sig, files_from, files_to):
+		# Validate signature format to prevent path traversal
+		if not re.match(r'^[a-fA-F0-9]+$', sig) or len(sig) < 2:
+			return "Invalid signature format"
+		
 		try:
 			for i, x in enumerate(files_to):
 				orig = os.path.join(CACHE_DIR, sig[:2], sig, str(i))
+				# Ensure source path is within cache directory
+				orig_real = os.path.realpath(orig)
+				cache_dir_real = os.path.realpath(CACHE_DIR)
+				if not orig_real.startswith(cache_dir_real + os.sep) and orig_real != cache_dir_real:
+					return "Invalid source path"
 				self.bucket_copy(orig, x)
 		except EnvironmentError:
 			return traceback.format_exc()
