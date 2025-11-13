@@ -1525,7 +1525,20 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	 * We don't allow empty passwords for machine accounts.
 	 */
 
-	cr.creds.password = (const char*) plaintext.data;
+	/* Ensure the plaintext password is null-terminated */
+	if (plaintext.length == 0 || plaintext.data[plaintext.length - 1] != '\0') {
+		char *null_terminated_password = talloc_strndup(p->mem_ctx, 
+								(const char*)plaintext.data, 
+								plaintext.length);
+		if (null_terminated_password == NULL) {
+			TALLOC_FREE(creds);
+			return NT_STATUS_NO_MEMORY;
+		}
+		cr.creds.password = null_terminated_password;
+	} else {
+		cr.creds.password = (const char*) plaintext.data;
+	}
+	
 	if (strlen(cr.creds.password) == 0) {
 		DBG_WARNING("Empty plaintext password\n");
 		TALLOC_FREE(creds);
