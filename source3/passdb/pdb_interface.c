@@ -2448,9 +2448,11 @@ static NTSTATUS pdb_default_set_trusted_domain(struct pdb_methods *methods,
 
 	ok = pdb_set_trusteddom_pw(domain, pwd, &td->security_identifier);
 	if (!ok) {
+		TALLOC_FREE(pwd);
 		return NT_STATUS_UNSUCCESSFUL;
 	}
 
+	TALLOC_FREE(pwd);
 	return NT_STATUS_OK;
 }
 
