@@ -1675,7 +1675,7 @@ NTSTATUS decode_rc4_passwd_buffer(const DATA_BLOB *psession_key,
  rest of the buffer is filled with random data to make it harder to attack.
 ************************************************************/
 
-static bool create_pw_buffer_from_blob(uint8_t buffer[512],
+static bool create_pw_buffer_from_blob(uint8_t buffer[516],
 				       const DATA_BLOB *in_password,
 				       enum encode_order order)
 {
