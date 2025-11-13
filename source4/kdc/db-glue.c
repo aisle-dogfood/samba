@@ -2207,8 +2207,8 @@ static krb5_error_code samba_kdc_fill_trust_keys(krb5_context context,
 	uint32_t *returned_kvno = p->returned_kvno;
 	TALLOC_CTX *frame = talloc_stackframe();
 	const struct AuthenticationInformationArray *aa = p->auth_array;
-	DATA_BLOB password_utf16 = { .length = 0, };
-	DATA_BLOB password_utf8 = { .length = 0, };
+	DATA_BLOB password_utf16 = { .data = NULL, .length = 0, };
+	DATA_BLOB password_utf8 = { .data = NULL, .length = 0, };
 	struct samr_Password _password_hash = { .hash = { 0,}, };
 	const struct samr_Password *password_hash = NULL;
 	uint32_t allocated_keys = 0;
