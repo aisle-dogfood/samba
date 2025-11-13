@@ -26,6 +26,8 @@
 #include "system/filesys.h"
 #include "system/wait.h"
 #include "tdb.h"
+#include <fcntl.h>
+#include <unistd.h>
 
 static int do_command(void);
 const char *cmdname;
@@ -37,6 +39,32 @@ TDB_DATA iterate_kbuf;
 char cmdline[1024];
 static int disable_mmap;
 static int _disable_lock;
+
+/* Secure random number generator using /dev/urandom */
+static long int secure_random(void)
+{
+	static int urandom_fd = -1;
+	long int result;
+	ssize_t bytes_read;
+	
+	if (urandom_fd == -1) {
+		urandom_fd = open("/dev/urandom", O_RDONLY);
+		if (urandom_fd == -1) {
+			/* Fallback to time-seeded rand() if /dev/urandom unavailable */
+			srand((unsigned int)time(NULL));
+			return rand();
+		}
+	}
+	
+	bytes_read = read(urandom_fd, &result, sizeof(result));
+	if (bytes_read != sizeof(result)) {
+		/* Fallback to time-seeded rand() on read error */
+		srand((unsigned int)time(NULL));
+		return rand();
+	}
+	
+	return result;
+}
 
 enum commands {
 	CMD_CREATE_TDB,
@@ -572,7 +600,7 @@ static void speed_tdb(const char *tlimit)
 	printf("Testing store speed for %u seconds\n", timelimit);
 	_start_timer();
 	do {
-		long int r = random();
+		long int r = secure_random();
 		TDB_DATA key, dbuf;
 		key.dptr = discard_const_p(uint8_t, str);
 		key.dsize = strlen((char *)key.dptr);
@@ -601,7 +629,7 @@ static void speed_tdb(const char *tlimit)
 	printf("Testing transaction speed for %u seconds\n", timelimit);
 	_start_timer();
 	do {
-		long int r = random();
+		long int r = secure_random();
 		TDB_DATA key, dbuf;
 		key.dptr = discard_const_p(uint8_t, str2);
 		key.dsize = strlen((char *)key.dptr);
