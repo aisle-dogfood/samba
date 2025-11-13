@@ -2034,6 +2034,10 @@ static NTSTATUS update_trust_user(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_INTERNAL_DB_CORRUPTION;
 	}
 
+	if (ret < 0) {
+		return NT_STATUS_INTERNAL_DB_CORRUPTION;
+	}
+
 	if (ret == 0) {
 		if (delete_user) {
 			return NT_STATUS_OK;
