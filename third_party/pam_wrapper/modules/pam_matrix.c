@@ -187,10 +187,12 @@ static int pam_matrix_mod_items_get(const char *db,
 		NEXT_KEY(file_password, file_svc);
 
 		q = file_svc;
-		while(q[0] != '\n' && q[0] != '\0') {
-			q++;
+		if (q != NULL) {
+			while(q[0] != '\n' && q[0] != '\0') {
+				q++;
+			}
+			q[0] = '\0';
 		}
-		q[0] = '\0';
 
 		if (file_password == NULL) {
 			continue;
@@ -203,7 +205,7 @@ static int pam_matrix_mod_items_get(const char *db,
 				goto fail;
 			}
 
-			pmi->service = strdup(file_svc);
+			pmi->service = strdup(file_svc ? file_svc : "");
 			if (pmi->service == NULL) {
 				rv = errno;
 				goto fail;
@@ -284,10 +286,12 @@ static int pam_matrix_lib_items_put(const char *db,
 		NEXT_KEY(file_password, file_svc);
 
 		q = file_svc;
-		while(q[0] != '\n' && q[0] != '\0') {
-			q++;
+		if (q != NULL) {
+			while(q[0] != '\n' && q[0] != '\0') {
+				q++;
+			}
+			q[0] = '\0';
 		}
-		q[0] = '\0';
 
 		if (file_password == NULL) {
 			continue;
@@ -300,7 +304,7 @@ static int pam_matrix_lib_items_put(const char *db,
 		}
 
 		rv = fprintf(fp_tmp, "%s:%s:%s\n",
-			     file_user, file_password, file_svc);
+			     file_user, file_password, file_svc ? file_svc : "");
 		if (rv < 0) {
 			rv = PAM_CRED_ERR;
 			goto done;
