@@ -1016,7 +1016,18 @@ NTSTATUS libnet_Join_member(struct libnet_context *ctx,
 						  "provision_store_self_join failed with %s",
 						  nt_errstr(status));
 		}
+		/* Securely clear the password before cleanup */
+		if (set_secrets->machine_password) {
+			BURN_PTR_SIZE(discard_const(set_secrets->machine_password), 
+				      strlen(set_secrets->machine_password));
+		}
 		goto out;
+	}
+
+	/* Securely clear the password after successful use */
+	if (set_secrets->machine_password) {
+		BURN_PTR_SIZE(discard_const(set_secrets->machine_password), 
+			      strlen(set_secrets->machine_password));
 	}
 
 	/* move all out parameter to the callers TALLOC_CTX */

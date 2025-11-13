@@ -65,6 +65,12 @@ static bool test_provision(struct torture_context *tctx)
 	settings->use_ntvfs = true;
 
 	status = provision_bare(settings, tctx->lp_ctx, settings, &result);
+
+	/* Securely clear the machine password after use */
+	if (settings->machine_password) {
+		BURN_PTR_SIZE(discard_const(settings->machine_password), 
+			      strlen(settings->machine_password));
+	}
 			
 	torture_assert_ntstatus_ok(tctx, status, "provision");
 

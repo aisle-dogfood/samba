@@ -170,6 +170,12 @@ NTSTATUS libnet_vampire_cb_prepare_db(void *private_data,
 	settings.use_ntvfs = true;
 	status = provision_bare(s, s->lp_ctx, &settings, &result);
 
+	/* Securely clear the machine password after use */
+	if (settings.machine_password) {
+		BURN_PTR_SIZE(discard_const(settings.machine_password), 
+			      strlen(settings.machine_password));
+	}
+
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
