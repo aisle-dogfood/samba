@@ -390,6 +390,11 @@ class package_reader(Context.Context):
 		tarfile_obj.extract(member, path)
 
 	def extract_tar(self, subdir, pkgdir, tmpfile):
+		# Sanitize subdir to prevent path traversal attacks
+		subdir = os.path.basename(os.path.normpath(subdir))
+		if not subdir or subdir in ('.', '..'):
+			raise ValueError("Invalid subdir parameter")
+		
 		with tarfile.open(tmpfile) as f:
 			temp = tempfile.mkdtemp(dir=pkgdir)
 			try:
@@ -408,11 +413,16 @@ class package_reader(Context.Context):
 					pass
 
 	def get_pkg_dir(self, pkgname, pkgver, subdir):
+		# Sanitize subdir to prevent path traversal attacks
+		sanitized_subdir = os.path.basename(os.path.normpath(subdir))
+		if not sanitized_subdir or sanitized_subdir in ('.', '..'):
+			raise ValueError("Invalid subdir parameter")
+		
 		pkgdir = os.path.join(get_distnet_cache(), pkgname, pkgver)
 		if not os.path.isdir(pkgdir):
 			os.makedirs(pkgdir)
 
-		target = os.path.join(pkgdir, subdir)
+		target = os.path.join(pkgdir, sanitized_subdir)
 
 		if os.path.exists(target):
 			return target
@@ -424,7 +434,7 @@ class package_reader(Context.Context):
 			if subdir == REQUIRES:
 				os.rename(tmp, target)
 			else:
-				self.extract_tar(subdir, pkgdir, tmp)
+				self.extract_tar(sanitized_subdir, pkgdir, tmp)
 		finally:
 			try:
 				os.remove(tmp)
