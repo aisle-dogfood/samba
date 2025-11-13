@@ -28,6 +28,7 @@
 #include "lib/util/string_wrappers.h"
 #include "lib/param/param.h"
 #include "lib/util/memcache.h"
+#include "lib/util/memory.h"
 
 /*
  * Next two lines needed for SunOS and don't
@@ -142,7 +143,7 @@ static int process_options(int argc, char **argv, int local_flags,
 		case 'n':
 			local_flags |= LOCAL_SET_NO_PASSWORD;
 			local_flags &= ~LOCAL_SET_PASSWORD;
-			SAFE_FREE(new_passwd);
+			BURN_FREE_STR(new_passwd);
 			new_passwd = smb_xstrdup("NO PASSWORD");
 			break;
 		case 'r':
@@ -388,7 +389,7 @@ static int process_root(int local_flags)
 		}
 
 		if (local_flags & LOCAL_ADD_USER) {
-		        SAFE_FREE(new_passwd);
+		        BURN_FREE_STR(new_passwd);
 
 			/*
 			 * Remove any trailing '$' before we
@@ -512,8 +513,9 @@ static int process_root(int local_flags)
 	}
 
  done:
-	SAFE_FREE(old_passwd);
-	SAFE_FREE(new_passwd);
+	BURN_FREE_STR(old_passwd);
+	BURN_FREE_STR(new_passwd);
+	BURN_DATA(ldap_secret);
 	return result;
 }
 
@@ -606,8 +608,8 @@ static int process_nonroot(int local_flags)
 	printf("Password changed for user %s\n", username);
 
  done:
-	SAFE_FREE(old_pw);
-	SAFE_FREE(new_pw);
+	BURN_FREE_STR(old_pw);
+	BURN_FREE_STR(new_pw);
 
 	return result;
 }
