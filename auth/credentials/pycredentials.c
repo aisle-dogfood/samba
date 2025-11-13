@@ -2134,8 +2134,14 @@ static PyObject *py_netlogon_creds_client_init(PyObject *module,
 		return NULL;
 	}
 
+	/* Create a secure copy of the machine password to prevent heap inspection */
+	struct samr_Password machine_password_copy;
+	memcpy(&machine_password_copy, machine_password, sizeof(struct samr_Password));
+
 	initial_credential = talloc_zero(NULL, struct netr_Credential);
 	if (initial_credential == NULL) {
+		/* Zero out the password copy before returning */
+		ZERO_STRUCT(machine_password_copy);
 		PyErr_NoMemory();
 		return NULL;
 	}
@@ -2146,12 +2152,14 @@ static PyObject *py_netlogon_creds_client_init(PyObject *module,
 					    secure_channel_type,
 					    client_challenge,
 					    server_challenge,
-					    machine_password,
+					    &machine_password_copy,
 					    initial_credential,
 					    client_requested_flags,
 					    negotiate_flags);
 	if (ncreds == NULL) {
 		TALLOC_FREE(initial_credential);
+		/* Zero out the password copy before returning */
+		ZERO_STRUCT(machine_password_copy);
 		PyErr_NoMemory();
 		return NULL;
 	}
@@ -2163,6 +2171,8 @@ static PyObject *py_netlogon_creds_client_init(PyObject *module,
 	if (py_ncreds == NULL) {
 		TALLOC_FREE(initial_credential);
 		TALLOC_FREE(ncreds);
+		/* Zero out the password copy before returning */
+		ZERO_STRUCT(machine_password_copy);
 		return NULL;
 	}
 
@@ -2173,6 +2183,8 @@ static PyObject *py_netlogon_creds_client_init(PyObject *module,
 	if (py_ncreds == NULL) {
 		Py_DECREF(py_ncreds);
 		TALLOC_FREE(initial_credential);
+		/* Zero out the password copy before returning */
+		ZERO_STRUCT(machine_password_copy);
 		return NULL;
 	}
 
@@ -2182,9 +2194,13 @@ static PyObject *py_netlogon_creds_client_init(PyObject *module,
 	if (py_result == NULL) {
 		Py_DECREF(py_ncreds);
 		Py_DECREF(py_initial_credential);
+		/* Zero out the password copy before returning */
+		ZERO_STRUCT(machine_password_copy);
 		return NULL;
 	}
 
+	/* Zero out the password copy before returning */
+	ZERO_STRUCT(machine_password_copy);
 	return py_result;
 }
 
