@@ -1435,6 +1435,7 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 							   auth_type,
 							   auth_level);
 	if (!NT_STATUS_IS_OK(status)) {
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return status;
 	}
@@ -1442,6 +1443,7 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (!extract_pw_from_buffer(p->mem_ctx, password_buf.data, &new_password)) {
 		DEBUG(2,("_netr_ServerPasswordSet2: unable to extract password "
 			 "from a buffer. Rejecting auth request as a wrong password\n"));
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1453,6 +1455,8 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (new_password.length == r->in.new_password->length) {
 		DBG_WARNING("Length[%zu] field not encrypted\n",
 			new_password.length);
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1463,6 +1467,8 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (new_password.length < 2) {
 		DBG_WARNING("Empty password Length[%zu]\n",
 			new_password.length);
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1477,6 +1483,8 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (confounder_len > 0 && data_blob_equal_const_time(&dec_blob, &enc_blob)) {
 		DBG_WARNING("Confounder buffer not encrypted Length[%zu]\n",
 			    confounder_len);
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1492,6 +1500,8 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (data_blob_equal_const_time(&dec_blob, &enc_blob)) {
 		DBG_WARNING("Password buffer not encrypted Length[%zu]\n",
 			    new_password.length);
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1502,6 +1512,8 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (all_zero(new_password.data, new_password.length)) {
 		DBG_WARNING("Password zero buffer Length[%zu]\n",
 			    new_password.length);
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1517,6 +1529,8 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	if (!ok) {
 		DBG_WARNING("unable to extract password from a buffer. "
 			    "Rejecting auth request as a wrong password\n");
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1528,6 +1542,9 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 	cr.creds.password = (const char*) plaintext.data;
 	if (strlen(cr.creds.password) == 0) {
 		DBG_WARNING("Empty plaintext password\n");
+		data_blob_clear_free(&plaintext);
+		data_blob_clear_free(&new_password);
+		ZERO_STRUCT(password_buf);
 		TALLOC_FREE(creds);
 		return NT_STATUS_WRONG_PASSWORD;
 	}
@@ -1537,6 +1554,9 @@ NTSTATUS _netr_ServerPasswordSet2(struct pipes_struct *p,
 						   p->msg_ctx,
 						   client_sid,
 						   &cr);
+	data_blob_clear_free(&plaintext);
+	data_blob_clear_free(&new_password);
+	ZERO_STRUCT(password_buf);
 	TALLOC_FREE(creds);
 	return status;
 }
