@@ -2530,6 +2530,10 @@ bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
 	}
 
 	memcpy(ret_pwd, current_nt_hash.hash, sizeof(current_nt_hash.hash));
+	
+	/* Clear the sensitive hash data from memory */
+	memset_s(&current_nt_hash, sizeof(current_nt_hash), 0, sizeof(current_nt_hash));
+	
 	return true;
 }
 
