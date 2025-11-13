@@ -460,7 +460,7 @@ static NTSTATUS pdb_default_create_user(struct pdb_methods *methods,
 		loadparm_s3_global_substitution();
 	struct samu *sam_pass;
 	NTSTATUS status;
-	struct passwd *pwd;
+	struct passwd *pwd = NULL;
 
 	if ((sam_pass = samu_new(tmp_ctx)) == NULL) {
 		return NT_STATUS_NO_MEMORY;
