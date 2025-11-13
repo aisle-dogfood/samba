@@ -2171,7 +2171,25 @@ uint32_t pdb_search_entries(struct pdb_search *search,
 bool pdb_get_trusteddom_pw(const char *domain, char** pwd, struct dom_sid *sid,
 			   time_t *pass_last_set_time)
 {
-	struct pdb_methods *pdb = pdb_get_methods();
+	struct pdb_methods *pdb;
+
+	/* Validate input parameters */
+	if (domain == NULL || *domain == '\0') {
+		DEBUG(1, ("pdb_get_trusteddom_pw: domain parameter is NULL or empty\n"));
+		return false;
+	}
+
+	pdb = pdb_get_methods();
+	if (pdb == NULL) {
+		DEBUG(1, ("pdb_get_trusteddom_pw: failed to get pdb methods\n"));
+		return false;
+	}
+
+	if (pdb->get_trusteddom_pw == NULL) {
+		DEBUG(1, ("pdb_get_trusteddom_pw: get_trusteddom_pw method is not implemented\n"));
+		return false;
+	}
+
 	return pdb->get_trusteddom_pw(pdb, domain, pwd, sid,
 			pass_last_set_time);
 }
