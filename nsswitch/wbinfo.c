@@ -1644,10 +1644,16 @@ static char *wbinfo_prompt_pass(TALLOC_CTX *mem_ctx,
 	rc = samba_getpass(prompt, buf, sizeof(buf), false, false);
 	TALLOC_FREE(prompt);
 	if (rc < 0) {
+		BURN_DATA_SIZE(buf, sizeof(buf));
 		return NULL;
 	}
 
-	return talloc_strdup(mem_ctx, buf);
+	char *result = talloc_strdup(mem_ctx, buf);
+	BURN_DATA_SIZE(buf, sizeof(buf));
+	if (result != NULL) {
+		talloc_keep_secret(result);
+	}
+	return result;
 }
 
 /* Authenticate a user with a plaintext password */
@@ -1675,8 +1681,12 @@ static bool wbinfo_auth_krb5(char *username, const char *cctype, uint32_t flags)
 		*p = 0;
 		p++;
 		password = talloc_strdup(frame, p);
+		if (password != NULL) {
+			talloc_keep_secret(password);
+		}
 	} else {
 		password = wbinfo_prompt_pass(frame, NULL, username);
+		/* wbinfo_prompt_pass already calls talloc_keep_secret */
 	}
 
 	local_cctype = talloc_strdup(frame, cctype);
@@ -1795,8 +1805,12 @@ static bool wbinfo_auth(char *username)
 		*p = 0;
 		p++;
 		password = talloc_strdup(frame, p);
+		if (password != NULL) {
+			talloc_keep_secret(password);
+		}
 	} else {
 		password = wbinfo_prompt_pass(frame, NULL, username);
+		/* wbinfo_prompt_pass already calls talloc_keep_secret */
 	}
 
 	name = s;
@@ -1965,8 +1979,12 @@ static bool wbinfo_pam_logon(char *username, bool verbose)
 		*p = 0;
 		p++;
 		params.password = talloc_strdup(frame, p);
+		if (params.password != NULL) {
+			talloc_keep_secret(params.password);
+		}
 	} else {
 		params.password = wbinfo_prompt_pass(frame, NULL, username);
+		/* wbinfo_prompt_pass already calls talloc_keep_secret */
 	}
 	params.username = s;
 
@@ -2081,8 +2099,14 @@ static bool wbinfo_ccache_save(char *username)
 		*p = 0;
 		p++;
 		password = talloc_strdup(frame, p);
+		if (password != NULL) {
+			talloc_keep_secret(password);
+		}
 	} else {
 		password = wbinfo_prompt_pass(frame, NULL, username);
+		if (password != NULL) {
+			talloc_keep_secret(password);
+		}
 	}
 
 	name = s;
@@ -2131,6 +2155,9 @@ static bool wbinfo_klog(char *username)
 
 	wbc_status = wbcRequestResponse(NULL, WINBINDD_PAM_AUTH,
 					&request, &response);
+
+	/* Clear password from request structure */
+	BURN_DATA_SIZE(request.data.auth.pass, sizeof(request.data.auth.pass));
 
 	/* Display response */
 
