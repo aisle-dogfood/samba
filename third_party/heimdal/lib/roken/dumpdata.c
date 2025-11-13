@@ -160,6 +160,13 @@ rk_undumpdata(const char *filename, void **buf, size_t *size)
 
     if (sb.st_size < 0)
         sb.st_size = 0;
+    
+    /* Check for integer overflow when converting off_t to size_t */
+    if (sb.st_size > SIZE_MAX) {
+        ret = EOVERFLOW;
+        goto out;
+    }
+    
     *buf = malloc(sb.st_size);
     if (*buf == NULL) {
 	ret = ENOMEM;
