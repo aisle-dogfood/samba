@@ -388,6 +388,17 @@ static NTSTATUS dcesrv_samr_ChangePasswordUser_impl(struct dcesrv_call_state *dc
 		goto failed;
 	}
 
+	/*
+	 * Reject RC4-based password change when weak crypto is disallowed.
+	 * RC4 is cryptographically broken and should not be used.
+	 */
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(3,("samr: RC4-based password change rejected due to weak crypto policy\n"));
+		ldb_transaction_cancel(sam_ctx);
+		status = NT_STATUS_HASH_NOT_SUPPORTED;
+		goto failed;
+	}
+
 	/* decrypt the password we have been given */
 	nt_session_key = (gnutls_datum_t) {
 		.data = nt_pwd->hash,
@@ -595,6 +606,16 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
+	/*
+	 * Reject RC4-based samr_CryptPassword when weak crypto is disallowed.
+	 * RC4 is cryptographically broken and should not be used.
+	 * Clients should use samr_EncryptedPasswordAES (UserInfo31/32) instead.
+	 */
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(3,("samr: RC4-based password encryption rejected due to weak crypto policy\n"));
+		return NT_STATUS_HASH_NOT_SUPPORTED;
+	}
+
 	nt_status = dcesrv_transport_session_key(dce_call, &session_key);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		DBG_NOTICE("samr: failed to get session key: %s\n",
@@ -686,6 +707,16 @@ NTSTATUS samr_set_password_ex(struct dcesrv_call_state *dce_call,
 	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED &&
 	    !encrypted) {
 		return NT_STATUS_ACCESS_DENIED;
+	}
+
+	/*
+	 * Reject RC4-based samr_CryptPasswordEx when weak crypto is disallowed.
+	 * RC4 is cryptographically broken and should not be used.
+	 * Clients should use samr_EncryptedPasswordAES (UserInfo31/32) instead.
+	 */
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		DEBUG(3,("samr: RC4-based password encryption rejected due to weak crypto policy\n"));
+		return NT_STATUS_HASH_NOT_SUPPORTED;
 	}
 
 	GNUTLS_FIPS140_SET_LAX_MODE();
