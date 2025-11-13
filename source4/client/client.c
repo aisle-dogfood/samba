@@ -45,6 +45,7 @@
 #include "auth/credentials/credentials.h"
 #include "auth/gensec/gensec.h"
 #include "system/time.h" /* needed by some systems for asctime() */
+#include "system/wait.h" /* needed for waitpid() */
 #include "libcli/resolve/resolve.h"
 #include "libcli/security/security.h"
 #include "../libcli/smbreadline/smbreadline.h"
@@ -3157,7 +3158,67 @@ static int process_stdin(struct smbclient_context *ctx)
 		/* special case - first char is ! */
 		if (*cline == '!') {
 			int ret;
-			ret = system(cline + 1);
+			char *cmd = cline + 1;
+			char *args[64]; /* Maximum 64 arguments */
+			int argc = 0;
+			char *token;
+			char *cmd_copy;
+			
+			/* Basic input validation to prevent command injection */
+			if (strlen(cmd) == 0) {
+				d_printf("Error: Empty command\n");
+				free(cline);
+				continue;
+			}
+			
+			/* Check for dangerous characters that could be used for command injection */
+			if (strpbrk(cmd, ";|&`$(){}[]<>\"'\\") != NULL) {
+				d_printf("Error: Command contains potentially dangerous characters\n");
+				free(cline);
+				continue;
+			}
+			
+			/* Make a copy of the command for tokenization */
+			cmd_copy = strdup(cmd);
+			if (!cmd_copy) {
+				d_printf("Error: Memory allocation failed\n");
+				free(cline);
+				continue;
+			}
+			
+			/* Parse command into arguments (simple space-separated tokenization) */
+			token = strtok(cmd_copy, " \t");
+			while (token != NULL && argc < 63) {
+				args[argc++] = token;
+				token = strtok(NULL, " \t");
+			}
+			args[argc] = NULL;
+			
+			if (argc == 0) {
+				d_printf("Error: No command specified\n");
+				free(cmd_copy);
+				free(cline);
+				continue;
+			}
+			
+			/* Use fork/execvp to execute command without shell interpretation */
+			pid_t pid = fork();
+			if (pid == 0) {
+				/* Child process - execute command directly without shell */
+				execvp(args[0], args);
+				_exit(127); /* execvp failed */
+			} else if (pid > 0) {
+				/* Parent process */
+				int status;
+				waitpid(pid, &status, 0);
+				ret = WEXITSTATUS(status);
+			} else {
+				/* fork failed */
+				d_printf("Error: Failed to execute command\n");
+				ret = -1;
+			}
+			
+			free(cmd_copy);
 			free(cline);
 			if (ret == -1) {
 				rc |= ret;
