@@ -161,6 +161,10 @@ int string_replace_allocate(connection_struct *conn,
 		if (cmaps == NULL) {
 			continue;
 		}
+		/* Bounds check to prevent buffer overflow */
+		if (T_PICK((*ptr)) >= MAP_NUM) {
+			continue;
+		}
 		map = cmaps[T_PICK((*ptr))];
 		if (map == NULL) {
 			/* nothing to do */
