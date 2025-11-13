@@ -40,6 +40,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <stdbool.h>
+#include <limits.h>
 
 static struct timeval tp1,tp2;
 
@@ -227,6 +228,70 @@ static void usage(void)
 	printf(" -l    test for working byte range locks\n");
 }
 
+/*
+ * Validate filename to prevent resource injection attacks
+ * Returns 0 on success, -1 on failure
+ */
+static int validate_filename(const char *filename)
+{
+	char resolved_path[PATH_MAX];
+	char cwd[PATH_MAX];
+	
+	if (filename == NULL || strlen(filename) == 0) {
+		fprintf(stderr, "Error: Empty filename\n");
+		return -1;
+	}
+	
+	/* Reject absolute paths */
+	if (filename[0] == '/') {
+		fprintf(stderr, "Error: Absolute paths not allowed\n");
+		return -1;
+	}
+	
+	/* Check for directory traversal attempts */
+	if (strstr(filename, "..") != NULL) {
+		fprintf(stderr, "Error: Directory traversal not allowed\n");
+		return -1;
+	}
+	
+	/* Get current working directory */
+	if (getcwd(cwd, sizeof(cwd)) == NULL) {
+		fprintf(stderr, "Error: Cannot get current directory\n");
+		return -1;
+	}
+	
+	/* Resolve the path to its canonical form */
+	if (realpath(filename, resolved_path) != NULL) {
+		/* Check if resolved path is within current directory */
+		if (strncmp(resolved_path, cwd, strlen(cwd)) != 0) {
+			fprintf(stderr, "Error: File must be in current directory\n");
+			return -1;
+		}
+	} else {
+		/* File doesn't exist yet, validate the directory part */
+		char *dir_part = strdup(filename);
+		char *base_part = strrchr(dir_part, '/');
+		
+		if (base_part != NULL) {
+			*base_part = '\0';
+			if (realpath(dir_part, resolved_path) == NULL) {
+				fprintf(stderr, "Error: Invalid directory path\n");
+				free(dir_part);
+				return -1;
+			}
+			/* Check if directory is within current directory */
+			if (strncmp(resolved_path, cwd, strlen(cwd)) != 0) {
+				fprintf(stderr, "Error: File must be in current directory\n");
+				free(dir_part);
+				return -1;
+			}
+		}
+		free(dir_part);
+	}
+	
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	char *fname;
@@ -265,6 +330,11 @@ int main(int argc, char *argv[])
 	}
 
 	fname = argv[0];
+
+	/* Validate filename to prevent resource injection attacks */
+	if (validate_filename(fname) != 0) {
+		exit(1);
+	}
 
 	fd = open(fname, O_CREAT|O_RDWR, 0600);
 	if (fd == -1) {
