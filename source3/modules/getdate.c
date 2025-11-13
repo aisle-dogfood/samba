@@ -108,6 +108,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <limits.h>
 
 #ifdef HAVE_STDLIB_H
 # include <stdlib.h> /* for `free'; used by Bison 1.27 */
@@ -2439,7 +2440,18 @@ yylex (YYSTYPE *lvalp, struct parser_control *pc)
 	  value = 0;
 	  do
 	    {
-	      value = 10 * value + c - '0';
+	      int digit = c - '0';
+	      /* Check for overflow before performing arithmetic */
+	      if (value > (INT_MAX - digit) / 10)
+		{
+		  /* Overflow would occur, set to maximum value */
+		  value = INT_MAX;
+		  /* Skip remaining digits */
+		  while (ISDIGIT (*++p))
+		    ;
+		  break;
+		}
+	      value = 10 * value + digit;
 	      c = *++p;
 	    }
 	  while (ISDIGIT (c));
