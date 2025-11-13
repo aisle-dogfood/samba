@@ -791,6 +791,12 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 	client_gss_creds_threshold = cred->client_gss_creds_threshold;
 	password_is_nt_hash = cred->password_will_be_nt_hash;
 
+	nt_hash = talloc(cred, struct samr_Password);
+	if (nt_hash == NULL) {
+		return NULL;
+	}
+	talloc_keep_secret(nt_hash);
+
 	cred->password_will_be_nt_hash = false;
 	password = cli_credentials_get_password(cred);
 
@@ -809,15 +815,15 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 	}
 
 	if (password == NULL) {
+		TALLOC_FREE(nt_hash);
 		return NULL;
 	}
 
-	nt_hash = talloc(cred, struct samr_Password);
-	if (nt_hash == NULL) {
-		return NULL;
-	}
-	talloc_keep_secret(nt_hash);
-
+	/*
+	 * Process the password immediately to minimize exposure time.
+	 * This reduces the window where cleartext credentials are held
+	 * in local variables.
+	 */
 	if (password_is_nt_hash) {
 		size_t password_len = strlen(password);
 		size_t converted;
@@ -825,6 +831,8 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 		converted = strhex_to_str((char *)nt_hash->hash,
 					  sizeof(nt_hash->hash),
 					  password, password_len);
+		/* Clear password reference immediately after use */
+		password = NULL;
 		if (converted != sizeof(nt_hash->hash)) {
 			TALLOC_FREE(nt_hash);
 			return NULL;
@@ -840,6 +848,8 @@ _PUBLIC_ struct samr_Password *cli_credentials_get_nt_hash(struct cli_credential
 			    "MD4 is cryptographically weak. "
 			    "Consider using stronger authentication methods.\n");
 		E_md4hash(password, nt_hash->hash);
+		/* Clear password reference immediately after use */
+		password = NULL;
 	}
 
 	cred->nt_hash = nt_hash;
