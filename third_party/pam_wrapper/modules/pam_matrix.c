@@ -186,6 +186,10 @@ static int pam_matrix_mod_items_get(const char *db,
 		NEXT_KEY(file_user, file_password);
 		NEXT_KEY(file_password, file_svc);
 
+		if (file_svc == NULL) {
+			continue;
+		}
+
 		q = file_svc;
 		while(q[0] != '\n' && q[0] != '\0') {
 			q++;
@@ -282,6 +286,10 @@ static int pam_matrix_lib_items_put(const char *db,
 		/* Find the user, his password and allowed service */
 		NEXT_KEY(file_user, file_password);
 		NEXT_KEY(file_password, file_svc);
+
+		if (file_svc == NULL) {
+			continue;
+		}
 
 		q = file_svc;
 		while(q[0] != '\n' && q[0] != '\0') {
