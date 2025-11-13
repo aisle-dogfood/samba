@@ -62,9 +62,16 @@ NTSTATUS make_server_info_sam(TALLOC_CTX *mem_ctx,
 {
 	struct passwd *pwd;
 	struct auth_serversupplied_info *server_info;
-	const char *username = pdb_get_username(sampass);
+	const char *username;
 	TALLOC_CTX *tmp_ctx = talloc_stackframe();
 	NTSTATUS status;
+
+	if (sampass == NULL) {
+		status = NT_STATUS_INVALID_PARAMETER;
+		goto out;
+	}
+
+	username = pdb_get_username(sampass);
 
 	server_info = make_server_info(tmp_ctx);
 	if (server_info == NULL) {
