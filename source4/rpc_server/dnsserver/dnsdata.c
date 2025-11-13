@@ -730,6 +730,11 @@ static struct dns_tree *dns_tree_find(struct dns_tree *tree, int ncount, char **
 
 	*match_count = -1;
 
+	/* Validate input parameters to prevent buffer overflow */
+	if (ncount <= 0 || nlist == NULL) {
+		return NULL;
+	}
+
 	if (strcmp(tree->name, "@") == 0) {
 		start = 0;
 	} else {
@@ -812,7 +817,7 @@ struct dns_tree *dns_build_tree(TALLOC_CTX *mem_ctx, const char *name, struct ld
 		}
 
 		ncount = dns_split_name_components(root, ptr, &nlist);
-		if (ncount < 0) {
+		if (ncount <= 0) {
 			goto failed;
 		}
 
