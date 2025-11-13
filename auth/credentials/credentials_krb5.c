@@ -1538,6 +1538,10 @@ _PUBLIC_ void cli_credentials_set_salt_principal(struct cli_credentials *cred, c
 {
 	talloc_free(cred->salt_principal);
 	cred->salt_principal = talloc_strdup(cred, principal);
+	if (cred->salt_principal) {
+		talloc_keep_secret(discard_const(cred->salt_principal));
+		talloc_set_name_const(cred->salt_principal, "salt_principal set via cli_credentials_set_salt_principal");
+	}
 }
 
 /* The 'impersonate_principal' is used to allow one Kerberos principal
@@ -1570,8 +1574,16 @@ _PUBLIC_ void cli_credentials_set_impersonate_principal(struct cli_credentials *
 {
 	talloc_free(cred->impersonate_principal);
 	cred->impersonate_principal = talloc_strdup(cred, principal);
+	if (cred->impersonate_principal) {
+		talloc_keep_secret(discard_const(cred->impersonate_principal));
+		talloc_set_name_const(cred->impersonate_principal, "impersonate_principal set via cli_credentials_set_impersonate_principal");
+	}
 	talloc_free(cred->self_service);
 	cred->self_service = talloc_strdup(cred, self_service);
+	if (cred->self_service) {
+		talloc_keep_secret(discard_const(cred->self_service));
+		talloc_set_name_const(cred->self_service, "self_service set via cli_credentials_set_impersonate_principal");
+	}
 	cli_credentials_set_kerberos_state(cred,
 					   CRED_USE_KERBEROS_REQUIRED,
 					   CRED_SPECIFIED);
@@ -1596,6 +1608,10 @@ _PUBLIC_ void cli_credentials_set_target_service(struct cli_credentials *cred, c
 {
 	talloc_free(cred->target_service);
 	cred->target_service = talloc_strdup(cred, target_service);
+	if (cred->target_service) {
+		talloc_keep_secret(discard_const(cred->target_service));
+		talloc_set_name_const(cred->target_service, "target_service set via cli_credentials_set_target_service");
+	}
 }
 
 _PUBLIC_ int cli_credentials_get_kerberos_key(struct cli_credentials *cred,
