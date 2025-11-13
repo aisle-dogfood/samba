@@ -523,7 +523,24 @@ class TestProgram(object):
             # OptimisingTestSuite.add, but with a standard protocol).
             # This is needed because the load_tests hook allows arbitrary
             # suites, even if that is rarely used.
-            source = open(self.load_list, 'rb')
+            
+            # Validate the load_list path to prevent path traversal attacks
+            try:
+                # Get the absolute path of the current working directory
+                cwd = os.path.abspath(os.getcwd())
+                # Resolve the load_list path to its absolute form
+                load_list_path = os.path.abspath(self.load_list)
+                # Check if the resolved path is within the current working directory
+                if not load_list_path.startswith(cwd + os.sep) and load_list_path != cwd:
+                    raise ValueError("Invalid path: load_list must be within the current working directory")
+                # Additional check for path traversal sequences
+                if '..' in os.path.normpath(self.load_list):
+                    raise ValueError("Invalid path: path traversal sequences not allowed")
+            except (OSError, ValueError) as e:
+                sys.stderr.write("Error: %s\n" % str(e))
+                sys.exit(1)
+            
+            source = open(load_list_path, 'rb')
             try:
                 lines = source.readlines()
             finally:
