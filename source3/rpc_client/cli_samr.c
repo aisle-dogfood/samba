@@ -543,6 +543,22 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 	 * This provides much better security than the legacy user2/user3 functions.
 	 */
 	E_md4hash(oldpassword, old_nt_key_data);
+	
+	/* Use SHA256 instead of MD4 for PBKDF2 to improve security */
+	uint8_t sha256_hash[32];
+	int rc_sha256 = gnutls_hash_fast(GNUTLS_DIG_SHA256, 
+					 oldpassword, 
+					 strlen(oldpassword), 
+					 sha256_hash);
+	if (rc_sha256 != 0) {
+		return gnutls_error_to_ntstatus(rc_sha256, NT_STATUS_INTERNAL_ERROR);
+	}
+	
+	/* Update the old_nt_key to use SHA256 hash for PBKDF2 */
+	gnutls_datum_t sha256_key = {
+		.data = sha256_hash,
+		.size = sizeof(sha256_hash),
+	};
 
 	init_lsa_String(&server, srv_name_slash);
 	init_lsa_String(&user_account, username);
@@ -550,12 +566,13 @@ NTSTATUS dcerpc_samr_chgpasswd_user4(struct dcerpc_binding_handle *h,
 	pbkdf2_iterations = generate_random_u64_range(5000, 1000000);
 
 	rc = gnutls_pbkdf2(GNUTLS_MAC_SHA512,
-			   &old_nt_key,
+			   &sha256_key,
 			   &iv_datum,
 			   pbkdf2_iterations,
 			   cek.data,
 			   cek.length);
 	BURN_DATA(old_nt_key_data);
+	BURN_DATA(sha256_hash);
 	if (rc < 0) {
 		status = gnutls_error_to_ntstatus(rc, NT_STATUS_WRONG_PASSWORD);
 		return status;
