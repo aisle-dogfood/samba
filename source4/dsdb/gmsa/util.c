@@ -956,10 +956,10 @@ static int gmsa_create_update(TALLOC_CTX *mem_ctx,
 
 	*update = (struct gmsa_update){
 		.dn = talloc_steal(update, account_dn),
-		.found_pwd_id = talloc_steal(update, found_pwd_id),
-		.old_pw_req = talloc_steal(update, old_pw_req),
-		.new_pw_req = talloc_steal(update, new_pw_req),
-		.pwd_id_req = talloc_steal(update, pwd_id_req)};
+		.found_pwd_id = found_pwd_id ? talloc_steal(update, found_pwd_id) : NULL,
+		.old_pw_req = old_pw_req ? talloc_steal(update, old_pw_req) : NULL,
+		.new_pw_req = new_pw_req ? talloc_steal(update, new_pw_req) : NULL,
+		.pwd_id_req = pwd_id_req ? talloc_steal(update, pwd_id_req) : NULL};
 
 	*update_out = talloc_steal(mem_ctx, update);
 
