@@ -32,6 +32,11 @@ bool parse_guid_string(const char *s, struct GUID *guid)
 		\_____________________ time_low
 	*/
 
+	/* Check that the string is at least 36 characters long (GUID format) */
+	if (s == NULL || strlen(s) < 36) {
+		return false;
+	}
+
 	ok = hex_uint32(s, &guid->time_low);
 	if (!ok || (s[8] != '-')) {
 		return false;
