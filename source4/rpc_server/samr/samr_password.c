@@ -338,6 +338,12 @@ static NTSTATUS dcesrv_samr_ChangePasswordUser_impl(struct dcesrv_call_state *dc
 		return NT_STATUS_NTLM_BLOCKED;
 	}
 
+	/* RC4 encryption is considered weak crypto and should be avoided
+	 * when weak crypto is disallowed */
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		return NT_STATUS_ACCESS_DENIED;
+	}
+
 	if (r->in.nt_password == NULL ||
 	    r->in.nt_verifier == NULL) {
 		return NT_STATUS_INVALID_PARAMETER;
@@ -590,8 +596,9 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 	bool encrypted;
 
 	encrypted = dcerpc_is_transport_encrypted(session_info);
-	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED &&
-	    !encrypted) {
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		/* RC4 encryption is considered weak crypto and should be avoided
+		 * when weak crypto is disallowed, regardless of transport encryption */
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
@@ -683,8 +690,9 @@ NTSTATUS samr_set_password_ex(struct dcesrv_call_state *dce_call,
 	}
 
 	encrypted = dcerpc_is_transport_encrypted(session_info);
-	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED &&
-	    !encrypted) {
+	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		/* RC4 encryption is considered weak crypto and should be avoided
+		 * when weak crypto is disallowed, regardless of transport encryption */
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
