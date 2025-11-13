@@ -355,6 +355,9 @@ bool winbindd_ccache_save(struct winbindd_cli_state *state)
 		DEBUG(5,("winbindd_ccache_save: cannot parse domain and user "
 			 "from name [%s]\n",
 			 state->request->data.ccache_save.user));
+		/* Securely clear the password from memory to prevent heap inspection */
+		BURN_PTR_SIZE(state->request->data.ccache_save.pass, 
+			      sizeof(state->request->data.ccache_save.pass));
 		return false;
 	}
 
@@ -373,10 +376,16 @@ bool winbindd_ccache_save(struct winbindd_cli_state *state)
 	if (domain == NULL) {
 		DEBUG(5, ("winbindd_ccache_save: can't get domain [%s]\n",
 			  name_domain));
+		/* Securely clear the password from memory to prevent heap inspection */
+		BURN_PTR_SIZE(state->request->data.ccache_save.pass, 
+			      sizeof(state->request->data.ccache_save.pass));
 		return false;
 	}
 
 	if (!check_client_uid(state, state->request->data.ccache_save.uid)) {
+		/* Securely clear the password from memory to prevent heap inspection */
+		BURN_PTR_SIZE(state->request->data.ccache_save.pass, 
+			      sizeof(state->request->data.ccache_save.pass));
 		return false;
 	}
 
@@ -384,6 +393,10 @@ bool winbindd_ccache_save(struct winbindd_cli_state *state)
 		state->request->data.ccache_save.user,
 		state->request->data.ccache_save.uid,
 		state->request->data.ccache_save.pass);
+
+	/* Securely clear the password from memory to prevent heap inspection */
+	BURN_PTR_SIZE(state->request->data.ccache_save.pass, 
+		      sizeof(state->request->data.ccache_save.pass));
 
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(1, ("winbindd_add_memory_creds failed %s\n",
