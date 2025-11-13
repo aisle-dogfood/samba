@@ -167,6 +167,11 @@ static NTSTATUS netsec_do_seq_num(struct schannel_state *state,
 		};
 		int rc;
 
+		/* Ensure we have enough checksum data to fill the IV */
+		if (checksum_length < 8) {
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
 		ZERO_ARRAY(_iv);
 
 		memcpy(iv.data + 0, checksum, 8);
