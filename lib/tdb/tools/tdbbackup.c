@@ -68,6 +68,32 @@ static void tdb_log(struct tdb_context *tdb, enum tdb_debug_level level, const c
 	fflush(stdout);
 }
 
+/*
+  validate that a path doesn't contain directory traversal sequences
+  returns 0 if path is safe, 1 if path contains traversal attempts
+*/
+static int validate_path(const char *path)
+{
+	const char *p = path;
+	
+	/* Check for absolute paths */
+	if (path[0] == '/') {
+		return 1;
+	}
+	
+	/* Check for ".." sequences */
+	while ((p = strstr(p, "..")) != NULL) {
+		/* Check if ".." is a complete path component */
+		if ((p == path || p[-1] == '/') && 
+		    (p[2] == '\0' || p[2] == '/')) {
+			return 1;
+		}
+		p += 2;
+	}
+	
+	return 0;
+}
+
 static char *add_suffix(const char *name, const char *suffix)
 {
 	char *ret;
@@ -112,6 +138,17 @@ static int backup_tdb(const char *old_name, const char *new_name,
 	char *tmp_name;
 	struct stat st;
 	int count1, count2;
+
+	/* Validate paths to prevent directory traversal attacks */
+	if (validate_path(old_name) != 0) {
+		fprintf(stderr, "Error: Invalid path '%s' - path traversal not allowed\n", old_name);
+		return 1;
+	}
+	
+	if (validate_path(new_name) != 0) {
+		fprintf(stderr, "Error: Invalid path '%s' - path traversal not allowed\n", new_name);
+		return 1;
+	}
 
 	tmp_name = add_suffix(new_name, ".tmp");
 
@@ -255,6 +292,17 @@ static int verify_tdb(const char *fname, const char *bak_name)
 	TDB_CONTEXT *tdb;
 	int count = -1;
 
+	/* Validate paths to prevent directory traversal attacks */
+	if (validate_path(fname) != 0) {
+		fprintf(stderr, "Error: Invalid path '%s' - path traversal not allowed\n", fname);
+		return 1;
+	}
+	
+	if (validate_path(bak_name) != 0) {
+		fprintf(stderr, "Error: Invalid path '%s' - path traversal not allowed\n", bak_name);
+		return 1;
+	}
+
 	/* open the tdb */
 	tdb = tdb_open_ex(fname, 0, 0,
 			  O_RDONLY, 0, &log_ctx, NULL);
@@ -324,6 +372,10 @@ static void usage(void)
 			verify = 1;
 			break;
 		case 's':
+			if (validate_path(optarg) != 0) {
+				fprintf(stderr, "Error: Invalid suffix '%s' - path traversal not allowed\n", optarg);
+				exit(1);
+			}
 			suffix = optarg;
 			break;
 		case 'n':
