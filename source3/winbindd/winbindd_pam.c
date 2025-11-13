@@ -1177,12 +1177,13 @@ static NTSTATUS winbindd_dual_pam_auth_cached(struct winbindd_domain *domain,
 
 	if (cached_salt) {
 		/* In this case we didn't store the nt_hash itself,
-		   but the MD5 combination of salt + nt_hash. */
+		   but the SHA-256 combination of salt + nt_hash. */
 		uchar salted_hash[NT_HASH_LEN];
+		uint8_t sha256_hash[32]; /* SHA-256 produces 32-byte hash */
 		gnutls_hash_hd_t hash_hnd = NULL;
 		int rc;
 
-		rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_MD5);
+		rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
 		if (rc < 0) {
 			result = gnutls_error_to_ntstatus(
 					rc, NT_STATUS_HASH_NOT_SUPPORTED);
@@ -1203,7 +1204,10 @@ static NTSTATUS winbindd_dual_pam_auth_cached(struct winbindd_domain *domain,
 					rc, NT_STATUS_HASH_NOT_SUPPORTED);
 			goto out;
 		}
-		gnutls_hash_deinit(hash_hnd, salted_hash);
+		gnutls_hash_deinit(hash_hnd, sha256_hash);
+		
+		/* Truncate SHA-256 hash to 16 bytes to maintain compatibility */
+		memcpy(salted_hash, sha256_hash, NT_HASH_LEN);
 
 		password_good = mem_equal_const_time(cached_nt_pass, salted_hash,
 						     NT_HASH_LEN);

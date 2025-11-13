@@ -1383,6 +1383,7 @@ NTSTATUS wcache_save_creds(struct winbindd_domain *domain,
 	uint32_t rid;
 	uint8_t cred_salt[NT_HASH_LEN];
 	uint8_t salted_hash[NT_HASH_LEN];
+	uint8_t sha256_hash[32]; /* SHA-256 produces 32-byte hash */
 	gnutls_hash_hd_t hash_hnd = NULL;
 	int rc;
 
@@ -1406,7 +1407,7 @@ NTSTATUS wcache_save_creds(struct winbindd_domain *domain,
 	/* Create a salt and then salt the hash. */
 	generate_random_buffer(cred_salt, NT_HASH_LEN);
 
-	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_MD5);
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
 	if (rc < 0) {
 		centry_free(centry);
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_HASH_NOT_SUPPORTED);
@@ -1424,7 +1425,10 @@ NTSTATUS wcache_save_creds(struct winbindd_domain *domain,
 		centry_free(centry);
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_HASH_NOT_SUPPORTED);
 	}
-	gnutls_hash_deinit(hash_hnd, salted_hash);
+	gnutls_hash_deinit(hash_hnd, sha256_hash);
+	
+	/* Truncate SHA-256 hash to 16 bytes to maintain compatibility */
+	memcpy(salted_hash, sha256_hash, NT_HASH_LEN);
 
 	centry_put_hash16(centry, salted_hash);
 	centry_put_hash16(centry, cred_salt);
