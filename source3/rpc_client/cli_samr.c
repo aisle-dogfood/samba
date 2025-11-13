@@ -35,6 +35,26 @@
 
 /* User change password */
 
+/*
+ * SECURITY WARNING: This function uses cryptographically weak algorithms
+ * 
+ * dcerpc_samr_chgpasswd_user() implements the legacy SAMR password change
+ * protocol which uses MD4 and DES encryption. These algorithms are 
+ * cryptographically broken and vulnerable to various attacks:
+ * 
+ * - MD4 is vulnerable to collision attacks and should not be used
+ * - DES has a 56-bit effective key size and can be brute-forced
+ * 
+ * This function is maintained for backward compatibility with legacy
+ * Windows systems. For new implementations, use dcerpc_samr_chgpasswd_user4()
+ * which provides stronger cryptographic protection with PBKDF2-SHA512 and AES.
+ * 
+ * Mitigation measures implemented:
+ * - Input validation to prevent buffer overflows
+ * - DES usage is disabled by default (controlled by client_lanman_auth setting)
+ * - Warning messages logged when weak crypto is used
+ * - Secure memory clearing of sensitive data
+ */
 NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 				    TALLOC_CTX *mem_ctx,
 				    struct policy_handle *user_handle,
@@ -53,21 +73,58 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 
 	DEBUG(10,("rpccli_samr_chgpasswd_user\n"));
 
+	/* 
+	 * WARNING: This function uses weak cryptographic algorithms (MD4 and DES)
+	 * for backward compatibility with legacy SAMR protocol implementations.
+	 * These algorithms are cryptographically broken and should not be used
+	 * for new implementations. Consider using dcerpc_samr_chgpasswd_user4()
+	 * which provides stronger cryptographic protection with PBKDF2-SHA512 and AES.
+	 */
+	DEBUG(1, ("WARNING: Using weak cryptographic algorithms (MD4/DES) for password change. "
+		  "Consider upgrading to stronger authentication methods.\n"));
+
+	/* Input validation to ensure passwords are not NULL */
+	if (oldpassword == NULL || newpassword == NULL) {
+		DEBUG(0, ("ERROR: NULL password provided to dcerpc_samr_chgpasswd_user\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	/* Validate password length to prevent buffer overflows */
+	if (strlen(oldpassword) > 256 || strlen(newpassword) > 256) {
+		DEBUG(0, ("ERROR: Password length exceeds maximum allowed (256 characters)\n"));
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
 	E_md4hash(oldpassword, old_nt_hash);
 	E_md4hash(newpassword, new_nt_hash);
 
-	E_deshash(oldpassword, old_lm_hash);
-	E_deshash(newpassword, new_lm_hash);
-
-	rc = E_old_pw_hash(new_lm_hash, old_lm_hash, hash1.hash);
-	if (rc != 0) {
-		status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-		goto done;
+	/* Only use LM hashing if explicitly enabled (disabled by default for security) */
+	if (lp_client_lanman_auth()) {
+		E_deshash(oldpassword, old_lm_hash);
+		E_deshash(newpassword, new_lm_hash);
+	} else {
+		/* Zero out LM hashes when LanMan auth is disabled */
+		ZERO_ARRAY(old_lm_hash);
+		ZERO_ARRAY(new_lm_hash);
+		DEBUG(3, ("LanMan authentication disabled - not using DES hashing\n"));
 	}
-	rc = E_old_pw_hash(old_lm_hash, new_lm_hash, hash2.hash);
-	if (rc != 0) {
-		status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-		goto done;
+
+	/* Only compute LM-based hashes if LanMan auth is enabled */
+	if (lp_client_lanman_auth()) {
+		rc = E_old_pw_hash(new_lm_hash, old_lm_hash, hash1.hash);
+		if (rc != 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+			goto done;
+		}
+		rc = E_old_pw_hash(old_lm_hash, new_lm_hash, hash2.hash);
+		if (rc != 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+			goto done;
+		}
+	} else {
+		/* Zero out LM-based hashes when LanMan auth is disabled */
+		ZERO_ARRAY(hash1.hash);
+		ZERO_ARRAY(hash2.hash);
 	}
 	rc = E_old_pw_hash(new_nt_hash, old_nt_hash, hash3.hash);
 	if (rc != 0) {
@@ -79,37 +136,51 @@ NTSTATUS dcerpc_samr_chgpasswd_user(struct dcerpc_binding_handle *h,
 		status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
 		goto done;
 	}
-	rc = E_old_pw_hash(old_lm_hash, new_nt_hash, hash5.hash);
-	if (rc != 0) {
-		status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-		goto done;
-	}
-	rc = E_old_pw_hash(old_nt_hash, new_lm_hash, hash6.hash);
-	if (rc != 0) {
-		status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-		goto done;
+	/* Only compute mixed LM/NT hashes if LanMan auth is enabled */
+	if (lp_client_lanman_auth()) {
+		rc = E_old_pw_hash(old_lm_hash, new_nt_hash, hash5.hash);
+		if (rc != 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+			goto done;
+		}
+		rc = E_old_pw_hash(old_nt_hash, new_lm_hash, hash6.hash);
+		if (rc != 0) {
+			status = gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+			goto done;
+		}
+	} else {
+		/* Zero out mixed LM/NT hashes when LanMan auth is disabled */
+		ZERO_ARRAY(hash5.hash);
+		ZERO_ARRAY(hash6.hash);
 	}
 
 	status = dcerpc_samr_ChangePasswordUser(h,
 						mem_ctx,
 						user_handle,
-						true,
+						lp_client_lanman_auth(),  /* Only send LM hashes if enabled */
 						&hash1,
 						&hash2,
-						true,
+						true,  /* Always send NT hashes */
 						&hash3,
 						&hash4,
-						true,
+						lp_client_lanman_auth(),  /* Only send mixed hashes if LM enabled */
 						&hash5,
-						true,
+						lp_client_lanman_auth(),  /* Only send mixed hashes if LM enabled */
 						&hash6,
 						presult);
 
 done:
+	/* Securely clear all sensitive data from memory */
 	ZERO_ARRAY(old_nt_hash);
 	ZERO_ARRAY(old_lm_hash);
 	ZERO_ARRAY(new_nt_hash);
 	ZERO_ARRAY(new_lm_hash);
+	ZERO_ARRAY(hash1.hash);
+	ZERO_ARRAY(hash2.hash);
+	ZERO_ARRAY(hash3.hash);
+	ZERO_ARRAY(hash4.hash);
+	ZERO_ARRAY(hash5.hash);
+	ZERO_ARRAY(hash6.hash);
 
 	return status;
 }
