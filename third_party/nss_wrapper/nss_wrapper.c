@@ -4586,11 +4586,15 @@ static struct group *nwrap_module_getgrnam(struct nwrap_backend *b,
 again:
 	status = b->symbols->_nss_getgrnam_r.f(name, &grp, buf, buflen, &errno);
 	if (status == NSS_STATUS_TRYAGAIN) {
+		char *p = NULL;
+
 		buflen *= 2;
-		buf = (char *)realloc(buf, buflen);
-		if (!buf) {
+		p = (char *)realloc(buf, buflen);
+		if (p == NULL) {
+			SAFE_FREE(buf);
 			return NULL;
 		}
+		buf = p;
 		goto again;
 	}
 	if (status == NSS_STATUS_NOTFOUND) {
@@ -4658,11 +4662,15 @@ static struct group *nwrap_module_getgrgid(struct nwrap_backend *b,
 again:
 	status = b->symbols->_nss_getgrgid_r.f(gid, &grp, buf, buflen, &errno);
 	if (status == NSS_STATUS_TRYAGAIN) {
+		char *p = NULL;
+
 		buflen *= 2;
-		buf = (char *)realloc(buf, buflen);
-		if (!buf) {
+		p = (char *)realloc(buf, buflen);
+		if (p == NULL) {
+			SAFE_FREE(buf);
 			return NULL;
 		}
+		buf = p;
 		goto again;
 	}
 	if (status == NSS_STATUS_NOTFOUND) {
@@ -4738,11 +4746,15 @@ static struct group *nwrap_module_getgrent(struct nwrap_backend *b)
 again:
 	status = b->symbols->_nss_getgrent_r.f(&grp, buf, buflen, &errno);
 	if (status == NSS_STATUS_TRYAGAIN) {
+		char *p = NULL;
+
 		buflen *= 2;
-		buf = (char *)realloc(buf, buflen);
-		if (!buf) {
+		p = (char *)realloc(buf, buflen);
+		if (p == NULL) {
+			SAFE_FREE(buf);
 			return NULL;
 		}
+		buf = p;
 		goto again;
 	}
 	if (status == NSS_STATUS_NOTFOUND) {
