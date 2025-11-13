@@ -213,6 +213,16 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 	NTSTATUS status;
 	bool ok;
 
+	/* Macro to clear sensitive password data from memory */
+#define CLEAR_PASSWORDS() do { \
+	size_t i; \
+	for (i = 0; i < ARRAY_SIZE(passwords); i++) { \
+		if (passwords[i] != NULL) { \
+			memset((void *)passwords[i], 0, strlen(passwords[i])); \
+		} \
+	} \
+} while(0)
+
 	state = talloc_zero(frame, struct trust_pw_change_state);
 	if (state == NULL) {
 		TALLOC_FREE(frame);
@@ -497,6 +507,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(0, ("netlogon_creds_cli_auth(%s) failed for old passwords (%u) - %s!\n",
 			  context_name, num_passwords, nt_errstr(status)));
+		CLEAR_PASSWORDS();
 		TALLOC_FREE(frame);
 		return status;
 	}
@@ -505,6 +516,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 	if (!NT_STATUS_IS_OK(status)) {
 		DBG_ERR("netlogon_creds_cli_get(%s) failed  %s!\n",
 			context_name, nt_errstr(status));
+		CLEAR_PASSWORDS();
 		TALLOC_FREE(frame);
 		return status;
 	}
@@ -526,6 +538,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 			DEBUG(0, ("cli_credentials_get_principal[%s] %s!\n",
 				  context_name,
 				  nt_errstr(status)));
+			CLEAR_PASSWORDS();
 			TALLOC_FREE(frame);
 			return status;
 		}
@@ -536,6 +549,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 			DEBUG(0, ("dcerpc_binding_get_string_option(host)[%s] %s!\n",
 				  context_name,
 				  nt_errstr(status)));
+			CLEAR_PASSWORDS();
 			TALLOC_FREE(frame);
 			return status;
 		}
@@ -545,6 +559,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 				  host,
 				  context_name,
 				  nt_errstr(status)));
+			CLEAR_PASSWORDS();
 			TALLOC_FREE(frame);
 			return status;
 		}
@@ -556,6 +571,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 			DEBUG(0, ("smb_krb5_init_context_common[%s] %s!\n",
 				  context_name,
 				  nt_errstr(status)));
+			CLEAR_PASSWORDS();
 			TALLOC_FREE(frame);
 			return status;
 		}
@@ -594,6 +610,7 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 				  context_name,
 				  num_passwords,
 				  nt_errstr(status)));
+			CLEAR_PASSWORDS();
 			TALLOC_FREE(frame);
 			return status;
 		}
@@ -890,6 +907,10 @@ NTSTATUS trust_pw_change(struct netlogon_creds_cli_context *context,
 	DEBUG(0,("%s : %s(%s): Verified new password remotely using %s\n",
 		 current_timestring(talloc_tos(), false),
 		 __func__, domain, context_name));
+
+	CLEAR_PASSWORDS();
+
+#undef CLEAR_PASSWORDS
 
 	TALLOC_FREE(frame);
 	return NT_STATUS_OK;
