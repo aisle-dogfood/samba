@@ -1114,6 +1114,11 @@ static NTSTATUS add_trust_user(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_NO_MEMORY;
 	}
 
+	if (in == NULL || in->count == 0) {
+		/* No authentication information provided, skip password setup */
+		goto skip_auth_info;
+	}
+
 	for (i = 0; i < in->count; i++) {
 		const char *attribute;
 		struct ldb_val v;
@@ -1138,6 +1143,7 @@ static NTSTATUS add_trust_user(TALLOC_CTX *mem_ctx,
 		}
 	}
 
+skip_auth_info:
 	/* create the trusted_domain user account */
 	ret = ldb_build_add_req(&req, sam_ldb, mem_ctx, msg, NULL, NULL,
 				ldb_op_default_callback, NULL);
