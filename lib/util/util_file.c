@@ -61,6 +61,11 @@ _PUBLIC_ char *afdgets(int fd, TALLOC_CTX *mem_ctx, size_t hint)
 
 		/* Find newline */
 		for (p = 0; p < ret; p++) {
+			/* Check for integer overflow and bounds */
+			if (offset > SSIZE_MAX - p || offset + p >= alloc_size) {
+				talloc_free(data);
+				return NULL;
+			}
 			if (data[offset + p] == '\n')
 				break;
 		}
@@ -73,10 +78,20 @@ _PUBLIC_ char *afdgets(int fd, TALLOC_CTX *mem_ctx, size_t hint)
 			return data;
 		}
 
+		/* Check for integer overflow before incrementing offset */
+		if (offset > SSIZE_MAX - ret) {
+			talloc_free(data);
+			return NULL;
+		}
 		offset += ret;
 
 	} while ((size_t)ret == hint);
 
+	/* Check bounds before null termination */
+	if (offset >= alloc_size) {
+		talloc_free(data);
+		return NULL;
+	}
 	data[offset] = '\0';
 
 	return data;
