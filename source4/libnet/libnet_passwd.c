@@ -539,7 +539,7 @@ NTSTATUS libnet_ChangePassword(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, 
 	return NT_STATUS_INVALID_LEVEL;
 }
 
-static NTSTATUS libnet_SetPassword_samr_handle_26(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, union libnet_SetPassword *r)
+static NTSTATUS libnet_SetPassword_samr_handle_31(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, union libnet_SetPassword *r)
 {
 	struct dcerpc_binding_handle *b =
 		r->samr_handle.in.dcerpc_pipe->binding_handle;
@@ -547,14 +547,18 @@ static NTSTATUS libnet_SetPassword_samr_handle_26(struct libnet_context *ctx, TA
 	struct samr_SetUserInfo2 sui;
 	union samr_UserInfo u_info;
 	DATA_BLOB session_key;
+	DATA_BLOB salt = {
+		.data = NULL,
+		.length = 16,
+	};
 
 	if (r->samr_handle.in.info21) {
 		return NT_STATUS_INVALID_PARAMETER_MIX;
 	}
 
-	/* prepare samr_SetUserInfo2 level 26 */
+	/* prepare samr_SetUserInfo2 level 31 */
 	ZERO_STRUCT(u_info);
-	u_info.info26.password_expired = 0;
+	u_info.info31.password_expired = 0;
 
 	status = dcerpc_binding_handle_transport_session_key(b,
 							     mem_ctx,
@@ -566,39 +570,52 @@ static NTSTATUS libnet_SetPassword_samr_handle_26(struct libnet_context *ctx, TA
 		return status;
 	}
 
-	status = encode_rc4_passwd_buffer(r->samr_handle.in.newpassword,
-					  &session_key,
-					  &u_info.info26.password);
+	/* Allocate salt buffer */
+	salt.data = talloc_array(mem_ctx, uint8_t, salt.length);
+	if (salt.data == NULL) {
+		data_blob_clear_free(&session_key);
+		return NT_STATUS_NO_MEMORY;
+	}
+	
+	/* Generate random salt */
+	generate_nonce_buffer(salt.data, salt.length);
+
+	status = init_samr_CryptPasswordAES(mem_ctx,
+					    r->samr_handle.in.newpassword,
+					    &salt,
+					    &session_key,
+					    &u_info.info31.password);
 	data_blob_clear_free(&session_key);
+	data_blob_clear_free(&salt);
 	if (!NT_STATUS_IS_OK(status)) {
 		r->samr_handle.out.error_string =
 			talloc_asprintf(mem_ctx,
-					"encode_rc4_passwd_buffer failed: %s",
+					"init_samr_CryptPasswordAES failed: %s",
 					nt_errstr(status));
 		return status;
 	}
 
 	sui.in.user_handle = r->samr_handle.in.user_handle;
 	sui.in.info = &u_info;
-	sui.in.level = 26;
+	sui.in.level = 31;
 
-	/* 7. try samr_SetUserInfo2 level 26 to set the password */
+	/* 7. try samr_SetUserInfo2 level 31 to set the password */
 	status = dcerpc_samr_SetUserInfo2_r(b, mem_ctx, &sui);
-	/* check result of samr_SetUserInfo2 level 26 */
+	/* check result of samr_SetUserInfo2 level 31 */
 	if (NT_STATUS_IS_OK(status) && !NT_STATUS_IS_OK(sui.out.result)) {
 		status = sui.out.result;
 	}
 	if (!NT_STATUS_IS_OK(status)) {
 		r->samr_handle.out.error_string
 			= talloc_asprintf(mem_ctx,
-					  "SetUserInfo2 level 26 for [%s] failed: %s",
+					  "SetUserInfo2 level 31 for [%s] failed: %s",
 					  r->samr_handle.in.account_name, nt_errstr(status));
 	}
 
 	return status;
 }
 
-static NTSTATUS libnet_SetPassword_samr_handle_25(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, union libnet_SetPassword *r)
+static NTSTATUS libnet_SetPassword_samr_handle_32(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, union libnet_SetPassword *r)
 {
 	struct dcerpc_binding_handle *b =
 		r->samr_handle.in.dcerpc_pipe->binding_handle;
@@ -606,15 +623,19 @@ static NTSTATUS libnet_SetPassword_samr_handle_25(struct libnet_context *ctx, TA
 	struct samr_SetUserInfo2 sui;
 	union samr_UserInfo u_info;
 	DATA_BLOB session_key;
+	DATA_BLOB salt = {
+		.data = NULL,
+		.length = 16,
+	};
 
 	if (!r->samr_handle.in.info21) {
 		return NT_STATUS_INVALID_PARAMETER_MIX;
 	}
 
-	/* prepare samr_SetUserInfo2 level 25 */
+	/* prepare samr_SetUserInfo2 level 32 */
 	ZERO_STRUCT(u_info);
-	u_info.info25.info = *r->samr_handle.in.info21;
-	u_info.info25.info.fields_present |= SAMR_FIELD_NT_PASSWORD_PRESENT;
+	u_info.info32.info = *r->samr_handle.in.info21;
+	u_info.info32.info.fields_present |= SAMR_FIELD_NT_PASSWORD_PRESENT;
 
 	status = dcerpc_binding_handle_transport_session_key(b,
 							     mem_ctx,
@@ -626,14 +647,27 @@ static NTSTATUS libnet_SetPassword_samr_handle_25(struct libnet_context *ctx, TA
 		return status;
 	}
 
-	status = encode_rc4_passwd_buffer(r->samr_handle.in.newpassword,
-					  &session_key,
-					  &u_info.info25.password);
+	/* Allocate salt buffer */
+	salt.data = talloc_array(mem_ctx, uint8_t, salt.length);
+	if (salt.data == NULL) {
+		data_blob_clear_free(&session_key);
+		return NT_STATUS_NO_MEMORY;
+	}
+	
+	/* Generate random salt */
+	generate_nonce_buffer(salt.data, salt.length);
+
+	status = init_samr_CryptPasswordAES(mem_ctx,
+					    r->samr_handle.in.newpassword,
+					    &salt,
+					    &session_key,
+					    &u_info.info32.password);
 	data_blob_clear_free(&session_key);
+	data_blob_clear_free(&salt);
 	if (!NT_STATUS_IS_OK(status)) {
 		r->samr_handle.out.error_string =
 			talloc_asprintf(mem_ctx,
-					"encode_rc4_passwd_buffer failed: %s",
+					"init_samr_CryptPasswordAES failed: %s",
 					nt_errstr(status));
 		return status;
 	}
@@ -641,9 +675,9 @@ static NTSTATUS libnet_SetPassword_samr_handle_25(struct libnet_context *ctx, TA
 
 	sui.in.user_handle = r->samr_handle.in.user_handle;
 	sui.in.info = &u_info;
-	sui.in.level = 25;
+	sui.in.level = 32;
 
-	/* 8. try samr_SetUserInfo2 level 25 to set the password */
+	/* 8. try samr_SetUserInfo2 level 32 to set the password */
 	status = dcerpc_samr_SetUserInfo2_r(b, mem_ctx, &sui);
 	if (NT_STATUS_IS_OK(status) && !NT_STATUS_IS_OK(sui.out.result)) {
 		status = sui.out.result;
@@ -651,7 +685,7 @@ static NTSTATUS libnet_SetPassword_samr_handle_25(struct libnet_context *ctx, TA
 	if (!NT_STATUS_IS_OK(status)) {
 		r->samr_handle.out.error_string
 			= talloc_asprintf(mem_ctx,
-					  "SetUserInfo2 level 25 for [%s] failed: %s",
+					  "SetUserInfo2 level 32 for [%s] failed: %s",
 					  r->samr_handle.in.account_name, nt_errstr(status));
 	}
 
@@ -878,8 +912,8 @@ out:
 }
 
 /*
- * 1. try samr_SetUserInfo2 level 26 to set the password
- * 2. try samr_SetUserInfo2 level 25 to set the password
+ * 1. try samr_SetUserInfo2 level 31 to set the password (AES)
+ * 2. try samr_SetUserInfo2 level 32 to set the password (AES)
  * 3. try samr_SetUserInfo2 level 24 to set the password
  * 4. try samr_SetUserInfo2 level 23 to set the password
 */
@@ -888,8 +922,8 @@ static NTSTATUS libnet_SetPassword_samr_handle(struct libnet_context *ctx, TALLO
 
 	NTSTATUS status;
 	enum libnet_SetPassword_level levels[] = {
-		LIBNET_SET_PASSWORD_SAMR_HANDLE_26,
-		LIBNET_SET_PASSWORD_SAMR_HANDLE_25,
+		LIBNET_SET_PASSWORD_SAMR_HANDLE_31,
+		LIBNET_SET_PASSWORD_SAMR_HANDLE_32,
 		LIBNET_SET_PASSWORD_SAMR_HANDLE_24,
 		LIBNET_SET_PASSWORD_SAMR_HANDLE_23,
 	};
@@ -1128,17 +1162,23 @@ NTSTATUS libnet_SetPassword(struct libnet_context *ctx, TALLOC_CTX *mem_ctx, uni
 		case LIBNET_SET_PASSWORD_SAMR_HANDLE:
 			status = libnet_SetPassword_samr_handle(ctx, mem_ctx, r);
 			break;
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_31:
+			status = libnet_SetPassword_samr_handle_31(ctx, mem_ctx, r);
+			break;
+		case LIBNET_SET_PASSWORD_SAMR_HANDLE_32:
+			status = libnet_SetPassword_samr_handle_32(ctx, mem_ctx, r);
+			break;
 		case LIBNET_SET_PASSWORD_SAMR_HANDLE_26:
 			if (encryption_state == SMB_ENCRYPTION_REQUIRED) {
 				GNUTLS_FIPS140_SET_LAX_MODE();
 			}
-			status = libnet_SetPassword_samr_handle_26(ctx, mem_ctx, r);
+			status = libnet_SetPassword_samr_handle_31(ctx, mem_ctx, r);
 			break;
 		case LIBNET_SET_PASSWORD_SAMR_HANDLE_25:
 			if (encryption_state == SMB_ENCRYPTION_REQUIRED) {
 				GNUTLS_FIPS140_SET_LAX_MODE();
 			}
-			status = libnet_SetPassword_samr_handle_25(ctx, mem_ctx, r);
+			status = libnet_SetPassword_samr_handle_32(ctx, mem_ctx, r);
 			break;
 		case LIBNET_SET_PASSWORD_SAMR_HANDLE_24:
 			if (encryption_state == SMB_ENCRYPTION_REQUIRED) {
