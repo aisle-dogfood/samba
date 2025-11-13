@@ -67,7 +67,7 @@ struct samr_Password *smbpasswd_gethexpwd(TALLOC_CTX *mem_ctx, const char *p)
 		return NULL;
 	}
 
-	pwd = talloc(mem_ctx, struct samr_Password);
+	pwd = talloc_zero(mem_ctx, struct samr_Password);
 	if (pwd == NULL) {
 		return NULL;
 	}
