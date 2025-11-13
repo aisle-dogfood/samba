@@ -1755,12 +1755,17 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 		user = samu_new(talloc_tos());
 		if (user == NULL) {
 			DEBUG(0, ("samu_new failed\n"));
-			break;
+			endsmbfilepwent(fp, &(smbpasswd_state->pw_file_lock_depth));
+			TALLOC_FREE(search_state);
+			return false;
 		}
 
 		if (!build_sam_account(smbpasswd_state, user, pwd)) {
 			/* Already got debug msgs... */
-			break;
+			TALLOC_FREE(user);
+			endsmbfilepwent(fp, &(smbpasswd_state->pw_file_lock_depth));
+			TALLOC_FREE(search_state);
+			return false;
 		}
 
 		ZERO_STRUCT(entry);
@@ -1779,7 +1784,9 @@ static bool smbpasswd_search_users(struct pdb_methods *methods,
 		if ((entry.account_name == NULL) || (entry.fullname == NULL)
 		    || (entry.description == NULL)) {
 			DBG_ERR("talloc_strdup failed\n");
-			break;
+			endsmbfilepwent(fp, &(smbpasswd_state->pw_file_lock_depth));
+			TALLOC_FREE(search_state);
+			return false;
 		}
 
 		ADD_TO_LARGE_ARRAY(search_state, struct samr_displayentry,
