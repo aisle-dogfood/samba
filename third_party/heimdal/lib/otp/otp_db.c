@@ -139,14 +139,60 @@ otp_get_internal (void *v, OtpContext *ctx, int lockp)
     ctx->err = "Bad algorithm";
     return -1;
   }
-  p += strlen(p) + 1;
+  /* Bounds check: ensure we don't read beyond the data buffer */
+  {
+    char *end_of_data = dat.dptr + dat.dsize;
+    char *alg_end = p;
+    
+    /* Find the null terminator within bounds */
+    while (alg_end < end_of_data && *alg_end != '\0') {
+      alg_end++;
+    }
+    
+    /* Check if we found a null terminator within bounds */
+    if (alg_end >= end_of_data) {
+      ctx->err = "Malformed database entry: algorithm string not null-terminated";
+      return -1;
+    }
+    
+    p = alg_end + 1;
+  }
+  
+  /* Bounds check: ensure we have enough data for the 4-byte integer */
+  if (p + 4 > dat.dptr + dat.dsize) {
+    ctx->err = "Malformed database entry: insufficient data for sequence number";
+    return -1;
+  }
   {
     unsigned char *up = (unsigned char *)p;
     ctx->n = (up[0] << 24) | (up[1] << 16) | (up[2] << 8) | up[3];
   }
   p += 4;
+  
+  /* Bounds check: ensure we have enough data for the key */
+  if (p + OTPKEYSIZE > dat.dptr + dat.dsize) {
+    ctx->err = "Malformed database entry: insufficient data for key";
+    return -1;
+  }
   memcpy (ctx->key, p, OTPKEYSIZE);
   p += OTPKEYSIZE;
+  
+  /* Bounds check: ensure we have data for the seed and it's null-terminated */
+  {
+    char *end_of_data = dat.dptr + dat.dsize;
+    char *seed_end = p;
+    
+    /* Find the null terminator within bounds */
+    while (seed_end < end_of_data && *seed_end != '\0') {
+      seed_end++;
+    }
+    
+    /* Check if we found a null terminator within bounds */
+    if (seed_end >= end_of_data) {
+      ctx->err = "Malformed database entry: seed string not null-terminated";
+      return -1;
+    }
+  }
   strlcpy (ctx->seed, p, sizeof(ctx->seed));
   if (lockp)
     return dbm_store (dbm, key, dat, DBM_REPLACE);
