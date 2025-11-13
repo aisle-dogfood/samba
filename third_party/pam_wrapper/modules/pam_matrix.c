@@ -187,10 +187,12 @@ static int pam_matrix_mod_items_get(const char *db,
 		NEXT_KEY(file_password, file_svc);
 
 		q = file_svc;
-		while(q[0] != '\n' && q[0] != '\0') {
-			q++;
+		if (q != NULL) {
+			while(q[0] != '\n' && q[0] != '\0') {
+				q++;
+			}
+			q[0] = '\0';
 		}
-		q[0] = '\0';
 
 		if (file_password == NULL) {
 			continue;
@@ -284,10 +286,12 @@ static int pam_matrix_lib_items_put(const char *db,
 		NEXT_KEY(file_password, file_svc);
 
 		q = file_svc;
-		while(q[0] != '\n' && q[0] != '\0') {
-			q++;
+		if (q != NULL) {
+			while(q[0] != '\n' && q[0] != '\0') {
+				q++;
+			}
+			q[0] = '\0';
 		}
-		q[0] = '\0';
 
 		if (file_password == NULL) {
 			continue;
