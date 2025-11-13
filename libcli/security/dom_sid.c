@@ -162,7 +162,8 @@ bool dom_sid_parse_endp(const char *sidstr,struct dom_sid *sidout,
 
 	*sidout = (struct dom_sid) {};
 
-	if ((sidstr[0] != 'S' && sidstr[0] != 's') || sidstr[1] != '-') {
+	if (sidstr == NULL || strlen(sidstr) < 2 || 
+	    (sidstr[0] != 'S' && sidstr[0] != 's') || sidstr[1] != '-') {
 		goto format_error;
 	}
 
