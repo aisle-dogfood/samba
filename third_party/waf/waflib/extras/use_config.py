@@ -113,9 +113,20 @@ def download_tool(tool, force=False, ctx=None):
 
 		$ waf configure --download
 	"""
+	# Validate tool name to prevent path traversal and malicious URLs
+	import re
+	if not re.match(r'^[a-zA-Z0-9_-]+$', tool):
+		raise Errors.WafError('Invalid tool name: %s. Tool names must contain only alphanumeric characters, underscores, and hyphens.' % tool)
+	
 	for x in Utils.to_list(remote_repo):
 		for sub in Utils.to_list(remote_locs):
 			url = '/'.join((x, sub, tool + '.py'))
+			
+			# Validate that the constructed URL uses allowed schemes
+			parsed_url = urlparse(url)
+			if parsed_url.scheme not in ('http', 'https'):
+				raise Errors.WafError('Invalid URL scheme: %s. Only http and https are allowed.' % parsed_url.scheme)
+			
 			try:
 				web = urlopen(url)
 				try:
