@@ -620,7 +620,7 @@ int main(int argc, const char *argv[])
 			goto done;
 		}
 
-		printf ("%s\n", dom_sid_str_buf(sid, &buf) );
+		printf("Machine SID initialized successfully.\n");
 		retval = 0;
 		goto done;
 	}
