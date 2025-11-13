@@ -261,6 +261,15 @@ hx509_pem_read(hx509_context context,
 		goto out;
 	    }
 
+	    /* Check for integer overflow before adding len + i */
+	    if (len > SIZE_MAX - i) {
+		free(p);
+		hx509_set_error_string(context, 0, HX509_PARSING_KEY_FAILED,
+				       "PEM data too large, integer overflow");
+		ret = HX509_PARSING_KEY_FAILED;
+		goto out;
+	    }
+	    
 	    data = erealloc(data, len + i);
 	    memcpy(((char *)data) + len, p, i);
 	    free(p);
