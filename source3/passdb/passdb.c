@@ -514,7 +514,16 @@ int algorithmic_rid_base(void)
 uid_t algorithmic_pdb_user_rid_to_uid(uint32_t user_rid)
 {
 	int rid_offset = algorithmic_rid_base();
-	return (uid_t)(((user_rid & (~USER_RID_TYPE)) - rid_offset)/RID_MULTIPLIER);
+	uint32_t masked_rid = user_rid & (~USER_RID_TYPE);
+	
+	/* Prevent integer underflow by ensuring masked_rid is large enough */
+	if (masked_rid < (uint32_t)rid_offset) {
+		DEBUG(0, ("algorithmic_pdb_user_rid_to_uid: RID %u is too small (< %d)\n", 
+			  masked_rid, rid_offset));
+		return (uid_t)-1;  /* Return invalid uid */
+	}
+	
+	return (uid_t)((masked_rid - rid_offset)/RID_MULTIPLIER);
 }
 
 uid_t max_algorithmic_uid(void)

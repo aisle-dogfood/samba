@@ -1263,7 +1263,12 @@ static bool build_smb_pass (struct smb_passwd *smb_pw, const struct samu *sampas
 			smb_pw->smb_userid=passwd->pw_uid;
 			TALLOC_FREE(passwd);
 		} else if (algorithmic_pdb_rid_is_user(rid)) {
-			smb_pw->smb_userid=algorithmic_pdb_user_rid_to_uid(rid);
+			uid_t uid = algorithmic_pdb_user_rid_to_uid(rid);
+			if (uid == (uid_t)-1) {
+				DEBUG(0,("build_sam_pass: Invalid RID %u - conversion to uid failed\n", rid));
+				return False;
+			}
+			smb_pw->smb_userid = uid;
 		} else {
 			DEBUG(0,("build_sam_pass: Failing attempt to store user with non-uid based user RID. \n"));
 			return False;
