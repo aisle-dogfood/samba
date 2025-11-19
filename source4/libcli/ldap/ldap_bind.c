@@ -33,6 +33,7 @@
 #include "param/param.h"
 #include "param/loadparm.h"
 #include "librpc/gen_ndr/ads.h"
+#include "lib/util/talloc_keep_secret.h"
 
 struct ldap_simple_creds {
 	const char *dn;
@@ -85,6 +86,14 @@ static struct ldap_message *new_ldap_simple_bind_msg(struct ldap_connection *con
 	res->r.BindRequest.creds.password = talloc_strdup(res, pw);
 	res->controls = NULL;
 
+	/* 
+	 * Mark the password as secret so it gets securely zeroed
+	 * when the message is freed to prevent credential disclosure
+	 */
+	if (res->r.BindRequest.creds.password != NULL) {
+		talloc_keep_secret(discard_const(res->r.BindRequest.creds.password));
+	}
+
 	return res;
 }
 
@@ -102,6 +111,15 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 
 	if (conn == NULL) {
 		return NT_STATUS_INVALID_CONNECTION;
+	}
+
+	/* 
+	 * Check if the connection is secure before sending credentials.
+	 * Only allow simple bind over TLS/LDAPS connections to prevent
+	 * credentials from being sent in cleartext.
+	 */
+	if (conn->sockets.active != conn->sockets.tls && !conn->ldaps) {
+		return NT_STATUS_LDAP(LDAP_STRONG_AUTH_REQUIRED);
 	}
 
 	if (userdn) {
@@ -160,6 +178,11 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 		if (creds->dn == NULL || creds->pw == NULL) {
 			return NT_STATUS_NO_MEMORY;
 		}
+		/* 
+		 * Mark the password as secret so it gets securely zeroed
+		 * when the memory is freed to prevent credential disclosure
+		 */
+		talloc_keep_secret(discard_const(creds->pw));
 		conn->bind.type = LDAP_BIND_SIMPLE;
 		conn->bind.creds = creds;
 	}
