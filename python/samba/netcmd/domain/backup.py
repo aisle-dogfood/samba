@@ -207,7 +207,7 @@ def set_admin_password(logger, samdb):
     username = str(res[0]['samaccountname'])
 
     adminpass = samba.generate_random_password(12, 32)
-    logger.info("Setting %s password in backup to: %s" % (username, adminpass))
+    logger.info("Setting %s password in backup to a randomly generated value" % username)
     logger.info("Run 'samba-tool user setpassword %s' after restoring DB" %
                 username)
     samdb.setpassword(search_expr, adminpass, force_change_at_next_login=False,
