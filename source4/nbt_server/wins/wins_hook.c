@@ -41,7 +41,8 @@ void wins_hook(struct winsdb_handle *h, const struct winsdb_record *rec,
 {
 	uint32_t i, length;
 	int child;
-	char *cmd = NULL;
+	char **argv = NULL;
+	uint32_t argc = 0;
 	TALLOC_CTX *tmp_mem = NULL;
 
 	if (!wins_hook_script || !wins_hook_script[0]) return;
@@ -55,21 +56,35 @@ void wins_hook(struct winsdb_handle *h, const struct winsdb_record *rec,
 		action = WINS_HOOK_DELETE;
 	}
 
-	cmd = talloc_asprintf(tmp_mem,
-			      "%s %s %s %02x %ld",
-			      wins_hook_script,
-			      wins_hook_action_string(action),
-			      rec->name->name,
-			      rec->name->type,
-			      (long int) rec->expire_time);
-	if (!cmd) goto failed;
+	/* Build argument array for direct execution (no shell) to prevent command injection */
+	/* argv[0] = script, argv[1] = action, argv[2] = name, argv[3] = type, argv[4] = expire_time, argv[5..n] = addresses, argv[n+1] = NULL */
+	argc = 5 + length + 1; /* script + action + name + type + expire_time + addresses + NULL */
+	argv = talloc_zero_array(tmp_mem, char *, argc);
+	if (!argv) goto failed;
+
+	argv[0] = talloc_strdup(tmp_mem, wins_hook_script);
+	if (!argv[0]) goto failed;
+
+	argv[1] = talloc_strdup(tmp_mem, wins_hook_action_string(action));
+	if (!argv[1]) goto failed;
+
+	argv[2] = talloc_strdup(tmp_mem, rec->name->name);
+	if (!argv[2]) goto failed;
+
+	argv[3] = talloc_asprintf(tmp_mem, "%02x", rec->name->type);
+	if (!argv[3]) goto failed;
+
+	argv[4] = talloc_asprintf(tmp_mem, "%ld", (long int) rec->expire_time);
+	if (!argv[4]) goto failed;
 
 	for (i=0; rec->addresses[i]; i++) {
-		cmd = talloc_asprintf_append_buffer(cmd, " %s", rec->addresses[i]->address);
-		if (!cmd) goto failed;
+		argv[5 + i] = talloc_strdup(tmp_mem, rec->addresses[i]->address);
+		if (!argv[5 + i]) goto failed;
 	}
 
-	DEBUG(10,("call wins hook '%s'\n", cmd));
+	argv[5 + i] = NULL; /* NULL terminate the array */
+
+	DEBUG(10,("call wins hook '%s' with %d arguments\n", wins_hook_script, argc - 1));
 
 	/* signal handling in posix really sucks - doing this in a library
 	   affects the whole app, but what else to do?? */
@@ -82,7 +97,7 @@ void wins_hook(struct winsdb_handle *h, const struct winsdb_record *rec,
 
 	if (child == 0) {
 /* TODO: close file handles */
-		execl("/bin/sh", "sh", "-c", cmd, NULL);
+		execv(argv[0], argv);
 		_exit(0);
 	}
 
