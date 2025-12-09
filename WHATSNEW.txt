@@ -1,10 +1,48 @@
                    ==============================
+                   Release Notes for Samba 4.23.2
+                         January 15, 2025
+                   ==============================
+
+
+This is the latest stable release of the Samba 4.23 release series.
+
+
+Changes since 4.23.1
+--------------------
+
+This release contains security fixes and bug fixes.
+
+
+#######################################
+Reporting bugs & Development Discussion
+#######################################
+
+Please discuss this release on the samba-technical mailing list or by
+joining the #samba-technical:matrix.org matrix room, or
+#samba-technical IRC channel on irc.libera.chat.
+
+If you do report problems then please try to send high quality
+feedback. If you don't provide vital information to help us track down
+the problem then you will probably be ignored.  All bug reports should
+be filed under the Samba 4.1 and newer product in the project's Bugzilla
+database (https://bugzilla.samba.org/).
+
+
+======================================================================
+== Our Code, Our Bugs, Our Responsibility.
+== The Samba Team
+======================================================================
+
+
+Release notes for older releases follow:
+----------------------------------------
+                   ==============================
                    Release Notes for Samba 4.23.1
                          September 26, 2025
                    ==============================
 
 
-This is the latest stable release of the Samba 4.23 release series.
+This is a stable release of the Samba 4.23 release series.
 
 
 Changes since 4.23.0
