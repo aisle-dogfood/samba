@@ -376,9 +376,45 @@ _PUBLIC_ int tdb_check(struct tdb_context *tdb,
 	}
 
 	/* One big malloc: pointers then bit arrays. */
-	hashes = (unsigned char **)calloc(
-			1, sizeof(hashes[0]) * (1+tdb->hash_size)
-			+ BITMAP_BITS / CHAR_BIT * (1+tdb->hash_size));
+	/* Check for integer overflow in size calculation */
+	{
+		size_t num_entries, ptr_size, bitmap_size, total_size;
+		
+		/* Check that 1 + tdb->hash_size doesn't overflow */
+		if (tdb->hash_size >= UINT32_MAX) {
+			tdb->ecode = TDB_ERR_CORRUPT;
+			TDB_LOG((tdb, TDB_DEBUG_ERROR, "Hash size too large\n"));
+			goto unlock;
+		}
+		
+		num_entries = 1 + tdb->hash_size;
+		
+		/* Check pointer array size doesn't overflow */
+		if (num_entries > SIZE_MAX / sizeof(hashes[0])) {
+			tdb->ecode = TDB_ERR_CORRUPT;
+			TDB_LOG((tdb, TDB_DEBUG_ERROR, "Hash size too large for allocation\n"));
+			goto unlock;
+		}
+		ptr_size = sizeof(hashes[0]) * num_entries;
+		
+		/* Check bitmap array size doesn't overflow */
+		if (num_entries > SIZE_MAX / (BITMAP_BITS / CHAR_BIT)) {
+			tdb->ecode = TDB_ERR_CORRUPT;
+			TDB_LOG((tdb, TDB_DEBUG_ERROR, "Hash size too large for bitmap allocation\n"));
+			goto unlock;
+		}
+		bitmap_size = (BITMAP_BITS / CHAR_BIT) * num_entries;
+		
+		/* Check total size doesn't overflow */
+		if (ptr_size > SIZE_MAX - bitmap_size) {
+			tdb->ecode = TDB_ERR_CORRUPT;
+			TDB_LOG((tdb, TDB_DEBUG_ERROR, "Total allocation size too large\n"));
+			goto unlock;
+		}
+		total_size = ptr_size + bitmap_size;
+		
+		hashes = (unsigned char **)calloc(1, total_size);
+	}
 	if (!hashes) {
 		tdb->ecode = TDB_ERR_OOM;
 		goto unlock;
