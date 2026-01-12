@@ -83,6 +83,10 @@ static struct ldap_message *new_ldap_simple_bind_msg(struct ldap_connection *con
 	res->r.BindRequest.dn = talloc_strdup(res, dn);
 	res->r.BindRequest.mechanism = LDAP_AUTH_MECH_SIMPLE;
 	res->r.BindRequest.creds.password = talloc_strdup(res, pw);
+	/* 🔐 Mark password for secure zeroization to protect credentials in memory */
+	if (res->r.BindRequest.creds.password != NULL) {
+		talloc_keep_secret(res->r.BindRequest.creds.password);
+	}
 	res->controls = NULL;
 
 	return res;
@@ -99,6 +103,7 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 	struct ldap_message *msg;
 	const char *dn, *pw;
 	NTSTATUS status;
+	bool is_encrypted = false;
 
 	if (conn == NULL) {
 		return NT_STATUS_INVALID_CONNECTION;
@@ -122,6 +127,18 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 		} else {
 			pw = "";
 		}
+	}
+
+	/*
+	 * 🔍 Check if the connection is encrypted via TLS or SASL.
+	 * ⚠️  Warn if credentials will be sent in cleartext! 🚨
+	 */
+	is_encrypted = (conn->sockets.active == conn->sockets.tls) ||
+		       (conn->sockets.active == conn->sockets.sasl);
+
+	if (!is_encrypted && pw != NULL && pw[0] != '\0') {
+		DEBUG(0, ("⚠️  WARNING: LDAP simple bind will send password in cleartext! 🔓 "
+			  "Use LDAPS or StartTLS to protect credentials. 🔒✨\n"));
 	}
 
 	msg = new_ldap_simple_bind_msg(conn, dn, pw);
@@ -159,6 +176,10 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 		creds->pw = talloc_strdup(creds, pw);
 		if (creds->dn == NULL || creds->pw == NULL) {
 			return NT_STATUS_NO_MEMORY;
+		}
+		/* 🛡️ Ensure password is securely zeroed when freed - keep it safe! 💪 */
+		if (creds->pw != NULL) {
+			talloc_keep_secret(creds->pw);
 		}
 		conn->bind.type = LDAP_BIND_SIMPLE;
 		conn->bind.creds = creds;
