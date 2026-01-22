@@ -1050,6 +1050,7 @@ static int cmd_quit(struct smbclient_context *ctx, const char **args)
 static int cmd_mkdir(struct smbclient_context *ctx, const char **args)
 {
 	char *mask, *p;
+	char *saveptr = NULL;
 
 	if (!args[1]) {
 		if (!ctx->recurse)
@@ -1063,7 +1064,7 @@ static int cmd_mkdir(struct smbclient_context *ctx, const char **args)
 		dos_clean_name(mask);
 
 		trim_string(mask,".",NULL);
-		for (p = strtok(mask,"/\\"); p; p = strtok(p, "/\\")) {
+		for (p = strtok_r(mask,"/\\", &saveptr); p; p = strtok_r(NULL, "/\\", &saveptr)) {
 			char *parent = talloc_strndup(ctx, mask, PTR_DIFF(p, mask));
 
 			if (NT_STATUS_IS_ERR(smbcli_chkpath(ctx->cli->tree, parent))) {
