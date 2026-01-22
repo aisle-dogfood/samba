@@ -269,6 +269,10 @@ void standard_sub_basic(const char *smb_name, const char *domain_name,
 
 	if ( (s = talloc_sub_basic(talloc_tos(), smb_name, domain_name, str )) != NULL ) {
 		strncpy( str, s, len );
+		/* Ensure null termination in case s was >= len */
+		if (len > 0) {
+			str[len - 1] = '\0';
+		}
 	}
 
 	TALLOC_FREE( s );
