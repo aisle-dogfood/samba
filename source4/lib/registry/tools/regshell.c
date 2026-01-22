@@ -43,6 +43,7 @@ static WERROR get_full_path(struct regshell_context *ctx, const char *path, char
 	char *tmp;
 	char *new_path;
 	char *saveptr;
+	char *path_copy;
 
 	if (path[0] == '\\') {
 		new_path = talloc_strdup(ctx, "");
@@ -50,8 +51,16 @@ static WERROR get_full_path(struct regshell_context *ctx, const char *path, char
  		new_path = talloc_strdup(ctx, ctx->path);
 	}
 
-	dir = strtok_r(discard_const_p(char, path), "\\", &saveptr);
+	/* Create a mutable copy of path for strtok_r to safely modify */
+	path_copy = talloc_strdup(ctx, path);
+	if (path_copy == NULL) {
+		talloc_free(new_path);
+		return WERR_NOT_ENOUGH_MEMORY;
+	}
+
+	dir = strtok_r(path_copy, "\\", &saveptr);
 	if (dir == NULL) {
+		talloc_free(path_copy);
 		*ret_path = new_path;
 		return WERR_OK;
 	}
@@ -81,6 +90,7 @@ static WERROR get_full_path(struct regshell_context *ctx, const char *path, char
 
 	} while ((dir = strtok_r(NULL, "\\", &saveptr)));
 
+	talloc_free(path_copy);
 	*ret_path = new_path;
 	return WERR_OK;
 }
