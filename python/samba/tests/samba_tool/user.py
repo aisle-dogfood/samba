@@ -268,7 +268,7 @@ class UserCmdTestCase(SambaToolCmdTest):
             self.assertEqual(err, "", "setpassword with url")
             self.assertMatch(out, "Changed password OK", "setpassword with url")
 
-        attributes = "sAMAccountName,unicodePwd,supplementalCredentials,virtualClearTextUTF8,virtualClearTextUTF16,virtualSSHA,virtualSambaGPG"
+        attributes = "sAMAccountName,unicodePwd,supplementalCredentials,virtualClearTextUTF8,virtualClearTextUTF16,virtualSSHA256,virtualSambaGPG"
         (result, out, err) = self.runsubcmd("user", "syncpasswords",
                                             "--cache-ldb-initialize",
                                             "--attributes=%s" % attributes,
@@ -338,8 +338,8 @@ class UserCmdTestCase(SambaToolCmdTest):
                                  "getpassword virtualClearTextUTF8: out[%s]" % out)
                 self.assertMatch(out, "virtualClearTextUTF16:: %s" % virtualClearTextUTF16,
                                  "getpassword virtualClearTextUTF16: out[%s]" % out)
-                self.assertMatch(out, "virtualSSHA: ",
-                                 "getpassword virtualSSHA: out[%s]" % out)
+                self.assertMatch(out, "virtualSSHA256: ",
+                                 "getpassword virtualSSHA256: out[%s]" % out)
 
             (result, out, err) = self.runsubcmd("user", "getpassword",
                                                 user["name"],
@@ -362,8 +362,8 @@ class UserCmdTestCase(SambaToolCmdTest):
                                  "getpassword virtualClearTextUTF8: out[%s]" % out)
                 self.assertMatch(out, "virtualClearTextUTF16:: %s" % virtualClearTextUTF16,
                                  "getpassword virtualClearTextUTF16: out[%s]" % out)
-                self.assertMatch(out, "virtualSSHA: ",
-                                 "getpassword virtualSSHA: out[%s]" % out)
+                self.assertMatch(out, "virtualSSHA256: ",
+                                 "getpassword virtualSSHA256: out[%s]" % out)
 
         for user in self.users:
             newpasswd = self.random_password(16)
