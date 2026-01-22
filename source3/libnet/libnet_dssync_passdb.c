@@ -1167,6 +1167,11 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 
 	status = dom_sid_split_rid(mem_ctx, &objectSid, NULL, &rid);
 	if (!NT_STATUS_IS_OK(status)) {
+		/*
+		 * Clear sensitive password hash data before returning on error.
+		 */
+		data_blob_clear(&dBCSPwd);
+		data_blob_clear(&unicodePwd);
 		return status;
 	}
 	acct_flags = ds_uf2acb(userAccountControl);
@@ -1337,10 +1342,20 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	if (dBCSPwd.length == 16 && !all_zero(dBCSPwd.data, 16)) {
 		pdb_set_lanman_passwd(account, dBCSPwd.data, PDB_CHANGED);
 	}
+	/*
+	 * Clear sensitive LM password hash from heap memory immediately
+	 * after use to minimize exposure window.
+	 */
+	data_blob_clear(&dBCSPwd);
 
 	if (unicodePwd.length == 16 && !all_zero(unicodePwd.data, 16)) {
 		pdb_set_nt_passwd(account, unicodePwd.data, PDB_CHANGED);
 	}
+	/*
+	 * Clear sensitive NT password hash from heap memory immediately
+	 * after use to minimize exposure window.
+	 */
+	data_blob_clear(&unicodePwd);
 
 	/* TODO: history */
 
