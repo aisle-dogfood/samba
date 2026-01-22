@@ -181,30 +181,21 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
   initialise the credentials state for old-style 64 bit session keys
 
   this call is made after the netr_ServerReqChallenge call
+  
+  NOTE: 64-bit DES encryption is no longer supported due to inadequate
+  encryption strength (CWE-326/327). This function is deprecated and
+  returns an error. Use AES or 128-bit encryption instead.
 */
 static NTSTATUS netlogon_creds_init_64bit(struct netlogon_creds_CredentialState *creds,
 					 const struct netr_Credential *client_challenge,
 					 const struct netr_Credential *server_challenge,
 					 const struct samr_Password *machine_password)
 {
-	uint32_t sum[2];
-	uint8_t sum2[8];
-	int rc;
-
-	sum[0] = IVAL(client_challenge->data, 0) + IVAL(server_challenge->data, 0);
-	sum[1] = IVAL(client_challenge->data, 4) + IVAL(server_challenge->data, 4);
-
-	SIVAL(sum2,0,sum[0]);
-	SIVAL(sum2,4,sum[1]);
-
-	ZERO_ARRAY(creds->session_key);
-
-	rc = des_crypt128(creds->session_key, sum2, machine_password->hash);
-	if (rc != 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-
-	return NT_STATUS_OK;
+	/*
+	 * 64-bit DES encryption is no longer supported due to inadequate
+	 * encryption strength. Require AES or 128-bit encryption instead.
+	 */
+	return NT_STATUS_NOT_SUPPORTED;
 }
 
 /*
