@@ -83,6 +83,68 @@ static void delete_fn(struct clilist_file_info *finfo, const char *name, void *s
 	free(n);
 }
 
+/*
+   Check if a path is safe for deltree operation.
+   Rejects paths that:
+   - Contain wildcard characters (*, ?, <, >)
+   - Are too short (likely to be overly broad)
+   - Are root or near-root paths
+   Returns true if safe, false otherwise
+*/
+static bool is_deltree_path_safe(const char *dname)
+{
+	size_t len;
+	
+	if (dname == NULL) {
+		return false;
+	}
+	
+	/* Check for wildcard characters that could make deletions overly broad */
+	if (strchr(dname, '*') != NULL || 
+	    strchr(dname, '?') != NULL ||
+	    strchr(dname, '<') != NULL ||
+	    strchr(dname, '>') != NULL) {
+		DEBUG(0,("deltree: path contains wildcard characters: %s\n", dname));
+		return false;
+	}
+	
+	len = strlen(dname);
+	
+	/* Reject overly short paths that are likely too broad */
+	if (len < 2) {
+		DEBUG(0,("deltree: path too short (potential mass deletion): %s\n", dname));
+		return false;
+	}
+	
+	/* Strip trailing slashes/backslashes for length check */
+	while (len > 0 && (dname[len-1] == '\\' || dname[len-1] == '/')) {
+		len--;
+	}
+	
+	/* After stripping slashes, check again */
+	if (len < 2) {
+		DEBUG(0,("deltree: path too short after normalization: %s\n", dname));
+		return false;
+	}
+	
+	/* Check for root paths like "\", "/", "C:\", "C:/" */
+	if (len <= 3) {
+		/* Could be "C:\" or "C:/" or similar */
+		if (len == 3 && dname[1] == ':' && 
+		    (dname[2] == '\\' || dname[2] == '/')) {
+			DEBUG(0,("deltree: refusing to delete root path: %s\n", dname));
+			return false;
+		}
+		/* Could be single character paths */
+		if (len == 1) {
+			DEBUG(0,("deltree: refusing to delete single-char path: %s\n", dname));
+			return false;
+		}
+	}
+	
+	return true;
+}
+
 /* 
    recursively descend a tree deleting all files
    returns the number of files deleted, or -1 on error
@@ -96,6 +158,12 @@ int smbcli_deltree(struct smbcli_tree *tree, const char *dname)
 	dstate.tree = tree;
 	dstate.total_deleted = 0;
 	dstate.failed = false;
+
+	/* Validate path to prevent overly broad or dangerous deletions */
+	if (!is_deltree_path_safe(dname)) {
+		DEBUG(0,("deltree: unsafe path rejected: %s\n", dname));
+		return -1;
+	}
 
 	/* it might be a file */
 	status = smbcli_unlink(tree, dname);
