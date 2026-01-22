@@ -566,10 +566,12 @@ NTSTATUS netlogon_creds_cli_context_global(struct loadparm_context *lp_ctx,
 	}
 
 	/*
-	 * If weak crypto is disabled, do not announce that we support RC4 and
-	 * require AES.
+	 * AES encryption is required for secure communication.
+	 * ARCFOUR (RC4) and DES are no longer supported due to
+	 * inadequate encryption strength.
+	 * Exception: Kerberos authentication has its own security model.
 	 */
-	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+	if (!(required_flags & NETLOGON_NEG_SUPPORTS_KERBEROS_AUTH)) {
 		required_flags |= NETLOGON_NEG_SUPPORTS_AES;
 	}
 
