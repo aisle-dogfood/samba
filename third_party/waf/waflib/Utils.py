@@ -9,7 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 try:
 	import cPickle
@@ -890,6 +890,38 @@ process_pool = []
 List of processes started to execute sub-process commands
 """
 
+def encode_for_json(obj):
+	"""
+	Recursively encode bytes objects to base64 strings for JSON serialization.
+	
+	:param obj: object to encode
+	:return: JSON-safe version of the object
+	"""
+	if isinstance(obj, bytes):
+		return {'__bytes__': base64.b64encode(obj).decode('ascii')}
+	elif isinstance(obj, dict):
+		return {k: encode_for_json(v) for k, v in obj.items()}
+	elif isinstance(obj, (list, tuple)):
+		return [encode_for_json(item) for item in obj]
+	else:
+		return obj
+
+def decode_from_json(obj):
+	"""
+	Recursively decode base64 strings back to bytes objects after JSON deserialization.
+	
+	:param obj: JSON-deserialized object
+	:return: object with bytes restored
+	"""
+	if isinstance(obj, dict):
+		if '__bytes__' in obj:
+			return base64.b64decode(obj['__bytes__'])
+		return {k: decode_from_json(v) for k, v in obj.items()}
+	elif isinstance(obj, list):
+		return [decode_from_json(item) for item in obj]
+	else:
+		return obj
+
 def get_process():
 	"""
 	Returns a process object that can execute commands as sub-processes
@@ -915,8 +947,9 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		encoded_data = encode_for_json([cmd, kwargs, cargs])
+		obj = json.dumps(encoded_data).encode('utf-8')
+	except (TypeError, AttributeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,7 +969,8 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
+	decoded_data = json.loads(obj.decode('utf-8'))
+	lst = decode_from_json(decoded_data)
 	# Jython wrapper failures (bash/execvp)
 	assert len(lst) == 5
 	ret, out, err, ex, trace = lst

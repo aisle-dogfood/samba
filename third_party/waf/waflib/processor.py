@@ -2,7 +2,7 @@
 # encoding: utf-8
 # Thomas Nagy, 2016-2018 (ita)
 
-import os, sys, traceback, base64, signal
+import os, sys, traceback, base64, signal, json
 try:
 	import cPickle
 except ImportError:
@@ -19,12 +19,45 @@ except AttributeError:
 	class TimeoutExpired(Exception):
 		pass
 
+def encode_for_json(obj):
+	"""
+	Recursively encode bytes objects to base64 strings for JSON serialization.
+	
+	:param obj: object to encode
+	:return: JSON-safe version of the object
+	"""
+	if isinstance(obj, bytes):
+		return {'__bytes__': base64.b64encode(obj).decode('ascii')}
+	elif isinstance(obj, dict):
+		return {k: encode_for_json(v) for k, v in obj.items()}
+	elif isinstance(obj, (list, tuple)):
+		return [encode_for_json(item) for item in obj]
+	else:
+		return obj
+
+def decode_from_json(obj):
+	"""
+	Recursively decode base64 strings back to bytes objects after JSON deserialization.
+	
+	:param obj: JSON-deserialized object
+	:return: object with bytes restored
+	"""
+	if isinstance(obj, dict):
+		if '__bytes__' in obj:
+			return base64.b64decode(obj['__bytes__'])
+		return {k: decode_from_json(v) for k, v in obj.items()}
+	elif isinstance(obj, list):
+		return [decode_from_json(item) for item in obj]
+	else:
+		return obj
+
 def run():
 	txt = sys.stdin.readline().strip()
 	if not txt:
 		# parent process probably ended
 		sys.exit(18)
-	[cmd, kwargs, cargs] = cPickle.loads(base64.b64decode(txt))
+	decoded_data = json.loads(txt)
+	[cmd, kwargs, cargs] = decode_from_json(decoded_data)
 	cargs = cargs or {}
 
 	if not 'close_fds' in kwargs:
@@ -53,10 +86,11 @@ def run():
 		trace = str(cmd) + '\n' + ''.join(exc_lines)
 		ex = e.__class__.__name__
 
-	# it is just text so maybe we do not need to pickle()
+	# serialize using JSON instead of pickle for security
 	tmp = [ret, out, err, ex, trace]
-	obj = base64.b64encode(cPickle.dumps(tmp))
-	sys.stdout.write(obj.decode())
+	encoded_data = encode_for_json(tmp)
+	obj = json.dumps(encoded_data)
+	sys.stdout.write(obj)
 	sys.stdout.write('\n')
 	sys.stdout.flush()
 
