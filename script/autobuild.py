@@ -20,6 +20,7 @@ from sysconfig import get_path
 import platform
 import ssl
 import shutil
+import shlex
 
 def get_libc_version():
     import ctypes
@@ -1326,10 +1327,10 @@ def run_cmd(cmd, dir=".", show=None, output=False, checkfail=True):
 def rmdir_force(dirname, re_raise=True):
     try:
         run_cmd("test -d %s && chmod -R +w %s; rm -rf %s" % (
-                dirname, dirname, dirname), output=True, show=True)
+                shlex.quote(dirname), shlex.quote(dirname), shlex.quote(dirname)), output=True, show=True)
     except CalledProcessError as e:
         do_print("Failed: '%s'" % (str(e)))
-        run_cmd("tree %s" % dirname, output=True, show=True)
+        run_cmd("tree %s" % shlex.quote(dirname), output=True, show=True)
         if re_raise:
             raise
         return False
@@ -1354,7 +1355,7 @@ class builder(object):
         self.stderr_path = "%s/%s.stderr" % (gitroot, self.tag)
         do_debug("stdout for %s in %s" % (self.name, self.stdout_path))
         do_debug("stderr for %s in %s" % (self.name, self.stderr_path))
-        run_cmd("rm -f %s %s" % (self.stdout_path, self.stderr_path))
+        run_cmd("rm -f %s %s" % (shlex.quote(self.stdout_path), shlex.quote(self.stderr_path)))
         self.stdout = open(self.stdout_path, 'w')
         self.stderr = open(self.stderr_path, 'w')
         self.stdin  = open("/dev/null", 'r')
@@ -1390,11 +1391,11 @@ class builder(object):
             rmdir_force(self.builder_dir)
             rmdir_force(self.prefix)
             if self.producer is not None:
-                run_cmd("mkdir %s" % (self.builder_dir), dir=test_master, show=True)
+                run_cmd("mkdir %s" % shlex.quote(self.builder_dir), dir=test_master, show=True)
             elif not self.git_clone_required:
-                run_cmd("cp -R -a -l %s %s" % (test_master, self.builder_dir), dir=test_master, show=True)
+                run_cmd("cp -R -a -l %s %s" % (shlex.quote(test_master), shlex.quote(self.builder_dir)), dir=test_master, show=True)
             else:
-                run_cmd("git clone --recursive --shared %s %s" % (test_master, self.builder_dir), dir=test_master, show=True)
+                run_cmd("git clone --recursive --shared %s %s" % (shlex.quote(test_master), shlex.quote(self.builder_dir)), dir=test_master, show=True)
 
         if self.next == len(self.sequence):
             if not self.done:
@@ -1417,17 +1418,17 @@ class builder(object):
             return
         (self.stage, self.cmd) = self.sequence[self.next]
         self.cmd = self.cmd.replace("${PYTHON_PREFIX}",
-                                    get_path(name='platlib',
+                                    shlex.quote(get_path(name='platlib',
                                              scheme="posix_prefix",
                                              vars={"base": self.prefix,
-                                                   "platbase": self.prefix}))
-        self.cmd = self.cmd.replace("${PREFIX}", "--prefix=%s" % self.prefix)
-        self.cmd = self.cmd.replace("${PREFIX_DIR}", "%s" % self.prefix)
-        self.cmd = self.cmd.replace("${TESTS}", options.restrict_tests)
-        self.cmd = self.cmd.replace("${TEST_SOURCE_DIR}", self.test_source_dir)
-        self.cmd = self.cmd.replace("${SELFTEST_PREFIX}", self.selftest_prefix)
-        self.cmd = self.cmd.replace("${LOG_BASE}", options.log_base)
-        self.cmd = self.cmd.replace("${NAME}", self.name)
+                                                   "platbase": self.prefix})))
+        self.cmd = self.cmd.replace("${PREFIX}", "--prefix=%s" % shlex.quote(self.prefix))
+        self.cmd = self.cmd.replace("${PREFIX_DIR}", "%s" % shlex.quote(self.prefix))
+        self.cmd = self.cmd.replace("${TESTS}", shlex.quote(options.restrict_tests))
+        self.cmd = self.cmd.replace("${TEST_SOURCE_DIR}", shlex.quote(self.test_source_dir))
+        self.cmd = self.cmd.replace("${SELFTEST_PREFIX}", shlex.quote(self.selftest_prefix))
+        self.cmd = self.cmd.replace("${LOG_BASE}", shlex.quote(options.log_base))
+        self.cmd = self.cmd.replace("${NAME}", shlex.quote(self.name))
         self.cmd = self.cmd.replace("${ENABLE_COVERAGE}", options.enable_coverage)
         do_print('%s: [%s] Running %s in %r' % (self.name, self.stage, self.cmd, self.cwd))
         self.proc = Popen(self.cmd, shell=True,
@@ -1531,7 +1532,7 @@ class buildlist(object):
             self.retry = None
         for b in self.tlist:
             if b.proc is not None:
-                run_cmd("killbysubdir %s > /dev/null 2>&1" % b.test_source_dir, checkfail=False)
+                run_cmd("killbysubdir %s > /dev/null 2>&1" % shlex.quote(b.test_source_dir), checkfail=False)
                 b.proc.terminate()
                 b.proc.wait()
                 b.proc = None
@@ -1623,8 +1624,8 @@ class buildlist(object):
 def cleanup(do_raise=False):
     if options.nocleanup:
         return
-    run_cmd("stat %s || true" % test_tmpdir, show=True)
-    run_cmd("stat %s" % testbase, show=True)
+    run_cmd("stat %s || true" % shlex.quote(test_tmpdir), show=True)
+    run_cmd("stat %s" % shlex.quote(testbase), show=True)
     do_print("Cleaning up %r" % cleanup_list)
     for d in cleanup_list:
         ok = rmdir_force(d, re_raise=False)
@@ -1632,7 +1633,7 @@ def cleanup(do_raise=False):
             continue
         if os.path.isdir(d):
             do_print("Killing, waiting and retry")
-            run_cmd("killbysubdir %s > /dev/null 2>&1" % d, checkfail=False)
+            run_cmd("killbysubdir %s > /dev/null 2>&1" % shlex.quote(d), checkfail=False)
         else:
             do_print("Waiting and retry")
         time.sleep(1)
@@ -1674,30 +1675,30 @@ def rebase_tree(rebase_url, rebase_branch="master"):
     do_print("Rebasing on %s" % rebase_url)
     run_cmd("git describe HEAD", show=True, dir=test_master)
     run_cmd("git remote add -t %s %s %s" %
-            (rebase_branch, rebase_remote, rebase_url),
+            (shlex.quote(rebase_branch), shlex.quote(rebase_remote), shlex.quote(rebase_url)),
             show=True, dir=test_master)
-    run_cmd("git fetch %s" % rebase_remote, show=True, dir=test_master)
+    run_cmd("git fetch %s" % shlex.quote(rebase_remote), show=True, dir=test_master)
     if options.fix_whitespace:
         run_cmd("git rebase --force-rebase --whitespace=fix %s/%s" %
-                (rebase_remote, rebase_branch),
+                (shlex.quote(rebase_remote), shlex.quote(rebase_branch)),
                 show=True, dir=test_master)
     else:
         run_cmd("git rebase --force-rebase %s/%s" %
-                (rebase_remote, rebase_branch),
+                (shlex.quote(rebase_remote), shlex.quote(rebase_branch)),
                 show=True, dir=test_master)
     diff = run_cmd("git --no-pager diff HEAD %s/%s" %
-                   (rebase_remote, rebase_branch),
+                   (shlex.quote(rebase_remote), shlex.quote(rebase_branch)),
                    dir=test_master, output=True)
     if diff == '':
         do_print("No differences between HEAD and %s/%s - exiting" %
                  (rebase_remote, rebase_branch))
         sys.exit(0)
     run_cmd("git describe %s/%s" %
-            (rebase_remote, rebase_branch),
+            (shlex.quote(rebase_remote), shlex.quote(rebase_branch)),
             show=True, dir=test_master)
     run_cmd("git describe HEAD", show=True, dir=test_master)
     run_cmd("git --no-pager diff --stat HEAD %s/%s" %
-            (rebase_remote, rebase_branch),
+            (shlex.quote(rebase_remote), shlex.quote(rebase_branch)),
             show=True, dir=test_master)
 
 
@@ -1710,10 +1711,10 @@ def push_to(push_url, push_branch="master"):
         # the notes method doesn't work yet, as metze hasn't allowed refs/notes/* in master
         # run_cmd("EDITOR=script/commit_mark.sh git notes edit HEAD", dir=test_master)
     run_cmd("git remote add -t %s %s %s" %
-            (push_branch, push_remote, push_url),
+            (shlex.quote(push_branch), shlex.quote(push_remote), shlex.quote(push_url)),
             show=True, dir=test_master)
     run_cmd("git push %s +HEAD:%s" %
-            (push_remote, push_branch),
+            (shlex.quote(push_remote), shlex.quote(push_branch)),
             show=True, dir=test_master)
 
 
@@ -1856,7 +1857,7 @@ top_commit_msg = run_cmd("git log -1", dir=gitroot, output=True)
 
 try:
     if options.skip_dependencies:
-        run_cmd("stat %s" % testbase, dir=testbase, output=True)
+        run_cmd("stat %s" % shlex.quote(testbase), dir=testbase, output=True)
     else:
         os.makedirs(testbase)
 except Exception as reason:
@@ -1874,19 +1875,19 @@ start_time = time.time()
 
 while True:
     try:
-        run_cmd("rm -rf %s" % test_tmpdir, show=True)
+        run_cmd("rm -rf %s" % shlex.quote(test_tmpdir), show=True)
         os.makedirs(test_tmpdir)
         # The waf uninstall code removes empty directories all the way
         # up the tree.  Creating a file in test_tmpdir stops it from
         # being removed.
-        run_cmd("touch %s" % os.path.join(test_tmpdir,
-                                          ".directory-is-not-empty"), show=True)
-        run_cmd("stat %s" % test_tmpdir, show=True)
-        run_cmd("stat %s" % testbase, show=True)
+        run_cmd("touch %s" % shlex.quote(os.path.join(test_tmpdir,
+                                          ".directory-is-not-empty")), show=True)
+        run_cmd("stat %s" % shlex.quote(test_tmpdir), show=True)
+        run_cmd("stat %s" % shlex.quote(testbase), show=True)
         if options.skip_dependencies:
-            run_cmd("stat %s" % test_master, dir=testbase, output=True)
+            run_cmd("stat %s" % shlex.quote(test_master), dir=testbase, output=True)
         else:
-            run_cmd("git clone --recursive --shared %s %s" % (gitroot, test_master), show=True, dir=gitroot)
+            run_cmd("git clone --recursive --shared %s %s" % (shlex.quote(gitroot), shlex.quote(test_master)), show=True, dir=gitroot)
     except Exception:
         cleanup()
         raise
