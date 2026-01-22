@@ -61,6 +61,9 @@ static void reply_tcon_send(struct ntvfs_request *ntvfs)
 	SSVAL(req->out.vwv, VWV(1), con->tcon.out.tid);
 	SSVAL(req->out.hdr, HDR_TID, req->tcon->tid);
 
+	/* Clear password from memory after use */
+	data_blob_clear(&con->tcon.in.password);
+
 	smbsrv_send_reply(req);
 }
 
@@ -72,6 +75,7 @@ void smbsrv_reply_tcon(struct smbsrv_request *req)
 	union smb_tcon *con;
 	NTSTATUS status;
 	uint8_t *p;
+	const char *password_str;
 	
 	/* parse request */
 	SMBSRV_CHECK_WCT(req, 0);
@@ -82,17 +86,21 @@ void smbsrv_reply_tcon(struct smbsrv_request *req)
 
 	p = req->in.data;	
 	p += req_pull_ascii4(&req->in.bufinfo, &con->tcon.in.service, p, STR_TERMINATE);
-	p += req_pull_ascii4(&req->in.bufinfo, &con->tcon.in.password, p, STR_TERMINATE);
+	p += req_pull_ascii4(&req->in.bufinfo, &password_str, p, STR_TERMINATE);
 	p += req_pull_ascii4(&req->in.bufinfo, &con->tcon.in.dev, p, STR_TERMINATE);
 
-	if (!con->tcon.in.service || !con->tcon.in.password || !con->tcon.in.dev) {
+	if (!con->tcon.in.service || !password_str || !con->tcon.in.dev) {
 		smbsrv_send_error(req, NT_STATUS_INVALID_PARAMETER);
 		return;
 	}
 
+	/* Convert password string to DATA_BLOB for secure handling */
+	con->tcon.in.password = data_blob_talloc(con, password_str, strlen(password_str));
+
 	/* Instantiate backend */
 	status = smbsrv_tcon_backend(req, con);
 	if (!NT_STATUS_IS_OK(status)) {
+		data_blob_clear(&con->tcon.in.password);
 		smbsrv_send_error(req, status);
 		return;
 	}
