@@ -2,11 +2,7 @@
 # encoding: utf-8
 # Thomas Nagy, 2016-2018 (ita)
 
-import os, sys, traceback, base64, signal
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import os, sys, traceback, base64, signal, json
 
 try:
 	import subprocess32 as subprocess
@@ -19,13 +15,35 @@ except AttributeError:
 	class TimeoutExpired(Exception):
 		pass
 
+def decode_subprocess_value(value):
+	"""Decode special subprocess constants from JSON-safe format"""
+	if isinstance(value, dict) and value.get('__subprocess_const__'):
+		const_name = value['name']
+		if const_name == 'PIPE':
+			return subprocess.PIPE
+		elif const_name == 'STDOUT':
+			return subprocess.STDOUT
+		elif const_name == 'DEVNULL' and hasattr(subprocess, 'DEVNULL'):
+			return subprocess.DEVNULL
+	return value
+
+def decode_kwargs(kwargs):
+	"""Recursively decode subprocess constants in kwargs dict"""
+	result = {}
+	for key, value in kwargs.items():
+		result[key] = decode_subprocess_value(value)
+	return result
+
 def run():
 	txt = sys.stdin.readline().strip()
 	if not txt:
 		# parent process probably ended
 		sys.exit(18)
-	[cmd, kwargs, cargs] = cPickle.loads(base64.b64decode(txt))
-	cargs = cargs or {}
+	
+	data = json.loads(base64.b64decode(txt).decode('utf-8'))
+	cmd = data['cmd']
+	kwargs = decode_kwargs(data.get('kwargs', {}))
+	cargs = data.get('cargs', {})
 
 	if not 'close_fds' in kwargs:
 		# workers have no fds
@@ -53,9 +71,29 @@ def run():
 		trace = str(cmd) + '\n' + ''.join(exc_lines)
 		ex = e.__class__.__name__
 
-	# it is just text so maybe we do not need to pickle()
-	tmp = [ret, out, err, ex, trace]
-	obj = base64.b64encode(cPickle.dumps(tmp))
+	# Encode binary output as base64 for JSON compatibility
+	if out is not None and isinstance(out, bytes):
+		out = base64.b64encode(out).decode('ascii')
+		out_encoded = True
+	else:
+		out_encoded = False
+	
+	if err is not None and isinstance(err, bytes):
+		err = base64.b64encode(err).decode('ascii')
+		err_encoded = True
+	else:
+		err_encoded = False
+
+	tmp = {
+		'ret': ret,
+		'out': out,
+		'out_encoded': out_encoded,
+		'err': err,
+		'err_encoded': err_encoded,
+		'ex': ex,
+		'trace': trace
+	}
+	obj = base64.b64encode(json.dumps(tmp).encode('utf-8'))
 	sys.stdout.write(obj.decode())
 	sys.stdout.write('\n')
 	sys.stdout.flush()

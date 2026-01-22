@@ -9,12 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
-
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 # leave this
 if os.name == 'posix' and sys.version_info[0] < 3:
@@ -890,6 +885,23 @@ process_pool = []
 List of processes started to execute sub-process commands
 """
 
+def encode_subprocess_value(value):
+	"""Encode special subprocess constants to JSON-safe format"""
+	if value is subprocess.PIPE:
+		return {'__subprocess_const__': True, 'name': 'PIPE'}
+	elif value is subprocess.STDOUT:
+		return {'__subprocess_const__': True, 'name': 'STDOUT'}
+	elif hasattr(subprocess, 'DEVNULL') and value is subprocess.DEVNULL:
+		return {'__subprocess_const__': True, 'name': 'DEVNULL'}
+	return value
+
+def encode_kwargs(kwargs):
+	"""Recursively encode subprocess constants in kwargs dict for JSON serialization"""
+	result = {}
+	for key, value in kwargs.items():
+		result[key] = encode_subprocess_value(value)
+	return result
+
 def get_process():
 	"""
 	Returns a process object that can execute commands as sub-processes
@@ -915,8 +927,13 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		data = {
+			'cmd': cmd,
+			'kwargs': encode_kwargs(kwargs),
+			'cargs': cargs
+		}
+		obj = base64.b64encode(json.dumps(data).encode('utf-8'))
+	except (TypeError, AttributeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,10 +953,20 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
-	# Jython wrapper failures (bash/execvp)
-	assert len(lst) == 5
-	ret, out, err, ex, trace = lst
+	result = json.loads(base64.b64decode(obj).decode('utf-8'))
+	
+	ret = result['ret']
+	out = result['out']
+	err = result['err']
+	ex = result['ex']
+	trace = result['trace']
+	
+	# Decode base64-encoded binary output
+	if result.get('out_encoded') and out is not None:
+		out = base64.b64decode(out)
+	if result.get('err_encoded') and err is not None:
+		err = base64.b64decode(err)
+	
 	if ex:
 		if ex == 'OSError':
 			raise OSError(trace)
