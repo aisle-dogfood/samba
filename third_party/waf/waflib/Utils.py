@@ -47,7 +47,7 @@ try:
 	from hashlib import md5
 except ImportError:
 	try:
-		from hashlib import sha1 as md5
+		from hashlib import sha256 as md5
 	except ImportError:
 		# never fail to enable potential fixes from another module
 		pass
@@ -56,7 +56,7 @@ else:
 		md5().digest()
 	except ValueError:
 		# Fips? #2213
-		from hashlib import sha1 as md5
+		from hashlib import sha256 as md5
 
 try:
 	import threading
@@ -272,6 +272,8 @@ def h_file(fname):
 	"""
 	Computes a hash value for a file by using md5. Use the md5_tstamp
 	extension to get faster build hashes if necessary.
+	
+	Note: Falls back to SHA-256 if md5 is unavailable (e.g., in FIPS mode).
 
 	:type fname: string
 	:param fname: path to the file to hash
