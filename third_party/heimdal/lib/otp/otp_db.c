@@ -111,7 +111,10 @@ otp_get_internal (void *v, OtpContext *ctx, int lockp)
   DBM *dbm = (DBM *)v;
   datum dat, key;
   char *p;
+  char *dat_end;
   time_t now, then;
+  size_t alg_len;
+  size_t seed_len;
 
   key.dsize = strlen(ctx->user);
   key.dptr  = ctx->user;
@@ -122,6 +125,13 @@ otp_get_internal (void *v, OtpContext *ctx, int lockp)
     return -1;
   }
   p = dat.dptr;
+  dat_end = dat.dptr + dat.dsize;
+
+  /* Validate minimum size: sizeof(time_t) + 1 (alg) + 1 (null) + 4 (n) + OTPKEYSIZE + 1 (seed) + 1 (null) */
+  if (dat.dsize < sizeof(time_t) + 2 + 4 + OTPKEYSIZE + 2) {
+    ctx->err = "Invalid database entry";
+    return -1;
+  }
 
   memcpy (&then, p, sizeof(then));
   ctx->lock_time = then;
@@ -134,12 +144,27 @@ otp_get_internal (void *v, OtpContext *ctx, int lockp)
     memcpy (p, &now, sizeof(now));
   }
   p += sizeof(now);
+  
+  /* Verify algorithm string is null-terminated within bounds */
+  alg_len = strnlen(p, dat_end - p);
+  if (alg_len == (size_t)(dat_end - p)) {
+    ctx->err = "Invalid database entry: algorithm not null-terminated";
+    return -1;
+  }
+  
   ctx->alg = otp_find_alg (p);
   if (ctx->alg == NULL) {
     ctx->err = "Bad algorithm";
     return -1;
   }
-  p += strlen(p) + 1;
+  p += alg_len + 1;
+  
+  /* Verify we have enough space for n + key + seed */
+  if (p + 4 + OTPKEYSIZE >= dat_end) {
+    ctx->err = "Invalid database entry: truncated data";
+    return -1;
+  }
+  
   {
     unsigned char *up = (unsigned char *)p;
     ctx->n = (up[0] << 24) | (up[1] << 16) | (up[2] << 8) | up[3];
@@ -147,6 +172,14 @@ otp_get_internal (void *v, OtpContext *ctx, int lockp)
   p += 4;
   memcpy (ctx->key, p, OTPKEYSIZE);
   p += OTPKEYSIZE;
+  
+  /* Verify seed string is null-terminated within bounds */
+  seed_len = strnlen(p, dat_end - p);
+  if (seed_len == (size_t)(dat_end - p)) {
+    ctx->err = "Invalid database entry: seed not null-terminated";
+    return -1;
+  }
+  
   strlcpy (ctx->seed, p, sizeof(ctx->seed));
   if (lockp)
     return dbm_store (dbm, key, dat, DBM_REPLACE);
