@@ -564,9 +564,8 @@ static int do_global_checks(void)
 					fprintf(stderr,
 						"ERROR: the 'unix password sync' "
 						"parameter is set and the "
-						"'passwd program' (%s) cannot be "
+						"'passwd program' ([REDACTED]) cannot be "
 						"executed (error was %s).\n\n",
-						truncated_prog,
 						strerror(errno));
 					ret = 1;
 				}
@@ -590,9 +589,8 @@ static int do_global_checks(void)
 			/* check if there's a %u parameter present */
 			if(strstr_m(lp_passwd_program(talloc_tos(), lp_sub), "%u") == NULL) {
 				fprintf(stderr,
-					"ERROR: the 'passwd program' (%s) "
-					"requires a '%%u' parameter.\n\n",
-					lp_passwd_program(talloc_tos(), lp_sub));
+					"ERROR: the 'passwd program' ([REDACTED]) "
+					"requires a '%%u' parameter.\n\n");
 				ret = 1;
 			}
 		}
