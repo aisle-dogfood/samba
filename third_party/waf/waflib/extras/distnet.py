@@ -361,30 +361,55 @@ class package_reader(Context.Context):
 
 	def _is_safe_path(self, path, base_path):
 		"""Check if the path is safe for extraction (no directory traversal)."""
-		# Resolve both paths to absolute paths
-		abs_base = os.path.abspath(base_path)
-		abs_path = os.path.abspath(os.path.join(base_path, path))
+		# Normalize and resolve both paths to absolute paths
+		abs_base = os.path.abspath(os.path.normpath(base_path))
+		# Join and then normalize to handle .. components properly
+		target_path = os.path.normpath(os.path.join(base_path, path))
+		abs_path = os.path.abspath(target_path)
 		
-		# Check if the resolved path is within the base directory
-		return abs_path.startswith(abs_base + os.sep) or abs_path == abs_base
+		# Ensure the resolved path is within the base directory
+		# Use commonpath to ensure abs_path is actually under abs_base
+		try:
+			common = os.path.commonpath([abs_base, abs_path])
+			return common == abs_base
+		except ValueError:
+			# Paths are on different drives (Windows)
+			return False
 
 	def _safe_extract_member(self, tarfile_obj, member, path):
 		"""Safely extract a single member, checking for path traversal."""
+		# Normalize the member name to handle various path tricks
+		member_name = os.path.normpath(member.name)
+		
 		# Check for absolute paths
-		if os.path.isabs(member.name):
+		if os.path.isabs(member_name):
 			raise ValueError(f"Absolute path in tar member: {member.name}")
 		
-		# Check for path traversal attempts
-		if ".." in member.name or not self._is_safe_path(member.name, path):
+		# Check for path traversal attempts (.. components, etc.)
+		if member_name.startswith('..') or not self._is_safe_path(member_name, path):
 			raise ValueError(f"Path traversal attempt in tar member: {member.name}")
 		
 		# Check for unsafe symlinks
-		if member.issym() and not self._is_safe_path(member.linkname, path):
-			raise ValueError(f"Unsafe symlink in tar member: {member.name} -> {member.linkname}")
+		if member.issym():
+			# Normalize the link target
+			link_target = os.path.normpath(member.linkname)
+			# For symlinks, check if the link target (when resolved from the member's directory)
+			# would point outside the extraction directory
+			if os.path.isabs(link_target):
+				raise ValueError(f"Absolute symlink in tar member: {member.name} -> {member.linkname}")
+			# Check relative symlink target
+			member_dir = os.path.dirname(member_name) if os.path.dirname(member_name) else ''
+			resolved_link = os.path.normpath(os.path.join(member_dir, link_target))
+			if not self._is_safe_path(resolved_link, path):
+				raise ValueError(f"Unsafe symlink in tar member: {member.name} -> {member.linkname}")
 		
 		# Check for unsafe hard links
-		if member.islnk() and not self._is_safe_path(member.linkname, path):
-			raise ValueError(f"Unsafe hard link in tar member: {member.name} -> {member.linkname}")
+		if member.islnk():
+			link_target = os.path.normpath(member.linkname)
+			if os.path.isabs(link_target):
+				raise ValueError(f"Absolute hard link in tar member: {member.name} -> {member.linkname}")
+			if not self._is_safe_path(link_target, path):
+				raise ValueError(f"Unsafe hard link in tar member: {member.name} -> {member.linkname}")
 		
 		# Extract the member
 		tarfile_obj.extract(member, path)
