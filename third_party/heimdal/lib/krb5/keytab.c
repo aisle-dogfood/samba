@@ -400,7 +400,22 @@ krb5_kt_get_type(krb5_context context,
 		 char *prefix,
 		 size_t prefixsize)
 {
-    strlcpy(prefix, keytab->prefix, prefixsize);
+    size_t len;
+
+    if (prefixsize == 0) {
+	krb5_set_error_message(context, EINVAL,
+			       "prefix buffer size is zero");
+	return EINVAL;
+    }
+
+    len = strlcpy(prefix, keytab->prefix, prefixsize);
+    if (len >= prefixsize) {
+	krb5_set_error_message(context, EINVAL,
+			       "prefix buffer too small (%zu bytes needed, %zu provided)",
+			       len + 1, prefixsize);
+	return EINVAL;
+    }
+
     return 0;
 }
 
