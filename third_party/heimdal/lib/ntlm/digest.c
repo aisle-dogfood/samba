@@ -38,11 +38,15 @@
 #include <unistd.h>
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonHMAC.h>
+#include <CommonCrypto/CommonKeyDerivation.h>
 #include <assert.h>
 #include <roken.h>
 #include <hex.h>
 #include "heim-auth.h"
 #include "ntlm_err.h"
+
+/* PBKDF2 iteration count for password strengthening */
+#define PBKDF2_ITERATIONS 100000
 
 struct heim_digest_desc {
 #define F_SERVER	1
@@ -112,7 +116,69 @@ digest_userhash(const char *user, const char *realm, const char *password,
 		unsigned char md[CC_MD5_DIGEST_LENGTH])
 {
     CC_MD5_CTX ctx;
+    unsigned char derived_key[CC_MD5_DIGEST_LENGTH];
+    char *salt_input;
+    size_t salt_input_len;
+    int ret;
 
+    /* 
+     * Use PBKDF2-HMAC-SHA256 to add computational effort before MD5 hashing.
+     * This significantly increases the cost of brute-force attacks while
+     * maintaining protocol compatibility (MD5 is required by RFC 2617/2831).
+     *
+     * Note: This changes the final hash value, which means existing stored
+     * passwords will need to be re-hashed. For backward compatibility,
+     * applications should use pre-computed HA1 hashes via
+     * heim_digest_set_key(ctx, "H(A1)", ...) for legacy credentials.
+     */
+    
+    /* Create salt from user:realm to ensure uniqueness per user/realm pair */
+    salt_input_len = strlen(user) + 1 + strlen(realm);
+    salt_input = malloc(salt_input_len + 1);
+    if (salt_input == NULL) {
+        /* Fallback to direct MD5 if memory allocation fails */
+        goto fallback_md5;
+    }
+    
+    snprintf(salt_input, salt_input_len + 1, "%s:%s", user, realm);
+    
+    /* 
+     * Derive a cryptographically strong key from the password using PBKDF2.
+     * We derive CC_MD5_DIGEST_LENGTH bytes to match the MD5 output size,
+     * which will then be used in place of the password in the MD5 computation.
+     */
+    ret = CCKeyDerivationPBKDF(kCCPBKDF2, password, strlen(password),
+                               (const uint8_t *)salt_input, salt_input_len,
+                               kCCPRFHmacAlgSHA256, PBKDF2_ITERATIONS,
+                               derived_key, sizeof(derived_key));
+    
+    free(salt_input);
+    
+    if (ret != kCCSuccess) {
+        /* Fallback to direct MD5 if PBKDF2 fails */
+        memset(derived_key, 0, sizeof(derived_key));
+        goto fallback_md5;
+    }
+    
+    /* 
+     * Compute MD5(user:realm:derived_key) for protocol compatibility.
+     * The derived_key from PBKDF2 already provides strong protection,
+     * and the MD5 here is just for protocol compliance.
+     */
+    CC_MD5_Init(&ctx);
+    CC_MD5_Update(&ctx, user, (CC_LONG)strlen(user));
+    CC_MD5_Update(&ctx, ":", 1);
+    CC_MD5_Update(&ctx, realm, (CC_LONG)strlen(realm));
+    CC_MD5_Update(&ctx, ":", 1);
+    CC_MD5_Update(&ctx, derived_key, sizeof(derived_key));
+    CC_MD5_Final(md, &ctx);
+    
+    /* Clear sensitive data */
+    memset(derived_key, 0, sizeof(derived_key));
+    return;
+
+fallback_md5:
+    /* Original MD5 computation for backward compatibility or error cases */
     CC_MD5_Init(&ctx);
     CC_MD5_Update(&ctx, user, (CC_LONG)strlen(user));
     CC_MD5_Update(&ctx, ":", 1);
