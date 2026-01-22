@@ -118,8 +118,11 @@ parse_nodespec ()
 {
     # Subshell avoids hacks to restore $IFS.
     (
-	IFS=","
-	for i in $1 ; do
+	# Convert comma-separated list to newline-separated
+	local items
+	items=$(echo "$1" | tr ',' '\n')
+	while IFS= read -r i ; do
+	    [ -n "$i" ] || continue
 	    case "$i" in
 		*-*) seq "${i%-*}" "${i#*-}" 2>/dev/null || invalid_nodespec ;;
 		all|any|ok|healthy|con|connected) echo "$i" ;;
@@ -127,7 +130,7 @@ parse_nodespec ()
 		    [ "$i" -gt -1 ] 2>/dev/null || $names_ok || invalid_nodespec
 		    echo "$i"
 	    esac
-	done
+	done <<<"$items"
     )
 }
 
@@ -153,12 +156,11 @@ get_nodes_with_status ()
 
     (
 	local i
-	IFS="${IFS}|"
 	while IFS="" read -r i ; do
 
 	    # Intentional word splitting
 	    # shellcheck disable=SC2086
-	    set -- $i # split line on colons
+	    IFS="${IFS}|" set -- $i # split line on colons
 	    shift     # line starts with : so 1st field is empty
 	    local pnn="$1" ; shift
 	    shift # ignore IP address but need status bits below
