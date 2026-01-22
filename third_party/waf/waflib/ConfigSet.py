@@ -9,14 +9,14 @@ ConfigSet: a special dict
 The values put in :py:class:`ConfigSet` must be serializable (dicts, lists, strings)
 """
 
-import copy, re, os
+import copy, re, os, ast
 from waflib import Logs, Utils
 re_imp = re.compile(r'^(#)*?([^#=]*?)\ =\ (.*?)$', re.M)
 
 class ConfigSet(object):
 	"""
 	A copy-on-write dict with human-readable serialized format. The serialization format
-	is human-readable (python-like) and performed by using eval() and repr().
+	is human-readable (python-like) and performed by using ast.literal_eval() and repr().
 	For high performance prefer pickle. Do not store functions as they are not serializable.
 
 	The values can be accessed by attributes or by keys::
@@ -315,7 +315,7 @@ class ConfigSet(object):
 		code = Utils.readf(filename, m='r')
 		for m in re_imp.finditer(code):
 			g = m.group
-			tbl[g(2)] = eval(g(3))
+			tbl[g(2)] = ast.literal_eval(g(3))
 		Logs.debug('env: %s', self.table)
 
 	def update(self, d):
