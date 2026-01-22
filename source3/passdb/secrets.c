@@ -476,6 +476,7 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 {
 	size_t username_size, domain_size, password_size;
 	char *raw_username, *raw_domain, *raw_password;
+	char *temp_password = NULL;
 	
 	/* Fetch raw data from secrets database */
 	raw_username = (char *)secrets_fetch(SECRETS_AUTH_USER, &username_size);
@@ -488,6 +489,8 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		if (*username != NULL) {
 			memcpy(*username, raw_username, username_size);
 			(*username)[username_size] = '\0';
+		} else {
+			*username = NULL;
 		}
 		BURN_FREE(raw_username, username_size);
 	} else {
@@ -499,6 +502,8 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		if (*domain != NULL) {
 			memcpy(*domain, raw_domain, domain_size);
 			(*domain)[domain_size] = '\0';
+		} else {
+			*domain = NULL;
 		}
 		BURN_FREE(raw_domain, domain_size);
 	} else {
@@ -510,6 +515,8 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		if (*password != NULL) {
 			memcpy(*password, raw_password, password_size);
 			(*password)[password_size] = '\0';
+		} else {
+			*password = NULL;
 		}
 		BURN_FREE(raw_password, password_size);
 	} else {
@@ -525,7 +532,14 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 
 		if (!*password || !**password) {
 			BURN_FREE_STR(*password);
-			*password = smb_xstrdup("");
+			/* Allocate and securely zero password buffer */
+			temp_password = malloc(1);
+			if (temp_password != NULL) {
+				temp_password[0] = '\0';
+				*password = temp_password;
+			} else {
+				*password = NULL;
+			}
 		}
 
 		DEBUG(3, ("IPC$ connections done by user %s\\%s\n",
@@ -538,7 +552,14 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		BURN_FREE_STR(*password);
 		*username = smb_xstrdup("");
 		*domain = smb_xstrdup("");
-		*password = smb_xstrdup("");
+		/* Allocate and securely zero password buffer */
+		temp_password = malloc(1);
+		if (temp_password != NULL) {
+			temp_password[0] = '\0';
+			*password = temp_password;
+		} else {
+			*password = NULL;
+		}
 	}
 }
 
