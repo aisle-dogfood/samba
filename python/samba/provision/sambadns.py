@@ -1003,7 +1003,7 @@ def create_named_conf(paths, realm, dnsdomain, dns_backend, logger):
         setup_file(setup_path("named.conf.update"), paths.namedconf_update)
 
     elif dns_backend == "BIND9_DLZ":
-        bind_info = subprocess.Popen(['named -V'], shell=True,
+        bind_info = subprocess.Popen(['named', '-V'],
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT,
                                      cwd='.').communicate()[0]
