@@ -60,7 +60,7 @@ bool set_local_machine_name(const char *local_name, bool perm)
 	alpha_strcpy(local_machine,
 		     tmp,
 		     SAFE_NETBIOS_CHARS,
-		     sizeof(local_machine) - 1);
+		     sizeof(local_machine));
 	if (!strlower_m(local_machine)) {
 		return false;
 	}
@@ -100,7 +100,7 @@ bool set_remote_machine_name(const char *remote_name, bool perm)
 	alpha_strcpy(remote_machine,
 		     tmp,
 		     SAFE_NETBIOS_CHARS,
-		     sizeof(remote_machine) - 1);
+		     sizeof(remote_machine));
 	if (!strlower_m(remote_machine)) {
 		return false;
 	}
