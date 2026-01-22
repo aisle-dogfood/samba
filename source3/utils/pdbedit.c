@@ -1218,6 +1218,7 @@ int main(int argc, const char **argv)
 	/* account policy operations */
 	if ((checkparms & BIT_ACCPOLICY) && !(checkparms & ~(BIT_ACCPOLICY + BIT_ACCPOLVAL))) {
 		uint32_t value;
+		const char *policy_name;
 		enum pdb_policy_type field = account_policy_name_to_typenum(account_policy);
 		if (field == 0) {
 			const char **names;
@@ -1234,22 +1235,23 @@ int main(int argc, const char **argv)
 			TALLOC_FREE(names);
 			exit(1);
 		}
+		policy_name = decode_account_policy_name(field);
 		if (!pdb_get_account_policy(field, &value)) {
 			fprintf(stderr, "valid account policy, but unable to fetch value!\n");
 			if (!account_policy_value_set)
 				exit(1);
 		}
-		printf("account policy \"%s\" description: %s\n", account_policy, account_policy_get_desc(field));
+		printf("account policy \"%s\" description: %s\n", policy_name, account_policy_get_desc(field));
 		if (account_policy_value_set) {
-			printf("account policy \"%s\" value was: %u\n", account_policy, value);
+			printf("account policy \"%s\" value was: %u\n", policy_name, value);
 			if (!pdb_set_account_policy(field, account_policy_value)) {
 				fprintf(stderr, "valid account policy, but unable to set value!\n");
 				exit(1);
 			}
-			printf("account policy \"%s\" value is now: %lu\n", account_policy, account_policy_value);
+			printf("account policy \"%s\" value is now: %lu\n", policy_name, account_policy_value);
 			exit(0);
 		} else {
-			printf("account policy \"%s\" value is: %u\n", account_policy, value);
+			printf("account policy \"%s\" value is: %u\n", policy_name, value);
 			exit(0);
 		}
 	}

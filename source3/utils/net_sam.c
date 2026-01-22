@@ -498,25 +498,6 @@ static int net_sam_policy_set(struct net_context *c, int argc, const char **argv
 	account_policy = argv[0];
 	field = account_policy_name_to_typenum(account_policy);
 
-	if (strequal(argv[1], "forever") || strequal(argv[1], "never")
-	    || strequal(argv[1], "off")) {
-		value = -1;
-	}
-	else {
-		value = smb_strtoul(argv[1],
-				    NULL,
-				    10,
-				    &err,
-				    SMB_STR_FULL_STR_CONV);
-
-		if (err != 0) {
-			d_printf(_("Unable to set policy \"%s\"! Invalid value "
-				 "\"%s\".\n"),
-				 account_policy, argv[1]);
-			return -1;
-		}
-	}
-
 	if (field == 0) {
 		const char **names;
                 int i, count;
@@ -534,12 +515,31 @@ static int net_sam_policy_set(struct net_context *c, int argc, const char **argv
 		return -1;
 	}
 
+	if (strequal(argv[1], "forever") || strequal(argv[1], "never")
+	    || strequal(argv[1], "off")) {
+		value = -1;
+	}
+	else {
+		value = smb_strtoul(argv[1],
+				    NULL,
+				    10,
+				    &err,
+				    SMB_STR_FULL_STR_CONV);
+
+		if (err != 0) {
+			d_printf(_("Unable to set policy \"%s\"! Invalid value "
+				 "\"%s\".\n"),
+				 decode_account_policy_name(field), argv[1]);
+			return -1;
+		}
+	}
+
 	if (!pdb_get_account_policy(field, &old_value)) {
 		d_fprintf(stderr, _("Valid account policy, but unable to fetch "
 			  "value!\n"));
 	} else {
 		d_printf(_("Account policy \"%s\" value was: %d\n"),
-			account_policy, old_value);
+			decode_account_policy_name(field), old_value);
 	}
 
 	if (!pdb_set_account_policy(field, value)) {
@@ -548,7 +548,7 @@ static int net_sam_policy_set(struct net_context *c, int argc, const char **argv
 		return -1;
 	} else {
 		d_printf(_("Account policy \"%s\" value is now: %d\n"),
-			account_policy, value);
+			decode_account_policy_name(field), value);
 	}
 
 	return 0;
@@ -594,8 +594,8 @@ static int net_sam_policy_show(struct net_context *c, int argc, const char **arg
         }
 
 	printf(_("Account policy \"%s\" description: %s\n"),
-	       account_policy, account_policy_get_desc(field));
-        printf(_("Account policy \"%s\" value is: %d\n"), account_policy,
+	       decode_account_policy_name(field), account_policy_get_desc(field));
+        printf(_("Account policy \"%s\" value is: %d\n"), decode_account_policy_name(field),
 	       old_value);
         return 0;
 }
