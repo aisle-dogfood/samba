@@ -240,7 +240,7 @@ static void shell_auth(const struct shell_command * command,
 	    printf("User Principal: %s\n", principal ? principal : "");
 	    printf("Domain: %s\n", domain ? domain : "");
 	    printf("Realm: %s\n", realm ? realm : "");
-	    printf("Password: %s\n", password ? password : "");
+	    printf("Password: %s\n", (password && password[0]) ? "[SET]" : "");
     } else if (argc == 2) {
 	    bool result;
 
