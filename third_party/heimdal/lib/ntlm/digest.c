@@ -38,6 +38,7 @@
 #include <unistd.h>
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonHMAC.h>
+#include <CommonCrypto/CommonKeyDerivation.h>
 #include <assert.h>
 #include <roken.h>
 #include <hex.h>
@@ -107,12 +108,96 @@ clear_context(heim_digest_t context)
     FREE_AND_CLEAR(context->serverReply);
 }
 
+/*
+ * Password hash computation for HTTP Digest Authentication.
+ * 
+ * SECURITY ENHANCEMENT: This implementation adds PBKDF2 key derivation
+ * to mitigate CWE-916 (Use of Password Hash With Insufficient Computational Effort).
+ *
+ * BACKGROUND:
+ * - Standard HTTP Digest Authentication (RFC 2617/2831) uses MD5 which has
+ *   insufficient computational cost for password hashing by modern standards
+ * - MD5 can be brute-forced at billions of hashes per second on modern hardware
+ *
+ * MITIGATION:
+ * - This implementation applies PBKDF2-HMAC-SHA256 with 10,000 iterations
+ *   (per NIST SP 800-132 recommendations) to derive a strengthened password
+ * - The derived password is then used in place of the plaintext password
+ * - Format: MD5(username:realm:PBKDF2(password, salt=username:realm, iterations=10000))
+ * - This increases brute-force cost by a factor of 10,000 while maintaining
+ *   the MD5-based protocol structure
+ *
+ * COMPATIBILITY:
+ * - PBKDF2 is enabled by default for security
+ * - This breaks interoperability with standard HTTP Digest implementations
+ * - For environments requiring strict RFC compliance, set environment variable
+ *   HEIM_DIGEST_NO_PBKDF2=1 to disable PBKDF2 and use standard MD5 only
+ * - Note: Disabling PBKDF2 leaves passwords vulnerable to brute-force attacks
+ */
+#define PBKDF2_ITERATIONS 10000
+
 static void
 digest_userhash(const char *user, const char *realm, const char *password,
 		unsigned char md[CC_MD5_DIGEST_LENGTH])
 {
     CC_MD5_CTX ctx;
-
+    static int pbkdf2_enabled = -1;  /* -1 = uninitialized, 0 = disabled, 1 = enabled */
+    
+    /* Check environment variable on first call - PBKDF2 enabled by default */
+    if (pbkdf2_enabled == -1) {
+        const char *env = getenv("HEIM_DIGEST_NO_PBKDF2");
+        /* Disable PBKDF2 only if explicitly requested via environment variable */
+        pbkdf2_enabled = (env != NULL && (strcmp(env, "1") == 0 || strcasecmp(env, "yes") == 0)) ? 0 : 1;
+    }
+    
+    /* Apply PBKDF2 key strengthening if enabled */
+    if (pbkdf2_enabled) {
+        unsigned char pbkdf2_output[CC_SHA256_DIGEST_LENGTH];
+        char pbkdf2_hex[CC_SHA256_DIGEST_LENGTH * 2 + 1];
+        char *salt_str;
+        size_t salt_len, i;
+        
+        /* Construct salt from username:realm */
+        salt_len = strlen(user) + strlen(realm) + 2;
+        salt_str = malloc(salt_len);
+        if (salt_str != NULL) {
+            snprintf(salt_str, salt_len, "%s:%s", user, realm);
+            
+            /* Apply PBKDF2-HMAC-SHA256 with 10,000 iterations */
+            if (CCKeyDerivationPBKDF(kCCPBKDF2,
+                                      password, strlen(password),
+                                      (const uint8_t *)salt_str, strlen(salt_str),
+                                      kCCPRFHmacAlgSHA256,
+                                      PBKDF2_ITERATIONS,
+                                      pbkdf2_output, sizeof(pbkdf2_output)) == kCCSuccess) {
+                
+                /* Convert PBKDF2 output to hexadecimal string */
+                for (i = 0; i < sizeof(pbkdf2_output); i++) {
+                    snprintf(pbkdf2_hex + (i * 2), 3, "%02x", pbkdf2_output[i]);
+                }
+                pbkdf2_hex[sizeof(pbkdf2_output) * 2] = '\0';
+                
+                /* Compute MD5(username:realm:pbkdf2_derived_password) */
+                CC_MD5_Init(&ctx);
+                CC_MD5_Update(&ctx, user, (CC_LONG)strlen(user));
+                CC_MD5_Update(&ctx, ":", 1);
+                CC_MD5_Update(&ctx, realm, (CC_LONG)strlen(realm));
+                CC_MD5_Update(&ctx, ":", 1);
+                CC_MD5_Update(&ctx, pbkdf2_hex, (CC_LONG)strlen(pbkdf2_hex));
+                CC_MD5_Final(md, &ctx);
+                
+                /* Securely clear sensitive data */
+                memset(pbkdf2_output, 0, sizeof(pbkdf2_output));
+                memset(pbkdf2_hex, 0, sizeof(pbkdf2_hex));
+                free(salt_str);
+                return;
+            }
+            free(salt_str);
+        }
+        /* Fall through to standard MD5 if PBKDF2 fails */
+    }
+    
+    /* Standard HTTP Digest: MD5(username:realm:password) */
     CC_MD5_Init(&ctx);
     CC_MD5_Update(&ctx, user, (CC_LONG)strlen(user));
     CC_MD5_Update(&ctx, ":", 1);
