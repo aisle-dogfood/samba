@@ -180,31 +180,30 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
 /*
   initialise the credentials state for old-style 64 bit session keys
 
-  this call is made after the netr_ServerReqChallenge call
+  This function is no longer used due to inadequate encryption strength
+  of DES. It is retained only for historical reference and must not be
+  called in production code. All callers should use AES or ARCFOUR encryption.
 */
 static NTSTATUS netlogon_creds_init_64bit(struct netlogon_creds_CredentialState *creds,
 					 const struct netr_Credential *client_challenge,
 					 const struct netr_Credential *server_challenge,
 					 const struct samr_Password *machine_password)
 {
-	uint32_t sum[2];
-	uint8_t sum2[8];
-	int rc;
+	/*
+	 * DES-based encryption is no longer supported due to inadequate
+	 * encryption strength (CVE-class vulnerability). This function
+	 * should never be called. If you reached this code, it indicates
+	 * an attempt to use deprecated weak cryptography.
+	 *
+	 * Require AES (NETLOGON_NEG_SUPPORTS_AES) or at minimum
+	 * ARCFOUR (NETLOGON_NEG_ARCFOUR) encryption.
+	 */
+	(void)creds;
+	(void)client_challenge;
+	(void)server_challenge;
+	(void)machine_password;
 
-	sum[0] = IVAL(client_challenge->data, 0) + IVAL(server_challenge->data, 0);
-	sum[1] = IVAL(client_challenge->data, 4) + IVAL(server_challenge->data, 4);
-
-	SIVAL(sum2,0,sum[0]);
-	SIVAL(sum2,4,sum[1]);
-
-	ZERO_ARRAY(creds->session_key);
-
-	rc = des_crypt128(creds->session_key, sum2, machine_password->hash);
-	if (rc != 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-
-	return NT_STATUS_OK;
+	return NT_STATUS_DOWNGRADE_DETECTED;
 }
 
 /*
@@ -674,7 +673,13 @@ struct netlogon_creds_CredentialState *netlogon_creds_client_init(TALLOC_CTX *me
 			return NULL;
 		}
 	} else {
-		/* Fallback to 128-bit encryption instead of weak DES */
+		/*
+		 * Neither AES nor STRONG_KEYS negotiated.
+		 * Legacy code used weak DES (netlogon_creds_init_64bit),
+		 * which is no longer supported due to inadequate encryption strength.
+		 * Fallback to 128-bit encryption to maintain compatibility
+		 * while enforcing minimum security standards.
+		 */
 		status = netlogon_creds_init_128bit(creds,
 						    client_challenge,
 						    server_challenge,
@@ -885,7 +890,13 @@ struct netlogon_creds_CredentialState *netlogon_creds_server_init(TALLOC_CTX *me
 			return NULL;
 		}
 	} else {
-		/* Fallback to 128-bit encryption instead of weak DES */
+		/*
+		 * Neither AES nor STRONG_KEYS negotiated.
+		 * Legacy code used weak DES (netlogon_creds_init_64bit),
+		 * which is no longer supported due to inadequate encryption strength.
+		 * Fallback to 128-bit encryption to maintain compatibility
+		 * while enforcing minimum security standards.
+		 */
 		status = netlogon_creds_init_128bit(creds,
 						    client_challenge,
 						    server_challenge,
@@ -1366,12 +1377,33 @@ static NTSTATUS netlogon_creds_crypt_samr_Password(
 		return NT_STATUS_OK;
 	}
 
+	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		if (do_encrypt) {
+			return netlogon_creds_aes_encrypt(creds,
+							  pass->hash,
+							  sizeof(pass->hash));
+		}
+
+		return netlogon_creds_aes_decrypt(creds,
+						  pass->hash,
+						  sizeof(pass->hash));
+	}
+
+	if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+		return netlogon_creds_arcfour_crypt(creds,
+						    pass->hash,
+						    sizeof(pass->hash));
+	}
+
 	/*
 	 * DES encryption is no longer supported due to inadequate
-	 * encryption strength. This function previously used DES
-	 * even when stronger encryption was available.
+	 * encryption strength. Require AES or ARCFOUR encryption.
 	 */
-	return NT_STATUS_DOWNGRADE_DETECTED;
+	if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
+		return NT_STATUS_DOWNGRADE_DETECTED;
+	}
+
+	return NT_STATUS_OK;
 }
 
 NTSTATUS netlogon_creds_decrypt_samr_Password(struct netlogon_creds_CredentialState *creds,
