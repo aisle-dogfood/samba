@@ -133,6 +133,8 @@ static bool string_match(const char *tok,const char *s)
 		} else {
 			if (getdomainname(nis_domain_buf,
 					  sizeof(nis_domain_buf)) == 0) {
+				/* Ensure NUL termination */
+				nis_domain_buf[sizeof(nis_domain_buf) - 1] = '\0';
 				mydomain = &nis_domain_buf[0];
 				memcache_add(NULL,
 					     SINGLETON_CACHE,
