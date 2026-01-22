@@ -310,32 +310,18 @@ NTSTATUS nbtd_startup_interfaces(struct nbtd_server *nbtsrv, struct loadparm_con
 	TALLOC_CTX *tmp_ctx = talloc_new(nbtsrv);
 	NTSTATUS status;
 
-	/* if we are allowing incoming packets from any address, then
-	   we also need to bind to the wildcard address */
-	if (!lpcfg_bind_interfaces_only(lp_ctx)) {
-		const char *primary_address;
-
-		primary_address = iface_list_first_v4(ifaces);
-
-		/* the primary address is the address we will return
-		   for non-WINS queries not made on a specific
-		   interface */
-		if (primary_address == NULL) {
-			primary_address = inet_ntoa(interpret_addr2(
-							    lpcfg_netbios_name(lp_ctx)));
-		}
-
-		primary_address = talloc_strdup(tmp_ctx, primary_address);
-		NT_STATUS_HAVE_NO_MEMORY(primary_address);
-
-		status = nbtd_add_socket(nbtsrv, 
-					 lp_ctx,
-					 "0.0.0.0",
-					 primary_address,
-					 talloc_strdup(tmp_ctx, "255.255.255.255"),
-					 talloc_strdup(tmp_ctx, "0.0.0.0"));
-		NT_STATUS_NOT_OK_RETURN(status);
-	}
+	/*
+	 * Security fix: Do not bind to the wildcard address 0.0.0.0
+	 * The NBT server should only bind to explicitly configured
+	 * interfaces to limit network exposure. Binding to 0.0.0.0
+	 * would expose NBT services (UDP/137 and UDP/138) to all
+	 * network interfaces, including potentially untrusted networks.
+	 *
+	 * This block has been removed to prevent binding to 0.0.0.0
+	 * when "bind interfaces only" is disabled. The server will
+	 * only bind to the specific interfaces configured in the
+	 * "interfaces" parameter.
+	 */
 
 	for (i=0; i<num_interfaces; i++) {
 		const char *bcast;
