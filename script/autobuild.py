@@ -20,6 +20,7 @@ from sysconfig import get_path
 import platform
 import ssl
 import shutil
+import shlex
 
 def get_libc_version():
     import ctypes
@@ -1309,19 +1310,27 @@ def do_debug(msg):
     sys.stderr.flush()
 
 
-def run_cmd(cmd, dir=".", show=None, output=False, checkfail=True):
+def run_cmd(cmd, dir=".", show=None, output=False, checkfail=True, shell=True):
     if show is None:
         do_debug("Running: '%s' in '%s'" % (cmd, dir))
     elif show:
         do_print("Running: '%s' in '%s'" % (cmd, dir))
 
+    # When shell=False, split the command string into a list for safe execution
+    if not shell:
+        if isinstance(cmd, str):
+            cmd = shlex.split(cmd)
+    
     if output:
-        out = check_output([cmd], shell=True, cwd=dir)
+        if shell:
+            out = check_output([cmd], shell=True, cwd=dir)
+        else:
+            out = check_output(cmd, shell=False, cwd=dir)
         return out.decode(encoding='utf-8', errors='backslashreplace')
     elif checkfail:
-        return check_call(cmd, shell=True, cwd=dir)
+        return check_call(cmd, shell=shell, cwd=dir)
     else:
-        return call(cmd, shell=True, cwd=dir)
+        return call(cmd, shell=shell, cwd=dir)
 
 def rmdir_force(dirname, re_raise=True):
     try:
@@ -1928,7 +1937,7 @@ elapsed_time = time.time() - start_time
 if status == 0:
     if options.passcmd is not None:
         do_print("Running passcmd: %s" % options.passcmd)
-        run_cmd(options.passcmd, dir=test_master)
+        run_cmd(options.passcmd, dir=test_master, shell=False)
     if options.pushto is not None:
         push_to(options.pushto, push_branch=options.branch)
     if options.keeplogs or options.attach_logs:
