@@ -9,12 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
-
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 # leave this
 if os.name == 'posix' and sys.version_info[0] < 3:
@@ -903,6 +898,24 @@ def get_process():
 		cmd = [sys.executable, '-c', readf(filepath)]
 		return subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 
+def encode_special_values(obj):
+	"""Encode special subprocess constants to string representations for JSON serialization"""
+	if isinstance(obj, dict):
+		result = {}
+		for key, value in obj.items():
+			if value == subprocess.PIPE:
+				result[key] = '__SUBPROCESS_PIPE__'
+			elif hasattr(subprocess, 'DEVNULL') and value == subprocess.DEVNULL:
+				result[key] = '__SUBPROCESS_DEVNULL__'
+			elif value == subprocess.STDOUT:
+				result[key] = '__SUBPROCESS_STDOUT__'
+			elif isinstance(value, dict):
+				result[key] = encode_special_values(value)
+			else:
+				result[key] = value
+		return result
+	return obj
+
 def run_prefork_process(cmd, kwargs, cargs):
 	"""
 	Delegates process execution to a pre-forked process instance.
@@ -915,8 +928,11 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		# Encode special subprocess constants before JSON serialization
+		kwargs_encoded = encode_special_values(kwargs)
+		cargs_encoded = encode_special_values(cargs)
+		obj = base64.b64encode(json.dumps([cmd, kwargs_encoded, cargs_encoded]).encode('utf-8'))
+	except (TypeError, AttributeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,10 +952,17 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
+	lst = json.loads(base64.b64decode(obj).decode('utf-8'))
 	# Jython wrapper failures (bash/execvp)
 	assert len(lst) == 5
 	ret, out, err, ex, trace = lst
+	
+	# Decode base64-encoded bytes back to bytes
+	if out is not None and isinstance(out, str) and out.startswith('__BASE64__'):
+		out = base64.b64decode(out[10:])
+	if err is not None and isinstance(err, str) and err.startswith('__BASE64__'):
+		err = base64.b64decode(err[10:])
+	
 	if ex:
 		if ex == 'OSError':
 			raise OSError(trace)
