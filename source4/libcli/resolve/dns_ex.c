@@ -470,6 +470,7 @@ static void pipe_handler(struct tevent_context *ev, struct tevent_fd *fde,
 	int ret;
 	int status;
 	int value = 0;
+	const int max_dns_pipe_size = 64 * 1024; /* 64 KiB max to prevent memory exhaustion */
 
 	/* if we get any event from the child then we know that we
 	   won't need to kill it off */
@@ -477,6 +478,14 @@ static void pipe_handler(struct tevent_context *ev, struct tevent_fd *fde,
 
 	if (ioctl(state->child_fd, FIONREAD, &value) != 0) {
 		value = 8192;
+	}
+
+	/* Enforce maximum bound to prevent memory exhaustion attacks */
+	if (value > max_dns_pipe_size) {
+		DEBUG(2, ("dns child returned excessive data (%d bytes), "
+			  "truncating to %d bytes for name '%s'\n",
+			  value, max_dns_pipe_size, state->name.name));
+		value = max_dns_pipe_size;
 	}
 
 	address = talloc_array(state, char, value+1);
