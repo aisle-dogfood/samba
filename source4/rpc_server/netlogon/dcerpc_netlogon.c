@@ -239,27 +239,23 @@ static NTSTATUS dcesrv_netr_ServerAuthenticate3_check_downgrade(
 	}
 	reject_aes_client = account_reject_aes_client;
 
-	reject_des_client = !allow_nt4_crypto;
-
 	/*
-	 * If weak crypto is disabled, do not announce that we support RC4.
+	 * Always require AES support to ensure adequate encryption strength.
+	 * Reject clients that don't support AES regardless of configuration.
 	 */
-	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
-		/* Without RC4 and DES we require AES */
-		reject_des_client = true;
-		reject_md5_client = true;
-	}
-
-	if (negotiate_flags & NETLOGON_NEG_STRONG_KEYS) {
-		need_des = false;
-		reject_des_client = false;
-	}
+	reject_des_client = true;
+	reject_md5_client = true;
 
 	if (negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
+		/* AES is supported, allow the connection */
 		need_des = false;
 		need_md5 = false;
+		need_aes = true;
 		reject_des_client = false;
 		reject_md5_client = false;
+	} else {
+		/* AES is not supported, reject the connection */
+		need_aes = true;
 	}
 
 	if (dce_call->pkt.u.request.opnum == NDR_NETR_SERVERAUTHENTICATEKERBEROS) {
@@ -274,7 +270,10 @@ static NTSTATUS dcesrv_netr_ServerAuthenticate3_check_downgrade(
 	if (reject_des_client || reject_md5_client || reject_aes_client) {
 		TALLOC_CTX *frame = talloc_stackframe();
 
-		if (need_aes && lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		/*
+		 * AES is now mandatory - always reject if not negotiated.
+		 */
+		if (need_aes) {
 			if (CVE_2022_38023_error_level < DBGLVL_NOTICE) {
 				CVE_2022_38023_error_level = DBGLVL_NOTICE;
 			}
@@ -285,7 +284,7 @@ static NTSTATUS dcesrv_netr_ServerAuthenticate3_check_downgrade(
 			      "client_negotiate_flags[0x%x] "
 			      "%s%s%s "
 			      "NT_STATUS_DOWNGRADE_DETECTED "
-			      "WEAK_CRYPTO_DISALLOWED\n",
+			      "AES_REQUIRED\n",
 			      log_escape(frame, r->in.account_name),
 			      log_escape(frame, r->in.computer_name),
 			      r->in.secure_channel_type,
@@ -581,16 +580,14 @@ static NTSTATUS dcesrv_netr_ServerAuthenticateGeneric(
 	}
 
 	/*
-	 * With SAMBA_WEAK_CRYPTO_DISALLOWED
+	 * AES support is now mandatory.
 	 * dcesrv_netr_ServerAuthenticate3_check_downgrade() will return
 	 * DOWNGRADE_DETECTED with negotiate_flags = 0,
-	 * if NETLOGON_NEG_SUPPORTS_AES was not negotiated...
+	 * if NETLOGON_NEG_SUPPORTS_AES was not negotiated.
 	 *
-	 * And if NETLOGON_NEG_SUPPORTS_AES was negotiated there's no harm in
-	 * returning the NETLOGON_NEG_ARCFOUR flag too...
-	 *
-	 * So there's no reason to remove NETLOGON_NEG_ARCFOUR nor
-	 * NETLOGON_NEG_STRONG_KEYS from server_flags...
+	 * We advertise NETLOGON_NEG_ARCFOUR and NETLOGON_NEG_STRONG_KEYS for
+	 * compatibility, but will only accept connections that negotiate AES.
+	 * This ensures adequate encryption strength.
 	 */
 
 	client_flags = *r->in.negotiate_flags;

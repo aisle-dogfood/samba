@@ -932,15 +932,14 @@ NTSTATUS _netr_ServerAuthenticate3(struct pipes_struct *p,
 		   NETLOGON_NEG_SCHANNEL;
 
 	/*
-	 * With SAMBA_WEAK_CRYPTO_DISALLOWED we will return DOWNGRADE_DETECTED
+	 * AES support is now mandatory. We will return DOWNGRADE_DETECTED
 	 * with negotiate_flags = 0 below, if NETLOGON_NEG_SUPPORTS_AES was not
 	 * negotiated...
 	 *
-	 * And if NETLOGON_NEG_SUPPORTS_AES was negotiated there's no harm in
-	 * returning the NETLOGON_NEG_ARCFOUR flag too...
-	 *
-	 * So there's no reason to remove NETLOGON_NEG_ARCFOUR nor
-	 * NETLOGON_NEG_STRONG_KEYS from srv_flgs...
+	 * We advertise NETLOGON_NEG_ARCFOUR and NETLOGON_NEG_STRONG_KEYS for
+	 * compatibility, but will only accept connections that negotiate AES.
+	 * This ensures adequate encryption strength while maintaining backwards
+	 * compatibility in the capability advertisement.
 	 */
 
 	/*
@@ -972,17 +971,19 @@ NTSTATUS _netr_ServerAuthenticate3(struct pipes_struct *p,
 			return NT_STATUS_INTERNAL_ERROR;
 	}
 
-	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED) {
-		if (!(neg_flags & NETLOGON_NEG_SUPPORTS_AES)) {
-			DBG_NOTICE("%s: no AES support negotiated from client %s\n",
-				   fn, r->in.computer_name);
-			/*
-			 * Here we match Windows 2012 and return no flags.
-			 */
-			neg_flags = 0;
-			status = NT_STATUS_DOWNGRADE_DETECTED;
-			goto out;
-		}
+	/*
+	 * Always require AES support to ensure adequate encryption strength.
+	 * Reject clients that don't support AES regardless of weak_crypto configuration.
+	 */
+	if (!(neg_flags & NETLOGON_NEG_SUPPORTS_AES)) {
+		DBG_NOTICE("%s: no AES support negotiated from client %s\n",
+			   fn, r->in.computer_name);
+		/*
+		 * Here we match Windows 2012 and return no flags.
+		 */
+		neg_flags = 0;
+		status = NT_STATUS_DOWNGRADE_DETECTED;
+		goto out;
 	}
 
 	/* We use this as the key to store the creds: */
