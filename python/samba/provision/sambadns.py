@@ -710,13 +710,22 @@ def create_dns_dir(logger, paths):
     except OSError:
         pass
 
-    os.mkdir(dns_dir, 0o770)
+    os.mkdir(dns_dir, 0o750)
 
     if paths.bind_gid is not None:
         try:
-            os.chown(dns_dir, -1, paths.bind_gid)
-            # chmod needed to cope with umask
-            os.chmod(dns_dir, 0o770)
+            # Change ownership to bind user and group for better security
+            bind_uid = getattr(paths, 'bind_uid', None)
+            if bind_uid is not None:
+                # If bind user exists, set owner to bind user and use 0o750
+                # This restricts write access to bind user only (more secure)
+                os.chown(dns_dir, bind_uid, paths.bind_gid)
+                os.chmod(dns_dir, 0o750)
+            else:
+                # Fallback: if bind user doesn't exist, only change group
+                # Use 0o770 to allow group write access (less secure but necessary)
+                os.chown(dns_dir, -1, paths.bind_gid)
+                os.chmod(dns_dir, 0o770)
         except OSError:
             if 'SAMBA_SELFTEST' not in os.environ:
                 logger.error("Failed to chown %s to bind gid %u" % (
@@ -750,8 +759,15 @@ def create_dns_dir_keytab_link(logger, paths):
         # chown the dns.keytab in the bind-dns directory
         if paths.bind_gid is not None:
             try:
-                os.chmod(paths.binddns_dir, 0o770)
-                os.chown(paths.binddns_dir, -1, paths.bind_gid)
+                bind_uid = getattr(paths, 'bind_uid', None)
+                if bind_uid is not None:
+                    # If bind user exists, set owner and use restrictive 0o750
+                    os.chown(paths.binddns_dir, bind_uid, paths.bind_gid)
+                    os.chmod(paths.binddns_dir, 0o750)
+                else:
+                    # Fallback: use group ownership with 0o770 for write access
+                    os.chown(paths.binddns_dir, -1, paths.bind_gid)
+                    os.chmod(paths.binddns_dir, 0o770)
             except OSError:
                 if 'SAMBA_SELFTEST' not in os.environ:
                     logger.info("Failed to chown %s to bind gid %u",
@@ -943,15 +959,25 @@ def create_samdb_copy(samdb, logger, paths, names, domainsid, domainguid):
     # Give bind read/write permissions dns partitions
     if paths.bind_gid is not None:
         try:
+            bind_uid = getattr(paths, 'bind_uid', None)
             for dirname, dirs, files in os.walk(dns_dir):
                 for d in dirs:
                     dpath = os.path.join(dirname, d)
-                    os.chown(dpath, -1, paths.bind_gid)
-                    os.chmod(dpath, 0o770)
+                    if bind_uid is not None:
+                        # If bind user exists, set owner and use restrictive 0o750
+                        os.chown(dpath, bind_uid, paths.bind_gid)
+                        os.chmod(dpath, 0o750)
+                    else:
+                        # Fallback: use group ownership with 0o770 for write access
+                        os.chown(dpath, -1, paths.bind_gid)
+                        os.chmod(dpath, 0o770)
                 for f in files:
                     if f.endswith(('.ldb', '.tdb', 'ldb-lock')):
                         fpath = os.path.join(dirname, f)
-                        os.chown(fpath, -1, paths.bind_gid)
+                        if bind_uid is not None:
+                            os.chown(fpath, bind_uid, paths.bind_gid)
+                        else:
+                            os.chown(fpath, -1, paths.bind_gid)
                         os.chmod(fpath, 0o660)
         except OSError:
             if 'SAMBA_SELFTEST' not in os.environ:

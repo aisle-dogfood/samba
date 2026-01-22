@@ -2204,8 +2204,10 @@ def provision(logger, session_info, smbconf=None,
 
     try:
         bind_gid = findnss_gid(["bind", "named"])
+        bind_uid = findnss_uid(["bind", "named"])
     except KeyError:
         bind_gid = None
+        bind_uid = None
 
     if targetdir is not None:
         smbconf = os.path.join(targetdir, "etc", "smb.conf")
@@ -2263,6 +2265,7 @@ def provision(logger, session_info, smbconf=None,
     paths = provision_paths_from_lp(lp, names.dnsdomain)
 
     paths.bind_gid = bind_gid
+    paths.bind_uid = bind_uid
     paths.root_uid = root_uid
     paths.root_gid = root_gid
 
@@ -2278,7 +2281,7 @@ def provision(logger, session_info, smbconf=None,
         serverrole = lp.get("server role")
 
     directory_create_or_exists(paths.private_dir, 0o700)
-    directory_create_or_exists(paths.binddns_dir, 0o770)
+    directory_create_or_exists(paths.binddns_dir, 0o750)
     directory_create_or_exists(os.path.join(paths.private_dir, "tls"))
     directory_create_or_exists(paths.state_dir)
     if not plaintext_secrets:
