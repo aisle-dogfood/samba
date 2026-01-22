@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,72 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_pickle_key(cache_dir):
+	"""
+	Get or create a secret key for signing pickle files.
+	The key is stored in the cache directory and tied to the local build environment.
+	"""
+	key_file = os.path.join(cache_dir, '.pickle_key')
+	try:
+		if os.path.exists(key_file):
+			with open(key_file, 'rb') as f:
+				return f.read()
+	except (IOError, OSError):
+		pass
+	
+	# Generate a new random key
+	try:
+		import secrets
+		key = secrets.token_bytes(32)
+	except (ImportError, AttributeError):
+		# Fallback for Python 2 or older Python 3
+		import random
+		random.seed()
+		key = os.urandom(32) if hasattr(os, 'urandom') else bytes(bytearray([random.randint(0, 255) for _ in range(32)]))
+	
+	# Try to save the key for future use
+	try:
+		with open(key_file, 'wb') as f:
+			f.write(key)
+		# Make the key file readable only by owner
+		try:
+			os.chmod(key_file, 0o600)
+		except (OSError, AttributeError):
+			pass
+	except (IOError, OSError):
+		pass
+	
+	return key
+
+def _sign_pickle_data(data, cache_dir):
+	"""
+	Sign pickle data with HMAC-SHA256 to prevent tampering.
+	Returns: signed_data (signature + data)
+	"""
+	key = _get_pickle_key(cache_dir)
+	signature = hmac.new(key, data, hashlib.sha256).digest()
+	return signature + data
+
+def _verify_and_extract_pickle_data(signed_data, cache_dir):
+	"""
+	Verify HMAC signature and extract pickle data.
+	Returns: data if verification succeeds, None otherwise
+	"""
+	if len(signed_data) < 32:  # SHA256 produces 32 bytes
+		return None
+	
+	key = _get_pickle_key(cache_dir)
+	signature = signed_data[:32]
+	data = signed_data[32:]
+	
+	expected_signature = hmac.new(key, data, hashlib.sha256).digest()
+	
+	# Use constant-time comparison to prevent timing attacks
+	if not hmac.compare_digest(signature, expected_signature):
+		return None
+	
+	return data
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -279,7 +345,7 @@ class BuildContext(Context.Context):
 
 		dbfn = os.path.join(self.variant_dir, Context.DBFILE)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			# handle missing file/empty file
 			Logs.debug('build: Could not load the build cache %s (missing)', dbfn)
@@ -288,12 +354,16 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify signature before unpickling to prevent malicious pickle exploitation
+					data = _verify_and_extract_pickle_data(signed_data, self.cache_dir)
+					if data is None:
+						Logs.debug('build: Could not verify the build cache signature %s (corrupted or tampered)', dbfn)
+					else:
+						data = cPickle.loads(data)
+						for x in SAVED_ATTRS:
+							setattr(self, x, data.get(x, {}))
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
-				else:
-					for x in SAVED_ATTRS:
-						setattr(self, x, data.get(x, {}))
 			finally:
 				Node.pickle_lock.release()
 
@@ -316,7 +386,9 @@ class BuildContext(Context.Context):
 		finally:
 			Node.pickle_lock.release()
 
-		Utils.writef(db + '.tmp', x, m='wb')
+		# Sign the pickle data to prevent tampering
+		signed_data = _sign_pickle_data(x, self.cache_dir)
+		Utils.writef(db + '.tmp', signed_data, m='wb')
 
 		try:
 			st = os.stat(db)

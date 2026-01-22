@@ -107,7 +107,7 @@ class bld_proxy(object):
 		dbfn = os.path.join(self.variant_dir, Context.DBFILE + self.store_key)
 		Logs.debug('rev_use: reading %s', dbfn)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			# handle missing file/empty file
 			Logs.debug('rev_use: Could not load the build cache %s (missing)', dbfn)
@@ -116,12 +116,16 @@ class bld_proxy(object):
 				waflib.Node.pickle_lock.acquire()
 				waflib.Node.Nod3 = self.node_class
 				try:
-					data = Build.cPickle.loads(data)
+					# Verify signature before unpickling to prevent malicious pickle exploitation
+					data = Build._verify_and_extract_pickle_data(signed_data, self.bld.cache_dir)
+					if data is None:
+						Logs.debug('rev_use: Could not verify the build cache signature %s (corrupted or tampered)', dbfn)
+					else:
+						data = Build.cPickle.loads(data)
+						for x in SAVED_ATTRS:
+							object.__setattr__(self, x, data.get(x, {}))
 				except Exception as e:
 					Logs.debug('rev_use: Could not pickle the build cache %s: %r', dbfn, e)
-				else:
-					for x in SAVED_ATTRS:
-						object.__setattr__(self, x, data.get(x, {}))
 			finally:
 				waflib.Node.pickle_lock.release()
 		self.fix_nodes()
@@ -145,8 +149,10 @@ class bld_proxy(object):
 						node_deps[idx] = root.find_node(node.abspath())
 				x = Build.cPickle.dumps(data, Build.PROTOCOL)
 
+		# Sign the pickle data to prevent tampering
+		signed_data = Build._sign_pickle_data(x, self.bld.cache_dir)
 		Logs.debug('rev_use: storing %s', db)
-		Utils.writef(db + '.tmp', x, m='wb')
+		Utils.writef(db + '.tmp', signed_data, m='wb')
 		try:
 			st = os.stat(db)
 			os.remove(db)
@@ -264,7 +270,9 @@ class bld(Build.BuildContext):
 			Logs.debug('rev_use: storing %s', dbfn)
 			dbfn_tmp = dbfn + '.tmp'
 			x = Build.cPickle.dumps([self.f_tstamps, f_deps], Build.PROTOCOL)
-			Utils.writef(dbfn_tmp, x, m='wb')
+			# Sign the pickle data to prevent tampering
+			signed_data = Build._sign_pickle_data(x, self.cache_dir)
+			Utils.writef(dbfn_tmp, signed_data, m='wb')
 			os.rename(dbfn_tmp, dbfn)
 			Logs.debug('rev_use: stored %s', dbfn)
 
@@ -279,20 +287,27 @@ class bld(Build.BuildContext):
 		dbfn = os.path.join(self.variant_dir, TSTAMP_DB)
 		Logs.debug('rev_use: Loading %s', dbfn)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			Logs.debug('rev_use: Could not load the build cache %s (missing)', dbfn)
 			self.f_deps = {}
 			self.f_tstamps = {}
 		else:
 			try:
-				self.f_tstamps, self.f_deps = Build.cPickle.loads(data)
+				# Verify signature before unpickling to prevent malicious pickle exploitation
+				data = Build._verify_and_extract_pickle_data(signed_data, self.cache_dir)
+				if data is None:
+					Logs.debug('rev_use: Could not verify the build cache signature %s (corrupted or tampered)', dbfn)
+					self.f_deps = {}
+					self.f_tstamps = {}
+				else:
+					self.f_tstamps, self.f_deps = Build.cPickle.loads(data)
+					Logs.debug('rev_use: Loaded %s', dbfn)
 			except Exception as e:
 				Logs.debug('rev_use: Could not pickle the build cache %s: %r', dbfn, e)
 				self.f_deps = {}
 				self.f_tstamps = {}
-			else:
-				Logs.debug('rev_use: Loaded %s', dbfn)
+
 
 
 		# 1. obtain task generators that contain rebuilds
