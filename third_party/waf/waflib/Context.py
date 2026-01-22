@@ -6,7 +6,7 @@
 Classes and functions enabling the command system
 """
 
-import os, re, sys
+import os, re, sys, ast
 from waflib import Utils, Errors, Logs
 import waflib.Node
 
@@ -277,8 +277,13 @@ class Context(ctx):
 				cache[node] = True
 				self.pre_recurse(node)
 				try:
+					node_path = node.abspath()
+					# Validate path before loading
+					_validate_wscript_path(node_path)
 					function_code = node.read('r', encoding)
-					exec(compile(function_code, node.abspath(), 'exec'), self.exec_dict)
+					# Validate code syntax before execution
+					_validate_python_code(function_code, node_path)
+					exec(compile(function_code, node_path, 'exec'), self.exec_dict)
 				finally:
 					self.post_recurse(node)
 			elif not node:
@@ -663,6 +668,49 @@ Dictionary holding already loaded modules (wscript), indexed by their absolute p
 The modules are added automatically by :py:func:`waflib.Context.load_module`
 """
 
+def _validate_wscript_path(path):
+	"""
+	Validates that a wscript path is safe to load.
+	
+	:param path: file path to validate
+	:type path: string
+	:raises: WafError if validation fails
+	"""
+	# Normalize and resolve the path to prevent path traversal
+	try:
+		real_path = os.path.realpath(path)
+	except (OSError, ValueError) as e:
+		raise Errors.WafError('Invalid path %r: %s' % (path, e))
+	
+	# Ensure it's a regular file, not a symlink to a dangerous location
+	if not os.path.isfile(real_path):
+		raise Errors.WafError('Path %r is not a regular file' % path)
+	
+	# Check for directory traversal patterns in the original path
+	path_normalized = os.path.normpath(path)
+	if '..' in path_normalized.split(os.sep):
+		raise Errors.WafError('Path traversal detected in %r' % path)
+	
+	# Validate file basename matches expected wscript patterns
+	basename = os.path.basename(real_path)
+	if not (basename.startswith(WSCRIPT_FILE) or basename.endswith('.py')):
+		raise Errors.WafError('Invalid wscript filename %r' % basename)
+
+def _validate_python_code(code, path):
+	"""
+	Validates Python code syntax before execution.
+	
+	:param code: Python code to validate
+	:type code: string
+	:param path: file path (for error messages)
+	:type path: string
+	:raises: WafError if validation fails
+	"""
+	try:
+		ast.parse(code, path, mode='exec')
+	except SyntaxError as e:
+		raise Errors.WafError('Syntax error in %r: %s' % (path, e))
+
 def load_module(path, encoding=None):
 	"""
 	Loads a wscript file as a python module. This method caches results in :py:attr:`waflib.Context.cache_modules`
@@ -677,11 +725,17 @@ def load_module(path, encoding=None):
 	except KeyError:
 		pass
 
+	# Validate path before loading
+	_validate_wscript_path(path)
+
 	module = imp.new_module(WSCRIPT_FILE)
 	try:
 		code = Utils.readf(path, m='r', encoding=encoding)
 	except EnvironmentError:
 		raise Errors.WafError('Could not read the file %r' % path)
+
+	# Validate code syntax before execution
+	_validate_python_code(code, path)
 
 	module_dir = os.path.dirname(path)
 	sys.path.insert(0, module_dir)
