@@ -146,6 +146,7 @@ NTSTATUS smb2_util_getatr(struct smb2_tree *tree, const char *fname,
 	parms.all_info2.in.file.handle = create_io.out.file.handle;
 	status = smb2_getinfo_file(tree, tree, &parms);
 	if (!NT_STATUS_IS_OK(status)) {
+		smb2_util_close(tree, create_io.out.file.handle);
 		return status;
 	}
 
@@ -251,6 +252,7 @@ int smb2_deltree(struct smb2_tree *tree, const char *dname)
 						dname,
 						s->stream_name.s);
 			if (spath == NULL) {
+				smb2_util_close(tree, create_parm.out.file.handle);
 				talloc_free(tmp_ctx);
 				return -1;
 			}
@@ -384,6 +386,7 @@ NTSTATUS smb2_qpathinfo_alt_name(TALLOC_CTX *ctx, struct smb2_tree *tree,
 
 	status = smb2_getinfo_file(tree, mem_ctx, &parms);
 	if (!NT_STATUS_IS_OK(status)) {
+		smb2_util_close(tree, create_io.out.file.handle);
 		talloc_free(mem_ctx);
 		return status;
 	}
