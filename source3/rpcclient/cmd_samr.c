@@ -185,7 +185,12 @@ static void display_sam_dom_info_2(struct samr_DomGeneralInformation *general)
 	printf("Total Groups:\t%d\n", general->num_groups);
 	printf("Total Aliases:\t%d\n", general->num_aliases);
 
-	printf("Sequence No:\t%llu\n", (unsigned long long)general->sequence_num);
+	/* Only display sequence number if debug level is high enough */
+	if (DEBUGLEVEL >= 10) {
+		printf("Sequence No:\t%llu\n", (unsigned long long)general->sequence_num);
+	} else {
+		printf("Sequence No:\t***MASKED*** (use -d 10 to view)\n");
+	}
 
 	printf("Force Logoff:\t%" PRIu64 "\n",
 	       (uint64_t)nt_time_to_unix_abs(&general->force_logoff_time));
