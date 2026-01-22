@@ -217,7 +217,7 @@ add_one_principal(const char *name,
 	kadm5_modify_principal(kadm_handle, &princ,
 			       KADM5_PW_EXPIRATION | KADM5_ATTRIBUTES);
     } else if (rand_password) {
-	printf ("added %s with password \"%s\"\n", princ_name, password);
+	printf ("added %s with random password\n", princ_name);
     }
 out:
     free(princ_name);
