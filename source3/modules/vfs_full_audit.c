@@ -584,6 +584,26 @@ static TALLOC_CTX *do_log_ctx(void)
         return tmp_do_log_ctx;
 }
 
+/**
+ * Sanitize a string for safe logging by replacing control characters
+ * that could be used for log forging (newlines, carriage returns, tabs)
+ * with spaces.
+ */
+static void sanitize_log_string(char *str)
+{
+	if (str == NULL) {
+		return;
+	}
+
+	/*
+	 * Replace newlines, carriage returns, and tabs with spaces
+	 * to prevent log forging attacks
+	 */
+	string_replace(str, '\n', ' ');
+	string_replace(str, '\r', ' ');
+	string_replace(str, '\t', ' ');
+}
+
 static void do_log(vfs_op_type op, bool success, vfs_handle_struct *handle,
 		   const char *format, ...) PRINTF_ATTRIBUTE(4, 5);
 
@@ -620,6 +640,15 @@ static void do_log(vfs_op_type op, bool success, vfs_handle_struct *handle,
 	}
 
 	audit_pre = audit_prefix(talloc_tos(), handle->conn);
+
+	/*
+	 * Sanitize all log fields to prevent log forging attacks
+	 * by replacing control characters (newlines, carriage returns, tabs)
+	 * with spaces.
+	 */
+	sanitize_log_string(audit_pre);
+	sanitize_log_string(err_msg);
+	sanitize_log_string(op_msg);
 
 	if (pd->do_syslog) {
 		int priority;
