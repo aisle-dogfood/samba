@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,30 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_cache_hmac_key():
+	"""
+	Generate a consistent HMAC key for cache file integrity verification.
+	The key is derived from system and version information to ensure it's
+	unique per installation and prevents tampering of pickle files.
+	"""
+	key_material = '%s-%d-%s' % (sys.platform, sys.hexversion, Context.HEXVERSION)
+	return hashlib.sha256(key_material.encode('utf-8')).digest()
+
+def _compute_cache_hmac(data):
+	"""
+	Compute HMAC-SHA256 for cache data to ensure integrity.
+	"""
+	key = _get_cache_hmac_key()
+	return hmac.new(key, data, hashlib.sha256).digest()
+
+def _verify_cache_hmac(data, expected_hmac):
+	"""
+	Verify HMAC-SHA256 for cache data.
+	Returns True if verification succeeds, False otherwise.
+	"""
+	computed_hmac = _compute_cache_hmac(data)
+	return hmac.compare_digest(computed_hmac, expected_hmac)
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -288,7 +312,16 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC integrity before unpickling to prevent deserialization attacks
+					if len(data) < 32:
+						raise ValueError('Cache file too short to contain HMAC')
+					stored_hmac = data[:32]
+					pickle_data = data[32:]
+					
+					if not _verify_cache_hmac(pickle_data, stored_hmac):
+						raise ValueError('HMAC verification failed - cache file may have been tampered with')
+					
+					data = cPickle.loads(pickle_data)
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
@@ -312,7 +345,10 @@ class BuildContext(Context.Context):
 		try:
 			Node.pickle_lock.acquire()
 			Node.Nod3 = self.node_class
-			x = cPickle.dumps(data, PROTOCOL)
+			pickle_data = cPickle.dumps(data, PROTOCOL)
+			# Compute HMAC and prepend it to the pickle data for integrity verification
+			hmac_digest = _compute_cache_hmac(pickle_data)
+			x = hmac_digest + pickle_data
 		finally:
 			Node.pickle_lock.release()
 
