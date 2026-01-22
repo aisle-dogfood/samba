@@ -270,6 +270,8 @@ bool make_user_info_netlogon_interactive(TALLOC_CTX *mem_ctx,
 		ret = NT_STATUS_IS_OK(nt_status) ? true : false;
 		data_blob_free(&local_lm_blob);
 		data_blob_free(&local_nt_blob);
+		ZERO_STRUCT(lm_pwd);
+		ZERO_STRUCT(nt_pwd);
 		return ret;
 	}
 }

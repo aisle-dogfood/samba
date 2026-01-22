@@ -1549,6 +1549,8 @@ bool init_domain_list(void)
 				nt_errstr(status));
 			return false;
 		}
+
+		ZERO_STRUCT(current_nt_hash);
 	} else {
 		uint32_t trust_flags;
 		enum netr_SchannelType secure_channel_type;

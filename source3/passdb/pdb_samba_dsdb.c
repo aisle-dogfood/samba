@@ -2570,6 +2570,7 @@ static NTSTATUS pdb_samba_dsdb_get_trusteddom_creds(struct pdb_methods *m,
 	}
 
 	*_creds = talloc_move(mem_ctx, &creds);
+	ZERO_STRUCT(old_password_nt_copy);
 	TALLOC_FREE(tmp_ctx);
 	return NT_STATUS_OK;
 }
