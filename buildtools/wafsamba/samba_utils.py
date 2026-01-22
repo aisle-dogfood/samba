@@ -29,6 +29,7 @@ def get_string(bytesorstring):
 # sigh, python octal constants are a mess
 MODE_644 = int('644', 8)
 MODE_744 = int('744', 8)
+MODE_750 = int('750', 8)
 MODE_755 = int('755', 8)
 MODE_777 = int('777', 8)
 
