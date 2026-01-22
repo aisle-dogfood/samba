@@ -396,8 +396,7 @@ static int process_root(int local_flags)
 			 */
 			new_passwd = smb_xstrndup(user_name, user_name_len);
 			if (!strlower_m(new_passwd)) {
-				fprintf(stderr, "strlower_m %s failed\n",
-					new_passwd);
+				fprintf(stderr, "strlower_m failed\n");
 				exit(1);
 			}
 		}
