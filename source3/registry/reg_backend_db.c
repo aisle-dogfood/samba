@@ -60,6 +60,8 @@ static WERROR regdb_create_subkey_internal(struct db_context *db,
 					   const char *key,
 					   const char *subkey);
 
+static bool tdb_data_is_cstr(TDB_DATA d);
+
 
 struct regdb_trans_ctx {
 	NTSTATUS (*action)(struct db_context *, void *);
@@ -440,6 +442,16 @@ static int regdb_normalize_keynames_fn(struct db_record *rec,
 		DEBUG(0, ("regdb_normalize_keynames_fn: ERROR: "
 			  "NULL db context handed in via private_data\n"));
 		return 1;
+	}
+
+	/*
+	 * Ensure the key is a valid C string before using string functions.
+	 * This prevents buffer overruns when processing malformed keys.
+	 */
+	if (!tdb_data_is_cstr(key)) {
+		DEBUG(0, ("regdb_normalize_keynames_fn: ERROR: "
+			  "key is not a valid C string, skipping\n"));
+		return 0;
 	}
 
 	if (strncmp((const char *)key.dptr, REGDB_VERSION_KEYNAME,
