@@ -14,6 +14,19 @@ try:
 	import cPickle
 except ImportError:
 	import pickle as cPickle
+
+# Import pickle module for creating RestrictedUnpickler
+try:
+	import pickle
+except ImportError:
+	pass
+
+# Import BytesIO for secure unpickling
+try:
+	from io import BytesIO
+except ImportError:
+	from StringIO import StringIO as BytesIO
+
 from waflib import Node, Runner, TaskGen, Utils, ConfigSet, Task, Logs, Options, Context, Errors
 
 CACHE_DIR = 'c4che'
@@ -45,6 +58,29 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+class RestrictedUnpickler(pickle.Unpickler):
+	"""
+	Restricted unpickler that only allows safe built-in types and waflib classes.
+	This prevents arbitrary code execution during pickle deserialization.
+	"""
+	# Whitelist of safe modules that can be unpickled
+	safe_modules = {
+		'__builtin__',
+		'builtins',
+		'copy_reg',
+		'_codecs',
+	}
+	
+	def find_class(self, module, name):
+		# Allow basic Python built-in types
+		if module in self.safe_modules:
+			return super(RestrictedUnpickler, self).find_class(module, name)
+		# Allow waflib Node classes (Node and Nod3 are used for build cache)
+		if module == 'waflib.Node':
+			return super(RestrictedUnpickler, self).find_class(module, name)
+		# Reject everything else to prevent arbitrary code execution
+		raise pickle.UnpicklingError("Attempted to unpickle unsafe class: %s.%s" % (module, name))
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -288,7 +324,8 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Use RestrictedUnpickler to prevent arbitrary code execution
+					data = RestrictedUnpickler(BytesIO(data)).load()
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
