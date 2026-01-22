@@ -12,6 +12,7 @@ import random
 from optparse import OptionParser
 import smtplib
 import email
+import shlex
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.application import MIMEApplication
@@ -1315,13 +1316,32 @@ def run_cmd(cmd, dir=".", show=None, output=False, checkfail=True):
     elif show:
         do_print("Running: '%s' in '%s'" % (cmd, dir))
 
+    # Detect if command uses shell features and needs shell execution
+    # Shell features include: pipes, redirections, command chains, etc.
+    shell_chars = ['|', '>', '<', ';', '&&', '||', '&', '`', '$', '\n']
+    needs_shell = isinstance(cmd, str) and any(char in cmd for char in shell_chars)
+    
+    if needs_shell:
+        # Use explicit shell invocation for commands with shell features
+        # This is more secure than shell=True as it doesn't propagate environment
+        cmd_list = ['/bin/sh', '-c', cmd]
+        use_shell = False
+    elif isinstance(cmd, str):
+        # Parse simple command string into list for safe shell=False execution
+        cmd_list = shlex.split(cmd)
+        use_shell = False
+    else:
+        # Command is already a list
+        cmd_list = cmd
+        use_shell = False
+
     if output:
-        out = check_output([cmd], shell=True, cwd=dir)
+        out = check_output(cmd_list, shell=use_shell, cwd=dir)
         return out.decode(encoding='utf-8', errors='backslashreplace')
     elif checkfail:
-        return check_call(cmd, shell=True, cwd=dir)
+        return check_call(cmd_list, shell=use_shell, cwd=dir)
     else:
-        return call(cmd, shell=True, cwd=dir)
+        return call(cmd_list, shell=use_shell, cwd=dir)
 
 def rmdir_force(dirname, re_raise=True):
     try:
