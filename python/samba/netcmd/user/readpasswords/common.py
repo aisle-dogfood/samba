@@ -26,7 +26,7 @@ import datetime
 import errno
 import io
 import os
-from hashlib import sha1
+from hashlib import sha1, pbkdf2_hmac
 
 import ldb
 from samba import credentials, nttime2float
@@ -731,12 +731,17 @@ class GetPasswordCommand(Command):
                 u8 = get_utf8(a, b, username or account_name)
                 if u8 is None:
                     continue
-                salt = os.urandom(4)
-                h = sha1()
-                h.update(u8)
-                h.update(salt)
-                bv = h.digest() + salt
-                v = "{SSHA}" + base64.b64encode(bv).decode('utf8')
+                # Use PBKDF2-HMAC-SHA256 with 100,000 iterations for stronger security
+                # This provides significant resistance against brute-force attacks
+                salt = os.urandom(16)  # Use 16 bytes (128 bits) salt instead of 4
+                iterations = 100000
+                # PBKDF2-HMAC-SHA256 produces a 32-byte hash
+                hash_value = pbkdf2_hmac('sha256', u8, salt, iterations)
+                # Format: {PBKDF2-SHA256}base64(hash+salt+iterations_as_4bytes)
+                # Encode iterations as 4-byte big-endian integer
+                iterations_bytes = iterations.to_bytes(4, byteorder='big')
+                bv = hash_value + salt + iterations_bytes
+                v = "{PBKDF2-SHA256}" + base64.b64encode(bv).decode('utf8')
             elif a == "virtualCryptSHA256":
                 rounds = get_rounds(attr_opts)
                 x = get_virtual_crypt_value(a, 5, rounds, username, account_name)
