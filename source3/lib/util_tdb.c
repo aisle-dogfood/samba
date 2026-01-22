@@ -226,10 +226,13 @@ int tdb_unpack(const uint8_t *buf, int in_bufsize, const char *fmt, ...)
 			if (bufsize < len)
 				goto no_space;
 			if (b != NULL) {
-				*b = (char *)SMB_MALLOC(*i);
+				/* Allocate one extra byte for null terminator */
+				*b = (char *)SMB_MALLOC(*i + 1);
 				if (! *b)
 					goto no_space;
 				memcpy(*b, buf+4, *i);
+				/* Ensure null termination for safe use as C string */
+				(*b)[*i] = '\0';
 			}
 			break;
 		default:
