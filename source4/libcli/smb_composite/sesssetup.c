@@ -48,6 +48,27 @@ struct sesssetup_state {
 
 static int sesssetup_state_destructor(struct sesssetup_state *state)
 {
+	/* Clear sensitive credential data from heap before freeing */
+	switch (state->setup.old.level) {
+	case RAW_SESSSETUP_OLD:
+		data_blob_clear_free(&state->setup.old.in.password);
+		break;
+	case RAW_SESSSETUP_NT1:
+		data_blob_clear_free(&state->setup.nt1.in.password1);
+		data_blob_clear_free(&state->setup.nt1.in.password2);
+		break;
+	case RAW_SESSSETUP_SPNEGO:
+		data_blob_clear_free(&state->setup.spnego.in.secblob);
+		data_blob_clear_free(&state->setup.spnego.out.secblob);
+		break;
+	case RAW_SESSSETUP_SMB2:
+		/* SMB2 session setup handled separately, not in this code path */
+		break;
+	default:
+		/* No sensitive data for other levels */
+		break;
+	}
+
 	if (state->req) {
 		talloc_free(state->req);
 		state->req = NULL;
