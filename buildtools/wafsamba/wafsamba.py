@@ -1053,7 +1053,7 @@ sys.path.insert(1, "%s")""" % (task.env["PYTHONARCHDIR"], task.env["PYTHONDIR"])
         installed_file.write(newline)
         lineno = lineno + 1
     installed_file.close()
-    os.chmod(installed_location, 0o755)
+    os.chmod(installed_location, MODE_750)
     return 0
 
 def copy_and_fix_perl_path(task):
@@ -1081,7 +1081,7 @@ def copy_and_fix_perl_path(task):
         installed_file.write(newline)
         lineno = lineno + 1
     installed_file.close()
-    os.chmod(installed_location, 0o755)
+    os.chmod(installed_location, MODE_750)
     return 0
 
 
