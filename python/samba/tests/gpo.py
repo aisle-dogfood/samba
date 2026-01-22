@@ -6251,7 +6251,7 @@ class GPOTests(tests.TestCase):
         parameters.text = '-n'
         hash = etree.SubElement(listelement, 'hash')
         hash.text = \
-            hashlib.md5(open(test_script, 'rb').read()).hexdigest().upper()
+            hashlib.sha256(open(test_script, 'rb').read()).hexdigest().upper()
         run_as = etree.SubElement(listelement, 'run_as')
         run_as.text = 'root'
         ret = stage_file(manifest, etree.tostring(stage))
@@ -6351,7 +6351,7 @@ class GPOTests(tests.TestCase):
         script.text = os.path.basename(test_script).lower()
         hash = etree.SubElement(listelement, 'hash')
         hash.text = \
-            hashlib.md5(open(test_script, 'rb').read()).hexdigest().upper()
+            hashlib.sha256(open(test_script, 'rb').read()).hexdigest().upper()
         run_as = etree.SubElement(listelement, 'run_as')
         run_as.text = 'root'
         ret = stage_file(manifest, etree.tostring(stage))
