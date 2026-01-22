@@ -190,7 +190,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 						 &session_key,
 						 &new_lm_password);
 		if (!NT_STATUS_IS_OK(status)) {
-			return status;
+			goto done;
 		}
 
 		rc = E_old_pw_hash(new_nt_hash, old_lanman_hash, old_lanman_hash_enc.hash);
@@ -207,7 +207,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user2(struct dcerpc_binding_handle *h,
 					 &session_key,
 					 &new_nt_password);
 	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+		goto done;
 	}
 	rc = E_old_pw_hash(new_nt_hash, old_nt_hash, old_nt_hash_enc.hash);
 	if (rc != 0) {
@@ -322,6 +322,11 @@ NTSTATUS dcerpc_samr_chng_pswd_auth_crap(struct dcerpc_binding_handle *h,
 						 &old_lm_hash_enc,
 						 presult);
 
+	ZERO_STRUCT(new_nt_password);
+	ZERO_STRUCT(new_lm_password);
+	ZERO_STRUCT(old_nt_hash_enc);
+	ZERO_STRUCT(old_lm_hash_enc);
+
 	return status;
 }
 
@@ -410,7 +415,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 						 &session_key,
 						 &new_lm_password);
 		if (!NT_STATUS_IS_OK(status)) {
-			return status;
+			goto done;
 		}
 
 		rc = E_old_pw_hash(new_nt_hash, old_lanman_hash, old_lanman_hash_enc.hash);
@@ -427,7 +432,7 @@ NTSTATUS dcerpc_samr_chgpasswd_user3(struct dcerpc_binding_handle *h,
 					 &session_key,
 					 &new_nt_password);
 	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+		goto done;
 	}
 
 	rc = E_old_pw_hash(new_nt_hash, old_nt_hash, old_nt_hash_enc.hash);
