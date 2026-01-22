@@ -1313,6 +1313,8 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 	DATA_BLOB session_key = data_blob_null;
 	struct samr_CryptPassword crypt_pwd;
 	struct samr_CryptPasswordEx crypt_pwd_ex;
+	struct samr_EncryptedPasswordAES pwd_buf_aes;
+	DATA_BLOB salt = data_blob_null;
 
 	ZERO_STRUCT(sam_pol);
 	ZERO_STRUCT(domain_pol);
@@ -1542,7 +1544,13 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 		goto done;
 	}
 
-	/* Set password on machine account - first try level 26 */
+	/*
+	 * Set password on machine account.
+	 * Try levels in order of security strength:
+	 * 1. Level 31 (AES-256 with HMAC-SHA512) - most secure
+	 * 2. Level 26 (RC4-MD5) - for older servers that don't support AES
+	 * 3. Level 24 (RC4-MD5) - for very old servers
+	 */
 
 	/*
 	 * increase the timeout as password filter modules on the DC
@@ -1550,6 +1558,41 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 	 */
 	old_timeout = rpccli_set_timeout(pipe_hnd, 600000);
 
+	/* First try level 31 with AES encryption (most secure) */
+	salt = data_blob_talloc(mem_ctx, NULL, 16);
+	if (salt.data == NULL) {
+		status = NT_STATUS_NO_MEMORY;
+		goto error;
+	}
+	generate_random_buffer(salt.data, salt.length);
+
+	ZERO_STRUCT(pwd_buf_aes);
+	status = init_samr_CryptPasswordAES(mem_ctx,
+					    r->in.machine_password,
+					    &salt,
+					    &session_key,
+					    &pwd_buf_aes);
+	if (NT_STATUS_IS_OK(status)) {
+		user_info.info31.password = pwd_buf_aes;
+		user_info.info31.password_expired = PASS_DONT_CHANGE_AT_NEXT_LOGON;
+
+		status = dcerpc_samr_SetUserInfo2(b, mem_ctx,
+						  &user_pol,
+						  UserInternal7InformationNew,
+						  &user_info,
+						  &result);
+		
+		if (NT_STATUS_IS_OK(status) && NT_STATUS_IS_OK(result)) {
+			/* Level 31 succeeded, we're done */
+			DEBUG(5, ("Successfully set machine password using AES encryption (level 31)\n"));
+			goto error;
+		}
+		
+		DEBUG(5, ("Level 31 (AES) not supported or failed (%s/%s), falling back to level 26 (RC4)\n",
+			  nt_errstr(status), nt_errstr(result)));
+	}
+
+	/* Fall back to level 26 with RC4 encryption */
 	status = init_samr_CryptPasswordEx(r->in.machine_password,
 					   &session_key,
 					   &crypt_pwd_ex);
@@ -1568,7 +1611,8 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 
 	if (NT_STATUS_EQUAL(status, NT_STATUS_RPC_ENUM_VALUE_OUT_OF_RANGE)) {
 
-		/* retry with level 24 */
+		/* retry with level 24 (oldest fallback) */
+		DEBUG(5, ("Level 26 not supported, falling back to level 24\n"));
 
 		status = init_samr_CryptPassword(r->in.machine_password,
 						 &session_key,
@@ -1585,6 +1629,8 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 						  UserInternal5Information,
 						  &user_info,
 						  &result);
+	} else if (NT_STATUS_IS_OK(status) && NT_STATUS_IS_OK(result)) {
+		DEBUG(5, ("Successfully set machine password using RC4 encryption (level 26)\n"));
 	}
 
 error:
@@ -1622,6 +1668,7 @@ error:
 	}
 
 	data_blob_clear_free(&session_key);
+	data_blob_clear_free(&salt);
 
 	if (is_valid_policy_hnd(&sam_pol)) {
 		dcerpc_samr_Close(b, mem_ctx, &sam_pol, &result);

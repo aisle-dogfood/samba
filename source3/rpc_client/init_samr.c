@@ -34,88 +34,16 @@ NTSTATUS init_samr_CryptPasswordEx(const char *pwd,
 				   DATA_BLOB *session_key,
 				   struct samr_CryptPasswordEx *pwd_buf)
 {
-	/* Use AES instead of RC4 for better security */
-	uint8_t _confounder[16] = {0};
-	DATA_BLOB confounder = data_blob_const(_confounder, 16);
-	DATA_BLOB pw_data = data_blob_const(pwd_buf->data, 516);
-	gnutls_cipher_hd_t cipher_hnd = NULL;
-	uint8_t derived_key[32]; /* AES-256 requires 32-byte key */
-	gnutls_datum_t aes_key = {
-		.data = derived_key,
-		.size = sizeof(derived_key),
-	};
-	uint8_t iv[16] = {0}; /* AES block size is 16 bytes */
-	gnutls_datum_t iv_datum = {
-		.data = iv,
-		.size = sizeof(iv),
-	};
-	bool ok;
-	int rc;
-	gnutls_hash_hd_t hash_hnd = NULL;
-
-	ok = encode_pw_buffer(pw_data.data, pwd, STR_UNICODE);
-	if (!ok) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	generate_random_buffer(confounder.data, confounder.length);
-
-	/* Derive a proper AES key from session key and confounder using SHA-256 */
-	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
-	if (rc < 0) {
-		ZERO_ARRAY(_confounder);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	
-	rc = gnutls_hash(hash_hnd, session_key->data, session_key->length);
-	if (rc < 0) {
-		gnutls_hash_deinit(hash_hnd, NULL);
-		ZERO_ARRAY(_confounder);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	
-	rc = gnutls_hash(hash_hnd, confounder.data, confounder.length);
-	if (rc < 0) {
-		gnutls_hash_deinit(hash_hnd, NULL);
-		ZERO_ARRAY(_confounder);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	
-	gnutls_hash_deinit(hash_hnd, derived_key);
-
-	/* Use the confounder as IV for AES encryption */
-	memcpy(iv, confounder.data, sizeof(iv));
-
-	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_AES_256_CBC,
-				&aes_key,
-				&iv_datum);
-	if (rc != 0) {
-		ZERO_ARRAY(_confounder);
-		ZERO_ARRAY(derived_key);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-
-	rc = gnutls_cipher_encrypt(cipher_hnd, pw_data.data, pw_data.length);
-	gnutls_cipher_deinit(cipher_hnd);
-	ZERO_ARRAY(derived_key);
-	
-	if (rc != 0) {
-		ZERO_ARRAY(_confounder);
-		data_blob_clear(&pw_data);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-
 	/*
-	 * The packet format is the 516 byte AES encrypted
-	 * password followed by the 16 byte confounder
-	 * The confounder is a salt to prevent pre-computed hash attacks on the
-	 * database.
+	 * This function implements the MS-SAMR protocol's samr_CryptPasswordEx
+	 * structure which uses RC4-MD5 encryption as defined by Microsoft.
+	 * While RC4 is a weak cipher, it is required for protocol compatibility
+	 * with Windows servers that only support SAMR level 26.
+	 * 
+	 * For better security, callers should prefer using init_samr_CryptPasswordAES
+	 * with SAMR level 31 when the server supports it.
 	 */
-	memcpy(&pwd_buf->data[516], confounder.data, confounder.length);
-	ZERO_ARRAY(_confounder);
-
-	return NT_STATUS_OK;
+	return encode_rc4_passwd_buffer(pwd, session_key, pwd_buf);
 }
 
 /*************************************************************************
@@ -126,61 +54,26 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 				 DATA_BLOB *session_key,
 				 struct samr_CryptPassword *pwd_buf)
 {
-	/* samr_CryptPassword */
-	gnutls_cipher_hd_t cipher_hnd = NULL;
-	uint8_t derived_key[16]; /* AES-128 requires 16-byte key */
-	gnutls_datum_t aes_key = {
-		.data = derived_key,
-		.size = sizeof(derived_key),
-	};
-	uint8_t iv[16] = {0}; /* AES block size is 16 bytes */
-	gnutls_datum_t iv_datum = {
-		.data = iv,
-		.size = sizeof(iv),
-	};
-	bool ok;
-	int rc;
-	gnutls_hash_hd_t hash_hnd = NULL;
+	/*
+	 * This function implements the MS-SAMR protocol's samr_CryptPassword
+	 * structure which uses RC4-MD5 encryption as defined by Microsoft.
+	 * While RC4 is a weak cipher, it is required for protocol compatibility
+	 * with Windows servers that only support SAMR level 24.
+	 * 
+	 * For better security, callers should prefer using init_samr_CryptPasswordAES
+	 * with SAMR level 31 when the server supports it.
+	 */
+	struct samr_CryptPasswordEx tmp;
+	NTSTATUS status;
 
-	ok = encode_pw_buffer(pwd_buf->data, pwd, STR_UNICODE);
-	if (!ok) {
-		return NT_STATUS_INTERNAL_ERROR;
+	status = encode_rc4_passwd_buffer(pwd,
+					  session_key,
+					  &tmp);
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
 	}
 
-	/* Derive a proper AES key from the session key using SHA-256 */
-	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
-	if (rc < 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	
-	rc = gnutls_hash(hash_hnd, session_key->data, session_key->length);
-	if (rc < 0) {
-		gnutls_hash_deinit(hash_hnd, NULL);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	
-	/* Get first 16 bytes of SHA-256 hash for AES-128 key */
-	gnutls_hash_deinit(hash_hnd, derived_key);
-
-	/* Generate a random IV for AES encryption */
-	generate_random_buffer(iv, sizeof(iv));
-
-	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_AES_128_CBC,
-				&aes_key,
-				&iv_datum);
-	if (rc != 0) {
-		ZERO_ARRAY(derived_key);
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-	rc = gnutls_cipher_encrypt(cipher_hnd,
-				   pwd_buf->data,
-				   516);
-	gnutls_cipher_deinit(cipher_hnd);
-	ZERO_ARRAY(derived_key);
-	if (rc != 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
+	memcpy(&pwd_buf->data, &tmp.data, 516);
 
 	return NT_STATUS_OK;
 }
