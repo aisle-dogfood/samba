@@ -58,16 +58,21 @@ _gen_ansi_colours()
 #
 #    c_BLUE("hello")  # "hello"
 #
-# The definition of the functions looks a little odd, because we want
-# to bake in the name of the colour but not its actual value.
+# We generate these functions by exec'ing code that directly references
+# the colour globals by name, avoiding the security issue of
+# globals()[variable] where variable could be attacker-controlled.
 
 for _k in list(globals().keys()):
     if _k.isupper():
-        def _f(s, name=_k):
-            return "%s%s%s" % (globals()[name], s, C_NORMAL)
-        globals()['c_%s' % _k] = _f
+        # Generate function code that directly references the colour global by name
+        # This avoids dangerous globals()[variable] pattern
+        _func_code = f'''
+def c_{_k}(s):
+    return "%s%s%s" % ({_k}, s, C_NORMAL)
+'''
+        exec(_func_code, globals())
 
-del _k, _f
+del _k
 
 
 def switch_colour_off():
