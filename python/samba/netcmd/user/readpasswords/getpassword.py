@@ -68,8 +68,11 @@ for which virtual attributes are supported in your environment):
                           (invalid UTF-16-LE is mapped in the same way as
                           Windows).
 
-   virtualSSHA:           As virtualClearTextUTF8, but a salted SHA-1
-                          checksum, useful for OpenLDAP's '{SSHA}' algorithm.
+   virtualSSHA256:        As virtualClearTextUTF8, but a salted SHA-256
+                          checksum, useful for OpenLDAP's '{SSHA256}' algorithm.
+
+   virtualSSHA512:        As virtualClearTextUTF8, but a salted SHA-512
+                          checksum, useful for OpenLDAP's '{SSHA512}' algorithm.
 
    virtualCryptSHA256:    As virtualClearTextUTF8, but a salted SHA256
                           checksum, useful for OpenLDAP's '{CRYPT}' algorithm,
