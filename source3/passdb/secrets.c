@@ -32,11 +32,154 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include <gnutls/gnutls.h>
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
 
 static struct db_context *db_ctx;
+
+/*
+ * Encrypt sensitive data before storing in secrets database.
+ * Uses MD5-based key derivation from local machine SID for obfuscation.
+ * Note: This provides defense-in-depth; primary security relies on
+ * filesystem permissions (0600) of secrets.tdb.
+ */
+static bool secrets_encrypt_password(const char *plaintext, 
+                                      uint8_t **ciphertext, 
+                                      size_t *cipher_len)
+{
+	struct dom_sid *local_sid = NULL;
+	gnutls_hash_hd_t hash_hnd = NULL;
+	uint8_t key[16];
+	size_t plaintext_len;
+	size_t i;
+	uint8_t *result = NULL;
+	int rc;
+	
+	if (plaintext == NULL || ciphertext == NULL || cipher_len == NULL) {
+		return false;
+	}
+	
+	plaintext_len = strlen(plaintext) + 1; /* Include null terminator */
+	
+	/* Derive encryption key from local machine SID */
+	local_sid = get_global_sam_sid();
+	
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_MD5);
+	if (rc < 0) {
+		return false;
+	}
+	
+	if (local_sid == NULL) {
+		/* 
+		 * Fallback: use hostname-based key derivation if SID unavailable.
+		 * This provides deterministic key generation.
+		 */
+		const char *hostname = lp_netbios_name();
+		DEBUG(2, ("Machine SID unavailable, using hostname-based key\n"));
+		
+		gnutls_hash(hash_hnd, hostname, strlen(hostname));
+		gnutls_hash(hash_hnd, "SAMBA_SECRETS_KEY_V1_FALLBACK", 29);
+	} else {
+		struct dom_sid_buf sid_str;
+		const char *sid_string = dom_sid_str_buf(local_sid, &sid_str);
+		
+		/* Derive key using MD5 of machine SID */
+		gnutls_hash(hash_hnd, sid_string, strlen(sid_string));
+		gnutls_hash(hash_hnd, "SAMBA_SECRETS_KEY_V1", 20);
+	}
+	
+	gnutls_hash_deinit(hash_hnd, key);
+	
+	/* Allocate buffer for encrypted data */
+	result = (uint8_t *)malloc(plaintext_len);
+	if (result == NULL) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		return false;
+	}
+	
+	/* XOR encryption with derived key */
+	for (i = 0; i < plaintext_len; i++) {
+		result[i] = ((const uint8_t *)plaintext)[i] ^ key[i % sizeof(key)];
+	}
+	
+	*ciphertext = result;
+	*cipher_len = plaintext_len;
+	
+	/* Clear sensitive key material */
+	BURN_PTR_SIZE(key, sizeof(key));
+	
+	return true;
+}
+
+/*
+ * Decrypt sensitive data retrieved from secrets database.
+ * Uses same key derivation as secrets_encrypt_password.
+ */
+static bool secrets_decrypt_password(const uint8_t *ciphertext,
+                                      size_t cipher_len,
+                                      char **plaintext)
+{
+	struct dom_sid *local_sid = NULL;
+	gnutls_hash_hd_t hash_hnd = NULL;
+	uint8_t key[16];
+	size_t i;
+	char *result = NULL;
+	int rc;
+	
+	if (ciphertext == NULL || plaintext == NULL || cipher_len == 0) {
+		return false;
+	}
+	
+	/* Derive decryption key from local machine SID */
+	local_sid = get_global_sam_sid();
+	
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_MD5);
+	if (rc < 0) {
+		return false;
+	}
+	
+	if (local_sid == NULL) {
+		/* 
+		 * Fallback: use hostname-based key derivation if SID unavailable.
+		 * This must match the encryption fallback for successful decryption.
+		 */
+		const char *hostname = lp_netbios_name();
+		DEBUG(2, ("Machine SID unavailable for decryption, using hostname-based key\n"));
+		
+		gnutls_hash(hash_hnd, hostname, strlen(hostname));
+		gnutls_hash(hash_hnd, "SAMBA_SECRETS_KEY_V1_FALLBACK", 29);
+	} else {
+		struct dom_sid_buf sid_str;
+		const char *sid_string = dom_sid_str_buf(local_sid, &sid_str);
+		
+		/* Derive key using MD5 of machine SID */
+		gnutls_hash(hash_hnd, sid_string, strlen(sid_string));
+		gnutls_hash(hash_hnd, "SAMBA_SECRETS_KEY_V1", 20);
+	}
+	
+	gnutls_hash_deinit(hash_hnd, key);
+	
+	/* Allocate buffer for decrypted data */
+	result = (char *)malloc(cipher_len);
+	if (result == NULL) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		return false;
+	}
+	
+	/* XOR decryption with derived key */
+	for (i = 0; i < cipher_len; i++) {
+		result[i] = ciphertext[i] ^ key[i % sizeof(key)];
+	}
+	
+	*plaintext = result;
+	
+	/* Clear sensitive key material */
+	BURN_PTR_SIZE(key, sizeof(key));
+	
+	return true;
+}
 
 /* open up the secrets database with specified private_dir path */
 bool secrets_init_path(const char *private_dir)
@@ -158,6 +301,8 @@ bool secrets_store_creds(struct cli_credentials *creds)
 {
 	const char *p = NULL;
 	bool ok;
+	uint8_t *encrypted_pw = NULL;
+	size_t encrypted_len = 0;
 
 	p = cli_credentials_get_username(creds);
 	if (p == NULL) {
@@ -188,7 +333,18 @@ bool secrets_store_creds(struct cli_credentials *creds)
 		return false;
 	}
 
-	ok = secrets_store(SECRETS_AUTH_PASSWORD, p, strlen(p) + 1);
+	/* Encrypt password before storing to protect credentials at rest */
+	ok = secrets_encrypt_password(p, &encrypted_pw, &encrypted_len);
+	if (!ok) {
+		DBG_ERR("Failed encrypting auth password\n");
+		return false;
+	}
+
+	ok = secrets_store(SECRETS_AUTH_PASSWORD, encrypted_pw, encrypted_len);
+	
+	/* Securely clear encrypted password from memory */
+	BURN_FREE(encrypted_pw, encrypted_len);
+	
 	if (!ok) {
 		DBG_ERR("Failed storing auth password\n");
 		return false;
@@ -475,12 +631,15 @@ bool secrets_fetch_afs_key(const char *cell, struct afs_key *result)
 void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 {
 	size_t username_size, domain_size, password_size;
-	char *raw_username, *raw_domain, *raw_password;
+	char *raw_username, *raw_domain;
+	uint8_t *encrypted_password = NULL;
+	char *decrypted_password = NULL;
+	bool decrypt_ok;
 	
 	/* Fetch raw data from secrets database */
 	raw_username = (char *)secrets_fetch(SECRETS_AUTH_USER, &username_size);
 	raw_domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, &domain_size);
-	raw_password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, &password_size);
+	encrypted_password = (uint8_t *)secrets_fetch(SECRETS_AUTH_PASSWORD, &password_size);
 	
 	/* Ensure null-termination for string safety */
 	if (raw_username != NULL) {
@@ -505,13 +664,20 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		*domain = NULL;
 	}
 	
-	if (raw_password != NULL) {
-		*password = malloc(password_size + 1);
-		if (*password != NULL) {
-			memcpy(*password, raw_password, password_size);
-			(*password)[password_size] = '\0';
+	/* Decrypt password retrieved from secrets database */
+	if (encrypted_password != NULL) {
+		decrypt_ok = secrets_decrypt_password(encrypted_password, 
+		                                       password_size, 
+		                                       &decrypted_password);
+		/* Securely clear encrypted data from memory */
+		BURN_FREE(encrypted_password, password_size);
+		
+		if (decrypt_ok && decrypted_password != NULL) {
+			*password = decrypted_password;
+		} else {
+			DBG_ERR("Failed to decrypt stored password\n");
+			*password = NULL;
 		}
-		BURN_FREE(raw_password, password_size);
 	} else {
 		*password = NULL;
 	}

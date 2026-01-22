@@ -400,27 +400,11 @@ done:
 
 static void cm_get_ipc_userpass(char **username, char **domain, char **password)
 {
-	*username = (char *)secrets_fetch(SECRETS_AUTH_USER, NULL);
-	*domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, NULL);
-	*password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, NULL);
-
-	if (*username && **username) {
-
-		if (!*domain || !**domain)
-			*domain = smb_xstrdup(lp_workgroup());
-
-		if (!*password || !**password)
-			*password = smb_xstrdup("");
-
-		DEBUG(3, ("cm_get_ipc_userpass: Retrieved auth-user from secrets.tdb [%s\\%s]\n",
-			  *domain, *username));
-
-	} else {
-		DEBUG(3, ("cm_get_ipc_userpass: No auth-user defined\n"));
-		*username = smb_xstrdup("");
-		*domain = smb_xstrdup("");
-		*password = smb_xstrdup("");
-	}
+	/* 
+	 * Use the centralized secrets_fetch_ipc_userpass function which
+	 * handles password decryption and secure memory cleanup.
+	 */
+	secrets_fetch_ipc_userpass(username, domain, password);
 }
 
 static NTSTATUS cm_get_ipc_credentials(TALLOC_CTX *mem_ctx,
@@ -486,7 +470,7 @@ static NTSTATUS cm_get_ipc_credentials(TALLOC_CTX *mem_ctx,
 	TALLOC_FREE(creds);
 	SAFE_FREE(username);
 	SAFE_FREE(netbios_domain);
-	SAFE_FREE(password);
+	BURN_FREE_STR(password); /* Securely clear password from memory */
 	TALLOC_FREE(frame);
 	return status;
 }
@@ -524,7 +508,7 @@ static bool cm_is_ipc_credentials(struct cli_credentials *creds)
  done:
 	SAFE_FREE(ipc_account);
 	SAFE_FREE(ipc_domain);
-	SAFE_FREE(ipc_password);
+	BURN_FREE_STR(ipc_password); /* Securely clear password from memory */
 	TALLOC_FREE(frame);
 	return ret;
 }
