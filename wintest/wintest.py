@@ -9,6 +9,7 @@ import sys
 import os
 import time
 import re
+import shlex
 
 
 class wintest():
@@ -173,18 +174,25 @@ class wintest():
         cmd = self.substitute(cmd)
         if isinstance(cmd, list):
             self.info('$ ' + " ".join(cmd))
+            cmd_list = cmd
+            use_shell = False
         else:
             self.info('$ ' + cmd)
+            # Check if command contains shell operators that require shell=True
+            shell_operators = ['|', '||', '&&', '>', '<', '>>', '<<', ';', '&']
+            needs_shell = any(op in cmd for op in shell_operators)
+            if needs_shell:
+                cmd_list = cmd
+                use_shell = True
+            else:
+                cmd_list = shlex.split(cmd)
+                use_shell = False
         if output:
-            return subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=dir).communicate()[0]
-        if isinstance(cmd, list):
-            shell = False
-        else:
-            shell = True
+            return subprocess.Popen(cmd_list, shell=use_shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=dir).communicate()[0]
         if checkfail:
-            return subprocess.check_call(cmd, shell=shell, cwd=dir)
+            return subprocess.check_call(cmd_list, shell=use_shell, cwd=dir)
         else:
-            return subprocess.call(cmd, shell=shell, cwd=dir)
+            return subprocess.call(cmd_list, shell=use_shell, cwd=dir)
 
     def run_child(self, cmd, dir="."):
         '''create a child and return the Popen handle to it'''
@@ -192,14 +200,21 @@ class wintest():
         cmd = self.substitute(cmd)
         if isinstance(cmd, list):
             self.info('$ ' + " ".join(cmd))
+            cmd_list = cmd
+            use_shell = False
         else:
             self.info('$ ' + cmd)
-        if isinstance(cmd, list):
-            shell = False
-        else:
-            shell = True
+            # Check if command contains shell operators that require shell=True
+            shell_operators = ['|', '||', '&&', '>', '<', '>>', '<<', ';', '&']
+            needs_shell = any(op in cmd for op in shell_operators)
+            if needs_shell:
+                cmd_list = cmd
+                use_shell = True
+            else:
+                cmd_list = shlex.split(cmd)
+                use_shell = False
         os.chdir(dir)
-        ret = subprocess.Popen(cmd, shell=shell, stderr=subprocess.STDOUT)
+        ret = subprocess.Popen(cmd_list, shell=use_shell, stderr=subprocess.STDOUT)
         os.chdir(cwd)
         return ret
 
