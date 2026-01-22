@@ -24,12 +24,12 @@ Render files:
  bootstrap/template.py --render
 
 Files are rendered into `bootstrap/generated-dists` directory in current dir.
-It also generates bootstrap/sha1sum.txt and prints out the sha1sum of the
+It also generates bootstrap/sha256sum.txt and prints out the sha256sum of the
 current code/configuration.
 
-Just calculate the sha1sum for consistency checks:
+Just calculate the sha256sum for consistency checks:
 
- bootstrap/template.py --sha1sum
+ bootstrap/template.py --sha256sum
 
 The checksum needs to be added as `SAMBA_CI_CONTAINER_TAG` in
 the toplevel .gitlab-ci-main.yml file.
@@ -84,12 +84,12 @@ With Docker:
  cd ~/samba
  git clean -xdf
  docker login
- docker pull registry.gitlab.com/samba-team/devel/samba/samba-ci-ubuntu1804:${sha1sum}
- docker run -it -v $(pwd):/home/samba/samba samba-ci-ubuntu1804:${sha1sum} bash
+ docker pull registry.gitlab.com/samba-team/devel/samba/samba-ci-ubuntu1804:${sha256sum}
+ docker run -it -v $(pwd):/home/samba/samba samba-ci-ubuntu1804:${sha256sum} bash
 
 With podman:
 
-  podman run -ti --cap-add=SYS_PTRACE --security-opt seccomp=unconfined registry.gitlab.com/samba-team/devel/samba/samba-ci-ubuntu1804:${sha1sum} bash
+  podman run -ti --cap-add=SYS_PTRACE --security-opt seccomp=unconfined registry.gitlab.com/samba-team/devel/samba/samba-ci-ubuntu1804:${sha256sum} bash
 
 With Vagrant:
 

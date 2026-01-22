@@ -1,0 +1,2 @@
+# This file will be regenerated when running: bootstrap/template.py --render
+# or by running: bootstrap/template.py --sha256sum

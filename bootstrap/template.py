@@ -31,7 +31,7 @@ import argparse
 from config import DISTS, VAGRANTFILE, OUT
 
 HERE = os.path.abspath(os.path.dirname(__file__))
-SHA1SUM_FILE_PATH = os.path.join(HERE, 'sha1sum.txt')
+SHA256SUM_FILE_PATH = os.path.join(HERE, 'sha256sum.txt')
 README_FILE_PATH = os.path.join(HERE, 'README.md')
 
 logging.basicConfig(level='INFO')
@@ -48,33 +48,33 @@ def get_files(path):
     return filepaths
 
 
-def get_sha1sum(debug=False):
-    """Get sha1sum for dists + .gitlab-ci.yml"""
+def get_sha256sum(debug=False):
+    """Get sha256sum for dists + .gitlab-ci.yml"""
     filepaths = get_files(HERE)
-    m = hashlib.sha1()
+    m = hashlib.sha256()
     i = 0
     for filepath in sorted(list(filepaths)):
         _filepath = os.path.relpath(filepath)
         i += 1
-        if filepath == SHA1SUM_FILE_PATH:
-            d = "skip                                    "
+        if filepath == SHA256SUM_FILE_PATH:
+            d = "skip                                                        "
             if debug:
                 print("%s: %s: %s" % (i, d, _filepath))
             continue
         if filepath == README_FILE_PATH:
-            d = "skip                                    "
+            d = "skip                                                        "
             if debug:
                 print("%s: %s: %s" % (i, d, _filepath))
             continue
         if filepath.endswith('.pyc'):
-            d = "skip                                    "
+            d = "skip                                                        "
             if debug:
                 print("%s: %s: %s" % (i, d, _filepath))
             continue
         with io.open(filepath, mode='rb') as _file:
             _bytes = _file.read()
 
-            m1 = hashlib.sha1()
+            m1 = hashlib.sha256()
             m1.update(_bytes)
             d = m1.hexdigest()
             if debug:
@@ -103,11 +103,11 @@ def render(dists):
     with io.open(path, mode='wt', encoding='utf8') as fp:
         fp.write(VAGRANTFILE)
 
-    # always calc sha1sum after render
-    sha1sum = get_sha1sum()
-    log.info('write sha1sum to %s: %s', SHA1SUM_FILE_PATH, sha1sum)
-    with io.open(SHA1SUM_FILE_PATH, mode='wt', encoding='utf8') as fp:
-        fp.write(sha1sum + "\n")
+    # always calc sha256sum after render
+    sha256sum = get_sha256sum()
+    log.info('write sha256sum to %s: %s', SHA256SUM_FILE_PATH, sha256sum)
+    with io.open(SHA256SUM_FILE_PATH, mode='wt', encoding='utf8') as fp:
+        fp.write(sha256sum + "\n")
 
 
 def main():
@@ -120,9 +120,9 @@ def main():
         '-r', '--render', action='store_true', help='Render templates')
 
     parser.add_argument(
-        '-s', '--sha1sum', action='store_true', help='Print sha1sum')
+        '-s', '--sha256sum', action='store_true', help='Print sha256sum')
     parser.add_argument(
-        '-d', '--debug', action='store_true', help='Debug sha1sum')
+        '-d', '--debug', action='store_true', help='Debug sha256sum')
 
     args = parser.parse_args()
     need_help = True
@@ -130,9 +130,9 @@ def main():
     if args.render:
         render(DISTS)
         need_help = False
-    if args.sha1sum:
-        # we will use the output to check sha1sum in ci
-        print(get_sha1sum(args.debug))
+    if args.sha256sum:
+        # we will use the output to check sha256sum in ci
+        print(get_sha256sum(args.debug))
         need_help = False
     if need_help:
         parser.print_help()
