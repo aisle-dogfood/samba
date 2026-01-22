@@ -451,10 +451,18 @@ dotype(unsigned char *buf, size_t len, char **argv, size_t *size)
                     warned = 1;
                 } else {
                     char *s;
+                    size_t max_len = 10 * 1024 * 1024; /* 10MB reasonable maximum */
+                    size_t len;
 
                     s = sorted_types[i].print(v, indent_flag ? ASN1_PRINT_INDENT : 0);
                     if (!s)
                         err(1, "Could not print %s\n", typename);
+                    
+                    /* Verify the returned string is properly null-terminated */
+                    len = strnlen(s, max_len);
+                    if (len >= max_len)
+                        errx(1, "Print function for %s returned non-null-terminated or excessively long string", typename);
+                    
                     if (!quiet_flag)
                         printf("%s\n", s);
                     free(s);
