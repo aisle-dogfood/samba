@@ -84,7 +84,7 @@ Asynchronous transfers
                          this requires asynchonous uploads to have an effect
 """
 
-import atexit, base64, errno, getpass, os, re, shutil, sys, time, threading, traceback, shlex
+import atexit, base64, errno, getpass, json, os, re, shutil, sys, time, threading, traceback, shlex
 try:
 	import subprocess32 as subprocess
 except ImportError:
@@ -108,11 +108,6 @@ WAFCACHE_ASYNC_NOWAIT = os.environ.get('WAFCACHE_ASYNC_NOWAIT')
 OK = "ok"
 
 re_waf_cmd = re.compile('(?P<src>%{SRC})|(?P<tgt>%{TGT})')
-
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
 
 if __name__ != '__main__':
 	from waflib import Task, Logs, Utils, Build
@@ -376,19 +371,19 @@ def build(bld):
 
 def cache_command(proc, sig, files_from, files_to):
 	"""
-	Create a command for cache worker processes, returns a pickled
+	Create a command for cache worker processes, returns a JSON-encoded
 	base64-encoded tuple containing the task signature, a list of files to
 	cache and a list of files files to get from cache (one of the lists
 	is assumed to be empty)
 	"""
-	obj = base64.b64encode(cPickle.dumps([sig, files_from, files_to]))
+	obj = base64.b64encode(json.dumps([sig, files_from, files_to]).encode())
 	proc.stdin.write(obj)
 	proc.stdin.write('\n'.encode())
 	proc.stdin.flush()
 	obj = proc.stdout.readline()
 	if not obj:
 		raise OSError('Preforked sub-process %r died' % proc.pid)
-	return cPickle.loads(base64.b64decode(obj))
+	return json.loads(base64.b64decode(obj).decode())
 
 try:
 	copyfun = os.link
@@ -668,7 +663,7 @@ def loop(service):
 	"""
 	This function is run when this file is run as a standalone python script,
 	it assumes a parent process that will communicate the commands to it
-	as pickled-encoded tuples (one line per command)
+	as JSON-encoded tuples (one line per command)
 
 	The commands are to copy files to the cache or copy files from the
 	cache to a target destination
@@ -681,7 +676,7 @@ def loop(service):
 		sys.exit(1)
 	ret = OK
 
-	[sig, files_from, files_to] = cPickle.loads(base64.b64decode(txt))
+	[sig, files_from, files_to] = json.loads(base64.b64decode(txt).decode())
 	if files_from:
 		# TODO return early when pushing files upstream
 		ret = service.copy_to_cache(sig, files_from, files_to)
@@ -691,7 +686,7 @@ def loop(service):
 	else:
 		ret = "Invalid command"
 
-	obj = base64.b64encode(cPickle.dumps(ret))
+	obj = base64.b64encode(json.dumps(ret).encode())
 	sys.stdout.write(obj.decode())
 	sys.stdout.write('\n')
 	sys.stdout.flush()
