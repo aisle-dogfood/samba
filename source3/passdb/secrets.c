@@ -32,6 +32,12 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include "passdb/machine_sid.h"
+#include "lib/crypto/gnutls_helpers.h"
+#include "lib/util/base64.h"
+#include "libcli/util/ntstatus.h"
+#include <gnutls/gnutls.h>
+#include <gnutls/crypto.h>
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
@@ -250,6 +256,243 @@ static char *trustdom_keystr(const char *domain)
 }
 
 /************************************************************************
+ * Helper function to derive encryption key from machine SID
+ ************************************************************************/
+static bool get_trust_password_encryption_key(DATA_BLOB *key_out)
+{
+	struct dom_sid *machine_sid = NULL;
+	char sid_str[DOM_SID_STR_BUFLEN];
+	gnutls_hash_hd_t hash_hnd = NULL;
+	uint8_t key_material[32];
+	int rc;
+
+	machine_sid = get_global_sam_sid();
+	if (machine_sid == NULL) {
+		DEBUG(0, ("get_global_sam_sid() returned NULL\n"));
+		return false;
+	}
+
+	dom_sid_string_buf(machine_sid, sid_str, sizeof(sid_str));
+
+	/* Derive a 256-bit key from the machine SID using SHA256 */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_hash_init failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	rc = gnutls_hash(hash_hnd, sid_str, strlen(sid_str));
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		DEBUG(0, ("gnutls_hash failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	/* Add a constant salt to ensure key uniqueness for this purpose */
+	rc = gnutls_hash(hash_hnd, "TRUSTED_DOMAIN_PASSWORD_ENCRYPTION", 34);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		DEBUG(0, ("gnutls_hash failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	gnutls_hash_deinit(hash_hnd, key_material);
+
+	*key_out = data_blob_const(key_material, sizeof(key_material));
+	return true;
+}
+
+/************************************************************************
+ * Encrypt trusted domain password using AES-256-CBC
+ ************************************************************************/
+static bool encrypt_trust_password(TALLOC_CTX *mem_ctx,
+				    const char *plaintext,
+				    char **encrypted_b64)
+{
+	DATA_BLOB key = data_blob_null;
+	DATA_BLOB plaintext_blob;
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	uint8_t iv[16];
+	uint8_t *padded_data = NULL;
+	size_t plaintext_len;
+	size_t padded_len;
+	size_t padding;
+	DATA_BLOB encrypted_data;
+	DATA_BLOB result_blob;
+	char *b64_result = NULL;
+	int rc;
+	bool ret = false;
+
+	if (!get_trust_password_encryption_key(&key)) {
+		return false;
+	}
+
+	plaintext_len = strlen(plaintext);
+	
+	/* PKCS#7 padding for AES block size (16 bytes) */
+	padding = 16 - (plaintext_len % 16);
+	padded_len = plaintext_len + padding;
+	
+	padded_data = talloc_zero_array(mem_ctx, uint8_t, padded_len);
+	if (padded_data == NULL) {
+		ZERO_STRUCT(key);
+		return false;
+	}
+
+	memcpy(padded_data, plaintext, plaintext_len);
+	/* Apply PKCS#7 padding */
+	memset(padded_data + plaintext_len, padding, padding);
+
+	/* Generate random IV */
+	generate_random_buffer(iv, sizeof(iv));
+
+	key_datum.data = key.data;
+	key_datum.size = key.length;
+	iv_datum.data = iv;
+	iv_datum.size = sizeof(iv);
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_CBC,
+				&key_datum,
+				&iv_datum);
+	ZERO_STRUCT(key);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_init failed: %s\n", gnutls_strerror(rc)));
+		talloc_free(padded_data);
+		return false;
+	}
+
+	rc = gnutls_cipher_encrypt(cipher_hnd, padded_data, padded_len);
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_encrypt failed: %s\n", gnutls_strerror(rc)));
+		gnutls_cipher_deinit(cipher_hnd);
+		BURN_FREE(padded_data, padded_len);
+		return false;
+	}
+
+	gnutls_cipher_deinit(cipher_hnd);
+
+	/* Prepend IV to encrypted data: [IV(16 bytes)][Encrypted Data] */
+	result_blob = data_blob_talloc(mem_ctx, NULL, sizeof(iv) + padded_len);
+	if (result_blob.data == NULL) {
+		BURN_FREE(padded_data, padded_len);
+		return false;
+	}
+
+	memcpy(result_blob.data, iv, sizeof(iv));
+	memcpy(result_blob.data + sizeof(iv), padded_data, padded_len);
+	BURN_FREE(padded_data, padded_len);
+
+	/* Base64 encode the result */
+	b64_result = base64_encode_data_blob(mem_ctx, result_blob);
+	data_blob_free(&result_blob);
+
+	if (b64_result == NULL) {
+		return false;
+	}
+
+	*encrypted_b64 = b64_result;
+	return true;
+}
+
+/************************************************************************
+ * Decrypt trusted domain password
+ ************************************************************************/
+static bool decrypt_trust_password(TALLOC_CTX *mem_ctx,
+				    const char *encrypted_b64,
+				    char **plaintext)
+{
+	DATA_BLOB key = data_blob_null;
+	DATA_BLOB encrypted_blob;
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	uint8_t *decrypted_data = NULL;
+	size_t encrypted_len;
+	uint8_t padding;
+	size_t plaintext_len;
+	char *result = NULL;
+	int rc;
+
+	if (!get_trust_password_encryption_key(&key)) {
+		return false;
+	}
+
+	/* Base64 decode */
+	encrypted_blob = base64_decode_data_blob_talloc(mem_ctx, encrypted_b64);
+	if (encrypted_blob.data == NULL || encrypted_blob.length < 16) {
+		DEBUG(0, ("Invalid encrypted data\n"));
+		ZERO_STRUCT(key);
+		return false;
+	}
+
+	/* Extract IV (first 16 bytes) */
+	iv_datum.data = encrypted_blob.data;
+	iv_datum.size = 16;
+
+	encrypted_len = encrypted_blob.length - 16;
+
+	key_datum.data = key.data;
+	key_datum.size = key.length;
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_CBC,
+				&key_datum,
+				&iv_datum);
+	ZERO_STRUCT(key);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_init failed: %s\n", gnutls_strerror(rc)));
+		data_blob_free(&encrypted_blob);
+		return false;
+	}
+
+	decrypted_data = talloc_array(mem_ctx, uint8_t, encrypted_len + 1);
+	if (decrypted_data == NULL) {
+		gnutls_cipher_deinit(cipher_hnd);
+		data_blob_free(&encrypted_blob);
+		return false;
+	}
+
+	memcpy(decrypted_data, encrypted_blob.data + 16, encrypted_len);
+	data_blob_free(&encrypted_blob);
+
+	rc = gnutls_cipher_decrypt(cipher_hnd, decrypted_data, encrypted_len);
+	gnutls_cipher_deinit(cipher_hnd);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_decrypt failed: %s\n", gnutls_strerror(rc)));
+		BURN_FREE(decrypted_data, encrypted_len);
+		return false;
+	}
+
+	/* Remove PKCS#7 padding */
+	padding = decrypted_data[encrypted_len - 1];
+	if (padding > 16 || padding == 0) {
+		DEBUG(0, ("Invalid padding in decrypted data\n"));
+		BURN_FREE(decrypted_data, encrypted_len);
+		return false;
+	}
+
+	plaintext_len = encrypted_len - padding;
+	decrypted_data[plaintext_len] = '\0';
+
+	result = talloc_strdup(mem_ctx, (char *)decrypted_data);
+	BURN_FREE(decrypted_data, encrypted_len);
+
+	if (result == NULL) {
+		return false;
+	}
+
+	*plaintext = result;
+	talloc_keep_secret(result);
+	return true;
+}
+
+/************************************************************************
  Routine to get account password to trusted domain
 ************************************************************************/
 
@@ -286,7 +529,24 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 
 	/* the trust's password */
 	if (pwd) {
-		*pwd = SMB_STRDUP(pass.pass);
+		char *decrypted_pwd = NULL;
+		
+		/* Try to decrypt the password - if it's encrypted */
+		/* If decryption fails, assume it's plaintext (backward compatibility) */
+		if (strncmp(pass.pass, "ENC:", 4) == 0) {
+			/* Password is encrypted, decrypt it */
+			if (!decrypt_trust_password(talloc_tos(), pass.pass + 4, &decrypted_pwd)) {
+				DEBUG(0, ("Failed to decrypt trusted domain password for %s\n", domain));
+				return False;
+			}
+			*pwd = SMB_STRDUP(decrypted_pwd);
+			BURN_STR(decrypted_pwd);
+			talloc_free(decrypted_pwd);
+		} else {
+			/* Backward compatibility: password not encrypted */
+			*pwd = SMB_STRDUP(pass.pass);
+		}
+		
 		if (!*pwd) {
 			return False;
 		}
@@ -316,6 +576,8 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
                                            const struct dom_sid *sid)
 {
 	bool ret;
+	char *encrypted_pwd = NULL;
+	char *prefixed_pwd = NULL;
 
 	/* packing structures */
 	DATA_BLOB blob;
@@ -323,21 +585,42 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 	struct TRUSTED_DOM_PASS pass;
 	ZERO_STRUCT(pass);
 
+	/* Encrypt the password before storing */
+	if (!encrypt_trust_password(talloc_tos(), pwd, &encrypted_pwd)) {
+		DEBUG(0, ("Failed to encrypt trusted domain password for %s\n", domain));
+		return false;
+	}
+
+	/* Add "ENC:" prefix to indicate this is an encrypted password */
+	prefixed_pwd = talloc_asprintf(talloc_tos(), "ENC:%s", encrypted_pwd);
+	BURN_STR(encrypted_pwd);
+	talloc_free(encrypted_pwd);
+	
+	if (prefixed_pwd == NULL) {
+		DEBUG(0, ("talloc_asprintf failed\n"));
+		return false;
+	}
+
 	pass.uni_name = domain;
 	pass.uni_name_len = strlen(domain)+1;
 
 	/* last change time */
 	pass.mod_time = time(NULL);
 
-	/* password of the trust */
-	pass.pass_len = strlen(pwd);
-	pass.pass = pwd;
+	/* password of the trust - now encrypted */
+	pass.pass_len = strlen(prefixed_pwd);
+	pass.pass = prefixed_pwd;
 
 	/* domain sid */
 	sid_copy(&pass.domain_sid, sid);
 
 	ndr_err = ndr_push_struct_blob(&blob, talloc_tos(), &pass,
 			(ndr_push_flags_fn_t)ndr_push_TRUSTED_DOM_PASS);
+	
+	/* Clean up the encrypted password from memory */
+	BURN_STR(prefixed_pwd);
+	talloc_free(prefixed_pwd);
+	
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
 		return false;
 	}
