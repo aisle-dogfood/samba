@@ -279,6 +279,22 @@ def verify_graph_directed_double_ring_or_small(edges, vertices, edge_vertices):
     return verify_graph_directed_double_ring(edges, vertices, edge_vertices)
 
 
+# Mapping of property names to verification functions
+# This dictionary provides a safe lookup mechanism instead of using globals()
+VERIFY_GRAPH_FUNCTIONS = {
+    'complete': verify_graph_complete,
+    'connected': verify_graph_connected,
+    'connected_under_edge_failures': verify_graph_connected_under_edge_failures,
+    'connected_under_vertex_failures': verify_graph_connected_under_vertex_failures,
+    'forest': verify_graph_forest,
+    'multi_edge_forest': verify_graph_multi_edge_forest,
+    'no_lonely_vertices': verify_graph_no_lonely_vertices,
+    'no_unknown_vertices': verify_graph_no_unknown_vertices,
+    'directed_double_ring': verify_graph_directed_double_ring,
+    'directed_double_ring_or_small': verify_graph_directed_double_ring_or_small,
+}
+
+
 def verify_graph(edges, vertices=None, directed=False, properties=()):
     errors = []
     properties = [x.replace(' ', '_') for x in properties]
@@ -294,8 +310,10 @@ def verify_graph(edges, vertices=None, directed=False, properties=()):
         vertices = set(vertices)
 
     for p in properties:
-        fn = 'verify_graph_%s' % p
-        f = globals()[fn]
+        # Use dictionary lookup instead of globals() to prevent arbitrary code execution
+        f = VERIFY_GRAPH_FUNCTIONS.get(p)
+        if f is None:
+            raise ValueError("Unknown graph verification property: %s" % p)
         try:
             f(edges, vertices, edge_vertices)
         except GraphError as e:
@@ -334,10 +352,10 @@ def verify_and_dot(basename, edges, vertices=None, label=None,
 
 
 def list_verify_tests():
-    for k, v in sorted(globals().items()):
-        if k.startswith('verify_graph_'):
-            print(k.replace('verify_graph_', ''))
-            if v.__doc__:
-                print('    %s' % (v.__doc__.rstrip()))
-            else:
-                print()
+    # Use the safe dictionary lookup instead of globals()
+    for k, v in sorted(VERIFY_GRAPH_FUNCTIONS.items()):
+        print(k)
+        if v.__doc__:
+            print('    %s' % (v.__doc__.rstrip()))
+        else:
+            print()
