@@ -605,12 +605,11 @@ static int do_global_checks(void)
 		if(lp_encrypt_passwords()) {
 			if(strstr_m( lp_passwd_chat(talloc_tos(), lp_sub), "%o")!=NULL) {
 				fprintf(stderr,
-					"ERROR: the 'passwd chat' script [%s] "
+					"ERROR: the 'passwd chat' script "
 					"expects to use the old plaintext "
 					"password via the %%o substitution. With "
 					"encrypted passwords this is not "
-					"possible.\n\n",
-					lp_passwd_chat(talloc_tos(), lp_sub) );
+					"possible.\n\n");
 				ret = 1;
 			}
 		}
