@@ -3634,7 +3634,7 @@ samba-tool gpo manage scripts startup add {31B2F340-016D-11D2-945F-00C04FB984F9}
         script_elm = ET.SubElement(listelement, 'script')
         script_elm.text = os.path.basename(script)
         hash = ET.SubElement(listelement, 'hash')
-        hash.text = hashlib.md5(script_data).hexdigest().upper()
+        hash.text = hashlib.sha256(script_data).hexdigest().upper()
         if args is not None:
             parameters = ET.SubElement(listelement, 'parameters')
             parameters.text = args.strip('"').strip("'").replace('\\-', '-')
