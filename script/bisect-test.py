@@ -9,6 +9,7 @@ import os
 import tempfile
 import sys
 from optparse import OptionParser
+import shlex
 
 parser = OptionParser()
 parser.add_option("", "--good", help="known good revision (default HEAD~100)", default='HEAD~100')
@@ -34,14 +35,20 @@ parser.add_option("", "--clean", help="run make clean before each build",
 
 
 def run_cmd(cmd, dir=".", show=True, output=False, checkfail=True):
-    if show:
-        print("Running: '%s' in '%s'" % (cmd, dir))
-    if output:
-        return Popen([cmd], shell=True, stdout=PIPE, cwd=dir).communicate()[0]
-    elif checkfail:
-        return check_call(cmd, shell=True, cwd=dir)
+    # Convert string command to list for safe execution without shell
+    if isinstance(cmd, str):
+        cmd_list = shlex.split(cmd)
     else:
-        return call(cmd, shell=True, cwd=dir)
+        cmd_list = cmd
+    
+    if show:
+        print("Running: '%s' in '%s'" % (' '.join(cmd_list), dir))
+    if output:
+        return Popen(cmd_list, shell=False, stdout=PIPE, cwd=dir).communicate()[0]
+    elif checkfail:
+        return check_call(cmd_list, shell=False, cwd=dir)
+    else:
+        return call(cmd_list, shell=False, cwd=dir)
 
 
 def find_git_root():
@@ -78,7 +85,7 @@ f.close()
 
 
 def cleanup():
-    run_cmd("git bisect reset", dir=gitroot)
+    run_cmd(["git", "bisect", "reset"], dir=gitroot)
     os.unlink(f.name)
     sys.exit(-1)
 
@@ -86,9 +93,9 @@ def cleanup():
 # run bisect
 ret = -1
 try:
-    run_cmd("git bisect reset", dir=gitroot, show=False, checkfail=False)
-    run_cmd("git bisect start %s %s --" % (opts.bad, opts.good), dir=gitroot)
-    ret = run_cmd("git bisect run bash %s" % f.name, dir=gitroot, show=True, checkfail=False)
+    run_cmd(["git", "bisect", "reset"], dir=gitroot, show=False, checkfail=False)
+    run_cmd(["git", "bisect", "start", opts.bad, opts.good, "--"], dir=gitroot)
+    ret = run_cmd(["git", "bisect", "run", "bash", f.name], dir=gitroot, show=True, checkfail=False)
 except KeyboardInterrupt:
     print("Cleaning up")
     cleanup()
@@ -96,6 +103,6 @@ except Exception as reason:
     print("Failed bisect: %s" % reason)
     cleanup()
 
-run_cmd("git bisect reset", dir=gitroot)
+run_cmd(["git", "bisect", "reset"], dir=gitroot)
 os.unlink(f.name)
 sys.exit(ret)
