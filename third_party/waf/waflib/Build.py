@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,46 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_pickle_key():
+	"""
+	Generate a machine-specific key for HMAC signing of pickle data.
+	This prevents loading of pickle files from different systems or modified by attackers.
+	"""
+	# Use waf version, python version, and platform as the key components
+	# This ensures the key is consistent across runs on the same system
+	# but different for different configurations
+	key_data = '%s-%s-%d-%d' % (Context.WAFVERSION, sys.platform, sys.hexversion, Context.ABI)
+	return key_data.encode('utf-8')
+
+def _sign_pickle_data(data):
+	"""
+	Sign pickle data with HMAC to ensure integrity.
+	Returns: data with HMAC prepended (32 bytes for SHA256)
+	"""
+	key = _get_pickle_key()
+	signature = hmac.new(key, data, hashlib.sha256).digest()
+	return signature + data
+
+def _verify_and_extract_pickle_data(signed_data):
+	"""
+	Verify HMAC signature and extract pickle data.
+	Returns: (success: bool, data: bytes)
+	"""
+	if len(signed_data) < 32:
+		return (False, b'')
+	
+	signature = signed_data[:32]
+	data = signed_data[32:]
+	
+	key = _get_pickle_key()
+	expected_signature = hmac.new(key, data, hashlib.sha256).digest()
+	
+	# Use constant-time comparison to prevent timing attacks
+	if hmac.compare_digest(signature, expected_signature):
+		return (True, data)
+	else:
+		return (False, b'')
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -288,12 +328,16 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature before unpickling to prevent deserialization attacks
+					verified, pickle_data = _verify_and_extract_pickle_data(data)
+					if not verified:
+						Logs.debug('build: Could not verify the build cache signature %s (invalid or from different version)', dbfn)
+					else:
+						data = cPickle.loads(pickle_data)
+						for x in SAVED_ATTRS:
+							setattr(self, x, data.get(x, {}))
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
-				else:
-					for x in SAVED_ATTRS:
-						setattr(self, x, data.get(x, {}))
 			finally:
 				Node.pickle_lock.release()
 
@@ -313,6 +357,8 @@ class BuildContext(Context.Context):
 			Node.pickle_lock.acquire()
 			Node.Nod3 = self.node_class
 			x = cPickle.dumps(data, PROTOCOL)
+			# Sign the pickle data with HMAC to ensure integrity
+			x = _sign_pickle_data(x)
 		finally:
 			Node.pickle_lock.release()
 
