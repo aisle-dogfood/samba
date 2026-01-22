@@ -2278,7 +2278,7 @@ def provision(logger, session_info, smbconf=None,
         serverrole = lp.get("server role")
 
     directory_create_or_exists(paths.private_dir, 0o700)
-    directory_create_or_exists(paths.binddns_dir, 0o770)
+    directory_create_or_exists(paths.binddns_dir, 0o750)
     directory_create_or_exists(os.path.join(paths.private_dir, "tls"))
     directory_create_or_exists(paths.state_dir)
     if not plaintext_secrets:
