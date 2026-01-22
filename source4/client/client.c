@@ -1587,6 +1587,7 @@ delete a whole directory tree
 static int cmd_deltree(struct smbclient_context *ctx, const char **args)
 {
 	char *dname;
+	char *quest;
 	int ret;
 
 	if (!args[1]) {
@@ -1595,6 +1596,15 @@ static int cmd_deltree(struct smbclient_context *ctx, const char **args)
 	}
 
 	dname = talloc_asprintf(ctx, "%s%s", ctx->remote_cur_dir, args[1]);
+
+	/* Prompt user for confirmation before performing destructive operation */
+	quest = talloc_asprintf(ctx, "Delete directory tree %s and all its contents? ", dname);
+	if (ctx->prompt && !yesno(quest)) {
+		talloc_free(quest);
+		d_printf("deltree cancelled.\n");
+		return 0;
+	}
+	talloc_free(quest);
 
 	ret = smbcli_deltree(ctx->cli->tree, dname);
 
