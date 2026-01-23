@@ -183,7 +183,7 @@ struct DNS_ADDR_ARRAY *dns_addr_array_copy(TALLOC_CTX *mem_ctx,
 
 int dns_split_name_components(TALLOC_CTX *tmp_ctx, const char *name, char ***components)
 {
-	char *str = NULL, *ptr, **list, *saveptr;
+	char *str = NULL, *ptr, **list, *saveptr = NULL;
 	int count = 0;
 
 	if (name == NULL) {
