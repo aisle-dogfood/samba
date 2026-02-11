@@ -2898,7 +2898,7 @@ struct loadparm_context *loadparm_init(TALLOC_CTX *mem_ctx)
 	lpcfg_do_global_parameter(lp_ctx, "ObeyPamRestrictions", "False");
 
 	lpcfg_do_global_parameter(lp_ctx, "TimeServer", "False");
-	lpcfg_do_global_parameter(lp_ctx, "BindInterfacesOnly", "False");
+	lpcfg_do_global_parameter(lp_ctx, "BindInterfacesOnly", "True");
 	lpcfg_do_global_parameter(lp_ctx, "Unicode", "True");
 	lpcfg_do_global_parameter(lp_ctx, "ClientLanManAuth", "False");
 	lpcfg_do_global_parameter(lp_ctx, "ClientNTLMv2Auth", "True");
