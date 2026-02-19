@@ -31,6 +31,7 @@
 #include "lib/util/tevent_unix.h"
 #include "lib/util/debug.h"
 #include "lib/util/samba_util.h"
+#include "lib/util/genrand.h"
 #include "lib/util/util_file.h"
 #include "lib/async_req/async_sock.h"
 
@@ -1164,7 +1165,9 @@ static uint32_t new_generation(uint32_t old_generation)
 	uint32_t generation;
 
 	while (1) {
-		generation = random();
+		uint8_t rand_buf[4];
+		generate_random_buffer(rand_buf, sizeof(rand_buf));
+		generation = IVAL(rand_buf, 0);
 		if (generation != INVALID_GENERATION &&
 		    generation != old_generation) {
 			break;
