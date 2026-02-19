@@ -628,8 +628,10 @@ def build(bld):
                              ctdb-system
                              ctdb-tcp
                              ctdb-util
+                             genrand
                              popt
                              replace
+                             samba-util
                              sys_rw
                              talloc
                              talloc_report
@@ -1139,6 +1141,7 @@ def build(bld):
                              ctdb-protocol-util
                              ctdb-system
                              ctdb-util
+                             genrand
                              popt
                              samba-util
                              tevent-util

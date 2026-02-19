@@ -31,6 +31,7 @@
 #include "lib/util/dlinklist.h"
 #include "lib/util/debug.h"
 #include "lib/util/samba_util.h"
+#include "lib/util/genrand.h"
 
 #include "ctdb_private.h"
 #include "ctdb_client.h"
@@ -306,10 +307,13 @@ int ctdb_ltdb_lock_requeue(struct ctdb_db_context *ctdb_db,
 	}
 
 	/* when torturing, ensure we test the contended path */
-	if ((ctdb_db->ctdb->flags & CTDB_FLAG_TORTURE) &&
-	    random() % 5 == 0) {
-		ret = -1;
-		tdb_chainunlock(tdb, key);
+	if (ctdb_db->ctdb->flags & CTDB_FLAG_TORTURE) {
+		uint8_t rand_byte;
+		generate_random_buffer(&rand_byte, 1);
+		if (rand_byte % 5 == 0) {
+			ret = -1;
+			tdb_chainunlock(tdb, key);
+		}
 	}
 
 	/* first the non-contended path */
