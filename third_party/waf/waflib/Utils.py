@@ -9,12 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
-
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 # leave this
 if os.name == 'posix' and sys.version_info[0] < 3:
@@ -915,8 +910,8 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		obj = base64.b64encode(json.dumps([cmd, kwargs, cargs]).encode('utf-8'))
+	except (TypeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,10 +931,15 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
+	lst = json.loads(base64.b64decode(obj).decode('utf-8'))
 	# Jython wrapper failures (bash/execvp)
 	assert len(lst) == 5
 	ret, out, err, ex, trace = lst
+	# Decode base64-encoded bytes for out and err
+	if out is not None:
+		out = base64.b64decode(out.encode('ascii') if isinstance(out, str) else out)
+	if err is not None:
+		err = base64.b64decode(err.encode('ascii') if isinstance(err, str) else err)
 	if ex:
 		if ex == 'OSError':
 			raise OSError(trace)
