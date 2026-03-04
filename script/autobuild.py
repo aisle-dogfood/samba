@@ -20,6 +20,7 @@ from sysconfig import get_path
 import platform
 import ssl
 import shutil
+import shlex
 
 def get_libc_version():
     import ctypes
@@ -250,7 +251,7 @@ def make_test(
     if int(FAIL_IMMEDIATELY):
         _options.append('FAIL_IMMEDIATELY=1')
     if TESTS:
-        _options.append("TESTS='{}'".format(TESTS))
+        _options.append("TESTS={}".format(shlex.quote(TESTS)))
 
     if INJECT_SELFTEST_PREFIX:
         _options.append("TEST_OPTIONS='--with-selftest-prefix={}'".format("${SELFTEST_PREFIX}"))
@@ -1426,7 +1427,7 @@ class builder(object):
         self.cmd = self.cmd.replace("${TESTS}", options.restrict_tests)
         self.cmd = self.cmd.replace("${TEST_SOURCE_DIR}", self.test_source_dir)
         self.cmd = self.cmd.replace("${SELFTEST_PREFIX}", self.selftest_prefix)
-        self.cmd = self.cmd.replace("${LOG_BASE}", options.log_base)
+        self.cmd = self.cmd.replace("${LOG_BASE}", shlex.quote(options.log_base))
         self.cmd = self.cmd.replace("${NAME}", self.name)
         self.cmd = self.cmd.replace("${ENABLE_COVERAGE}", options.enable_coverage)
         do_print('%s: [%s] Running %s in %r' % (self.name, self.stage, self.cmd, self.cwd))
