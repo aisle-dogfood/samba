@@ -201,12 +201,14 @@ struct cli_credentials *cli_session_creds_init(TALLOC_CTX *mem_ctx,
 						  password,
 						  strlen(password));
 			if (converted != sizeof(nt_hash.hash)) {
+				BURN_PTR_SIZE(&nt_hash, sizeof(nt_hash));
 				goto fail;
 			}
 
 			ok = cli_credentials_set_nt_hash(creds,
 							 &nt_hash,
 							 CRED_SPECIFIED);
+			BURN_PTR_SIZE(&nt_hash, sizeof(nt_hash));
 			if (!ok) {
 				goto fail;
 			}
