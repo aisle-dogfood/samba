@@ -73,6 +73,7 @@
 #include "passdb/machine_sid.h"
 #include "lib/util/tevent_ntstatus.h"
 #include "lib/util/string_wrappers.h"
+#include "lib/util/util_str_escape.h"
 #include "source3/lib/substitute.h"
 
 static int vfs_full_audit_debug_level = DBGC_VFS;
@@ -593,8 +594,10 @@ static void do_log(vfs_op_type op, bool success, vfs_handle_struct *handle,
 	struct vfs_full_audit_private_data *pd;
 	fstring err_msg;
 	char *audit_pre = NULL;
+	char *escaped_audit_pre = NULL;
 	va_list ap;
 	char *op_msg = NULL;
+	char *escaped_op_msg = NULL;
 
 	SMB_VFS_HANDLE_GET_DATA(handle, pd,
 				struct vfs_full_audit_private_data,
@@ -621,6 +624,13 @@ static void do_log(vfs_op_type op, bool success, vfs_handle_struct *handle,
 
 	audit_pre = audit_prefix(talloc_tos(), handle->conn);
 
+	/*
+	 * Escape audit_pre and op_msg to prevent log forging via
+	 * control characters (e.g., newlines, carriage returns).
+	 */
+	escaped_audit_pre = log_escape(talloc_tos(), audit_pre);
+	escaped_op_msg = log_escape(talloc_tos(), op_msg);
+
 	if (pd->do_syslog) {
 		int priority;
 
@@ -631,14 +641,18 @@ static void do_log(vfs_op_type op, bool success, vfs_handle_struct *handle,
 		priority = pd->syslog_priority | pd->syslog_facility;
 
 		syslog(priority, "%s|%s|%s|%s\n",
-		       audit_pre ? audit_pre : "",
-		       audit_opname(op), err_msg, op_msg);
+		       escaped_audit_pre ? escaped_audit_pre : "",
+		       audit_opname(op), err_msg,
+		       escaped_op_msg ? escaped_op_msg : "");
 	} else {
 		DEBUG(1, ("%s|%s|%s|%s\n",
-			  audit_pre ? audit_pre : "",
-			  audit_opname(op), err_msg, op_msg));
+			  escaped_audit_pre ? escaped_audit_pre : "",
+			  audit_opname(op), err_msg,
+			  escaped_op_msg ? escaped_op_msg : ""));
 	}
  out:
+	TALLOC_FREE(escaped_audit_pre);
+	TALLOC_FREE(escaped_op_msg);
 	TALLOC_FREE(audit_pre);
 	TALLOC_FREE(op_msg);
 	TALLOC_FREE(tmp_do_log_ctx);
