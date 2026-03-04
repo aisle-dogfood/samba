@@ -71,7 +71,7 @@ struct smbcli_request *smb_raw_tcon_send(struct smbcli_tree *tree,
 	case RAW_TCON_TCON:
 		SETUP_REQUEST_TREE(SMBtcon, 0, 0);
 		smbcli_req_append_ascii4(req, parms->tcon.in.service, STR_ASCII);
-		smbcli_req_append_ascii4(req, parms->tcon.in.password,STR_ASCII);
+		smbcli_req_append_ascii4_blob(req, &parms->tcon.in.password, STR_ASCII);
 		smbcli_req_append_ascii4(req, parms->tcon.in.dev,     STR_ASCII);
 		break;
 

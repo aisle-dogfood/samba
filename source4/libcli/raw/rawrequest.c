@@ -524,6 +524,20 @@ size_t smbcli_req_append_ascii4(struct smbcli_request *req, const char *str, uns
 	return size + 1;
 }
 
+/*
+  push an ASCII4 DATA_BLOB into the data portion of the request packet
+  
+  an ASCII4 buffer is a null terminated string that has a prefix
+  of the character 0x4. This function appends a DATA_BLOB containing
+  a password or other sensitive data in ASCII4 format.
+*/
+size_t smbcli_req_append_ascii4_blob(struct smbcli_request *req, const DATA_BLOB *blob, unsigned int flags)
+{
+	smbcli_req_append_bytes(req, (const uint8_t *)"\4", 1);
+	/* Append the blob data directly (should already include null terminator) */
+	smbcli_req_append_bytes(req, blob->data, blob->length);
+	return blob->length + 1;
+}
 
 /*
   push a blob into the data portion of the request packet, growing it if necessary

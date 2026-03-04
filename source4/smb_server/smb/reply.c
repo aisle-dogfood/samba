@@ -82,16 +82,21 @@ void smbsrv_reply_tcon(struct smbsrv_request *req)
 
 	p = req->in.data;	
 	p += req_pull_ascii4(&req->in.bufinfo, &con->tcon.in.service, p, STR_TERMINATE);
-	p += req_pull_ascii4(&req->in.bufinfo, &con->tcon.in.password, p, STR_TERMINATE);
+	p += req_pull_ascii4_blob(&req->in.bufinfo, &con->tcon.in.password, p, STR_TERMINATE);
 	p += req_pull_ascii4(&req->in.bufinfo, &con->tcon.in.dev, p, STR_TERMINATE);
 
-	if (!con->tcon.in.service || !con->tcon.in.password || !con->tcon.in.dev) {
+	if (!con->tcon.in.service || !con->tcon.in.password.data || !con->tcon.in.dev) {
+		data_blob_clear_free(&con->tcon.in.password);
 		smbsrv_send_error(req, NT_STATUS_INVALID_PARAMETER);
 		return;
 	}
 
 	/* Instantiate backend */
 	status = smbsrv_tcon_backend(req, con);
+	
+	/* Clear password from memory after use */
+	data_blob_clear_free(&con->tcon.in.password);
+	
 	if (!NT_STATUS_IS_OK(status)) {
 		smbsrv_send_error(req, status);
 		return;

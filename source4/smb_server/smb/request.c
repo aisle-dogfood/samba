@@ -632,6 +632,48 @@ size_t req_pull_ascii4(struct request_bufinfo *bufinfo, const char **dest, const
 }
 
 /**
+  pull an ASCII4 string buffer from a request packet, returning a DATA_BLOB
+
+  an ASCII4 buffer is a null terminated string that has a prefix
+  of the character 0x4. This function reads it into a DATA_BLOB
+  which can be securely cleared after use.
+
+  on failure an empty blob is returned
+*/
+size_t req_pull_ascii4_blob(struct request_bufinfo *bufinfo, DATA_BLOB *dest, const uint8_t *src, unsigned int flags)
+{
+	const char *str = NULL;
+	ssize_t ret;
+
+	if (PTR_DIFF(src, bufinfo->data) + 1 > bufinfo->data_size) {
+		/* treat as empty string */
+		*dest = data_blob_talloc(bufinfo->mem_ctx, NULL, 0);
+		return 0;
+	}
+
+	/* this consumes the 0x4 byte */
+	src++;
+
+	ret = req_pull_string(bufinfo, &str, src, -1, flags);
+	if (ret == -1 || str == NULL) {
+		*dest = data_blob_talloc(bufinfo->mem_ctx, NULL, 0);
+		return 1;
+	}
+
+	/* Convert the string to a DATA_BLOB (include null terminator) */
+	size_t str_len = strlen(str);
+	*dest = data_blob_talloc(bufinfo->mem_ctx, str, str_len + 1);
+	
+	/* Clear the temporary string from memory */
+	if (str_len > 0) {
+		memset(discard_const(str), 0, str_len);
+	}
+	talloc_free(discard_const(str));
+
+	return ret + 1;
+}
+
+/**
   pull a DATA_BLOB from a request packet, returning a talloced blob
 
   return false if any part is outside the data portion of the packet
