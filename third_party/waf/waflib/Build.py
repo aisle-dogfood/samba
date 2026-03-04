@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -262,6 +262,52 @@ class BuildContext(Context.Context):
 			pass
 		self.post_build()
 
+	def get_pickle_key(self):
+		"""
+		Get or create the HMAC key for pickle integrity verification.
+		The key is stored per build variant to prevent cross-variant attacks.
+		"""
+		key_file = os.path.join(self.cache_dir, '.waf_pickle_key')
+		try:
+			key = Utils.readf(key_file, 'rb')
+			if len(key) != 32:
+				raise ValueError('Invalid key length')
+		except (EnvironmentError, ValueError):
+			# Generate a new random key
+			key = os.urandom(32)
+			try:
+				Utils.writef(key_file, key, m='wb')
+				# Make key file readable only by owner (if on Unix)
+				if not Utils.is_win32:
+					os.chmod(key_file, 0o600)
+			except EnvironmentError:
+				pass
+		return key
+
+	def sign_pickle_data(self, data):
+		"""
+		Sign pickle data with HMAC to prevent tampering.
+		Returns: HMAC signature + data
+		"""
+		key = self.get_pickle_key()
+		signature = hmac.new(key, data, hashlib.sha256).digest()
+		return signature + data
+
+	def verify_pickle_data(self, signed_data):
+		"""
+		Verify and extract pickle data.
+		Returns: data if valid, None if invalid signature
+		"""
+		if len(signed_data) < 32:
+			return None
+		key = self.get_pickle_key()
+		signature = signed_data[:32]
+		data = signed_data[32:]
+		expected_signature = hmac.new(key, data, hashlib.sha256).digest()
+		if not hmac.compare_digest(signature, expected_signature):
+			return None
+		return data
+
 	def restore(self):
 		"""
 		Load data from a previous run, sets the attributes listed in :py:const:`waflib.Build.SAVED_ATTRS`
@@ -279,7 +325,7 @@ class BuildContext(Context.Context):
 
 		dbfn = os.path.join(self.variant_dir, Context.DBFILE)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			# handle missing file/empty file
 			Logs.debug('build: Could not load the build cache %s (missing)', dbfn)
@@ -288,12 +334,16 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature before unpickling
+					data = self.verify_pickle_data(signed_data)
+					if data is None:
+						Logs.debug('build: Build cache signature verification failed %s', dbfn)
+					else:
+						data = cPickle.loads(data)
+						for x in SAVED_ATTRS:
+							setattr(self, x, data.get(x, {}))
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
-				else:
-					for x in SAVED_ATTRS:
-						setattr(self, x, data.get(x, {}))
 			finally:
 				Node.pickle_lock.release()
 
@@ -316,7 +366,9 @@ class BuildContext(Context.Context):
 		finally:
 			Node.pickle_lock.release()
 
-		Utils.writef(db + '.tmp', x, m='wb')
+		# Sign the pickle data with HMAC before writing
+		signed_data = self.sign_pickle_data(x)
+		Utils.writef(db + '.tmp', signed_data, m='wb')
 
 		try:
 			st = os.stat(db)
