@@ -493,7 +493,9 @@ class ProvisionResult(object):
             "Once the above files are installed, your Samba AD server will "
             "be ready to use")
         if self.adminpass_generated:
-            logger.info("Admin password:        %s", self.adminpass)
+            # Write password directly to stderr to avoid logging sensitive data
+            import sys
+            sys.stderr.write("Admin password:        %s\n" % self.adminpass)
         logger.info("Server Role:           %s", self.server_role)
         logger.info("Hostname:              %s", self.names.hostname)
         logger.info("NetBIOS Domain:        %s", self.names.domain)
