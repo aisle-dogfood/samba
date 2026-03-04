@@ -647,7 +647,6 @@ static struct composite_context *dcerpc_schannel_key_send(TALLOC_CTX *mem_ctx,
 	}
 
 	if (require_strong_key) {
-		s->required_negotiate_flags |= NETLOGON_NEG_ARCFOUR;
 		s->required_negotiate_flags |= NETLOGON_NEG_STRONG_KEYS;
 	}
 
@@ -660,6 +659,15 @@ static struct composite_context *dcerpc_schannel_key_send(TALLOC_CTX *mem_ctx,
 		s->required_negotiate_flags |= NETLOGON_NEG_SUPPORTS_KERBEROS_AUTH;
 	}
 
+	/*
+	 * ARCFOUR/RC4 and DES encryption are no longer supported due to
+	 * inadequate encryption strength. Always require AES encryption
+	 * for secure communication.
+	 */
+	s->required_negotiate_flags |= NETLOGON_NEG_SUPPORTS_AES;
+	s->required_negotiate_flags &= ~NETLOGON_NEG_ARCFOUR;
+	s->required_negotiate_flags &= ~NETLOGON_NEG_STRONG_KEYS;
+
 	s->local_negotiate_flags |= s->required_negotiate_flags;
 
 	if (s->local_negotiate_flags & NETLOGON_NEG_SUPPORTS_KERBEROS_AUTH) {
@@ -669,11 +677,6 @@ static struct composite_context *dcerpc_schannel_key_send(TALLOC_CTX *mem_ctx,
 			return c;
 		}
 		s->pipe->conn->flags |= DCERPC_SEAL;
-	}
-
-	if (s->required_negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
-		s->required_negotiate_flags &= ~NETLOGON_NEG_ARCFOUR;
-		s->required_negotiate_flags &= ~NETLOGON_NEG_STRONG_KEYS;
 	}
 
 	if (s->required_negotiate_flags & NETLOGON_NEG_SUPPORTS_KERBEROS_AUTH) {
