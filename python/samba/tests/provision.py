@@ -184,12 +184,28 @@ class ProvisionResultTests(TestCase):
             ('INFO', 'DOMAIN SID:            S1-1-1')])
 
     def test_report_logger_adminpass(self):
+        import sys
+        from io import StringIO
+        
         result = self.base_result()
         result.adminpass_generated = True
         result.adminpass = "geheim"
-        entries = self.report_logger(result)
-        self.assertEqual(entries[1],
-                          ("INFO", 'Admin password:        geheim'))
+        
+        # Capture stderr to verify password is written there, not logged
+        old_stderr = sys.stderr
+        sys.stderr = StringIO()
+        try:
+            entries = self.report_logger(result)
+            stderr_output = sys.stderr.getvalue()
+        finally:
+            sys.stderr = old_stderr
+        
+        # Verify password is NOT in the logger entries (security fix)
+        for entry in entries:
+            self.assertNotIn("geheim", str(entry))
+        
+        # Verify password IS written to stderr for user visibility
+        self.assertIn("Admin password:        geheim", stderr_output)
 
 
 class DetermineNetbiosNameTests(TestCase):
