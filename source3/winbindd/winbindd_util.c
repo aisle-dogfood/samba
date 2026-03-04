@@ -1495,6 +1495,7 @@ bool init_domain_list(void)
 		if (!NT_STATUS_IS_OK(status)) {
 			DBG_ERR("Failed to add our own local AD "
 				"domain to winbindd's internal list\n");
+			BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 			return false;
 		}
 
@@ -1519,6 +1520,7 @@ bool init_domain_list(void)
 					  "local AD domain join password for "
 					  "winbindd's internal use into "
 					  "secrets.tdb\n"));
+				BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 				return false;
 			}
 			ok = get_trust_pw_hash(domain->name,
@@ -1530,6 +1532,7 @@ bool init_domain_list(void)
 					  "written local AD domain join "
 					  "password for winbindd's internal "
 					  "use in secrets.tdb\n"));
+				BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 				return false;
 			}
 		}
@@ -1538,6 +1541,8 @@ bool init_domain_list(void)
 		if (sec_chan_type == SEC_CHAN_RODC) {
 			domain->rodc = true;
 		}
+
+		BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 
 		status = pdb_filter_hints(domain,
 					  NULL,  /* p_local_tdo */

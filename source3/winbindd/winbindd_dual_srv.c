@@ -1555,12 +1555,18 @@ verify_return:
 		info2->trusted_dc_name = talloc_asprintf(info2, "\\\\%s",
 							 domain->dcname);
 		if (info2->trusted_dc_name == NULL) {
+			if (cur_nt_hash != NULL) {
+				BURN_PTR_SIZE(cur_nt_hash, sizeof(*cur_nt_hash));
+			}
 			TALLOC_FREE(frame);
 			return WERR_NOT_ENOUGH_MEMORY;
 		}
 	} else {
 		info2->trusted_dc_name = talloc_strdup(info2, "");
 		if (info2->trusted_dc_name == NULL) {
+			if (cur_nt_hash != NULL) {
+				BURN_PTR_SIZE(cur_nt_hash, sizeof(*cur_nt_hash));
+			}
 			TALLOC_FREE(frame);
 			return WERR_NOT_ENOUGH_MEMORY;
 		}
@@ -1581,6 +1587,9 @@ verify_return:
 	r->out.query->info2 = info2;
 
 	DEBUG(5, ("%s: succeeded.\n", __func__));
+	if (cur_nt_hash != NULL) {
+		BURN_PTR_SIZE(cur_nt_hash, sizeof(*cur_nt_hash));
+	}
 	TALLOC_FREE(frame);
 	return WERR_OK;
 }
@@ -1634,6 +1643,9 @@ reconnect:
 		 * Here we return a top level error!
 		 * This is different than TC_QUERY or TC_VERIFY.
 		 */
+		if (cur_nt_hash != NULL) {
+			BURN_PTR_SIZE(cur_nt_hash, sizeof(*cur_nt_hash));
+		}
 		return ntstatus_to_werror(status);
 	}
 	b = netlogon_pipe->binding_handle;
@@ -1642,6 +1654,7 @@ reconnect:
 		change_result = WERR_NO_TRUST_LSA_SECRET;
 		goto change_return;
 	}
+	BURN_PTR_SIZE(cur_nt_hash, sizeof(*cur_nt_hash));
 	TALLOC_FREE(cur_nt_hash);
 
 	status = trust_pw_change(netlogon_creds_ctx,
