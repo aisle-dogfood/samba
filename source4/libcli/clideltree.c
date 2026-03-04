@@ -92,6 +92,25 @@ int smbcli_deltree(struct smbcli_tree *tree, const char *dname)
 	char *mask;
 	struct delete_state dstate;
 	NTSTATUS status;
+	const char *p;
+
+	/* Validate input: reject if dname is NULL or empty */
+	if (dname == NULL || dname[0] == '\0') {
+		DEBUG(2,("deltree: invalid empty path\n"));
+		return -1;
+	}
+
+	/* Validate input: reject paths containing wildcards in the directory name itself.
+	   We intentionally append wildcards internally (e.g., "dir\\*"), but the caller-supplied
+	   directory name should not contain wildcards to prevent unintended broad deletions. */
+	p = dname;
+	while (*p) {
+		if (*p == '*' || *p == '?') {
+			DEBUG(2,("deltree: rejecting path with wildcard characters: %s\n", dname));
+			return -1;
+		}
+		p++;
+	}
 
 	dstate.tree = tree;
 	dstate.total_deleted = 0;
