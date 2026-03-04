@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,52 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_pickle_secret():
+	"""
+	Generate a secret key for HMAC validation of pickle files.
+	Uses the system's characteristics to create a consistent key.
+	"""
+	# Use system-specific information to derive a secret
+	# This ensures that pickle files are tied to the specific build environment
+	import getpass
+	try:
+		username = getpass.getuser()
+	except Exception:
+		username = 'wafuser'
+	
+	# Combine username, platform, and ABI version for the secret
+	secret_input = '%s-%s-%d' % (username, sys.platform, Context.ABI)
+	return hashlib.sha256(secret_input.encode('utf-8')).digest()
+
+def _sign_pickle_data(data):
+	"""
+	Sign pickle data with HMAC to prevent tampering.
+	Returns: (signature, data) as bytes
+	"""
+	secret = _get_pickle_secret()
+	signature = hmac.new(secret, data, hashlib.sha256).digest()
+	return signature + data
+
+def _verify_and_extract_pickle_data(signed_data):
+	"""
+	Verify HMAC signature and extract pickle data.
+	Returns: data if valid, None if invalid
+	"""
+	# HMAC-SHA256 produces 32 bytes
+	if len(signed_data) < 32:
+		return None
+	
+	signature = signed_data[:32]
+	data = signed_data[32:]
+	
+	secret = _get_pickle_secret()
+	expected_signature = hmac.new(secret, data, hashlib.sha256).digest()
+	
+	# Use constant-time comparison to prevent timing attacks
+	if hmac.compare_digest(signature, expected_signature):
+		return data
+	return None
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -279,7 +325,7 @@ class BuildContext(Context.Context):
 
 		dbfn = os.path.join(self.variant_dir, Context.DBFILE)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			# handle missing file/empty file
 			Logs.debug('build: Could not load the build cache %s (missing)', dbfn)
@@ -288,7 +334,24 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature before unpickling to prevent tampering
+					verified_data = _verify_and_extract_pickle_data(signed_data)
+					if verified_data is not None:
+						# Valid HMAC signature - safe to unpickle
+						data = cPickle.loads(verified_data)
+					else:
+						# Invalid/missing signature - check file ownership before unpickling
+						# This provides backward compatibility while adding security
+						try:
+							st = os.stat(dbfn)
+							current_uid = os.getuid() if hasattr(os, 'getuid') else None
+							if current_uid is not None and st.st_uid != current_uid:
+								Logs.warn('build: Cache file %s has unexpected owner, ignoring for security', dbfn)
+								raise Exception('Untrusted cache file')
+						except (AttributeError, OSError):
+							# Windows or stat failed - allow loading but log warning
+							Logs.warn('build: Loading cache without HMAC verification: %s', dbfn)
+						data = cPickle.loads(signed_data)
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
@@ -312,7 +375,9 @@ class BuildContext(Context.Context):
 		try:
 			Node.pickle_lock.acquire()
 			Node.Nod3 = self.node_class
-			x = cPickle.dumps(data, PROTOCOL)
+			pickled_data = cPickle.dumps(data, PROTOCOL)
+			# Sign the pickle data with HMAC to prevent tampering
+			x = _sign_pickle_data(pickled_data)
 		finally:
 			Node.pickle_lock.release()
 

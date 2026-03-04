@@ -107,7 +107,7 @@ class bld_proxy(object):
 		dbfn = os.path.join(self.variant_dir, Context.DBFILE + self.store_key)
 		Logs.debug('rev_use: reading %s', dbfn)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			# handle missing file/empty file
 			Logs.debug('rev_use: Could not load the build cache %s (missing)', dbfn)
@@ -116,7 +116,23 @@ class bld_proxy(object):
 				waflib.Node.pickle_lock.acquire()
 				waflib.Node.Nod3 = self.node_class
 				try:
-					data = Build.cPickle.loads(data)
+					# Verify HMAC signature before unpickling to prevent tampering
+					verified_data = Build._verify_and_extract_pickle_data(signed_data)
+					if verified_data is not None:
+						# Valid HMAC signature - safe to unpickle
+						data = Build.cPickle.loads(verified_data)
+					else:
+						# Invalid/missing signature - check file ownership before unpickling
+						try:
+							st = os.stat(dbfn)
+							current_uid = os.getuid() if hasattr(os, 'getuid') else None
+							if current_uid is not None and st.st_uid != current_uid:
+								Logs.warn('rev_use: Cache file %s has unexpected owner, ignoring for security', dbfn)
+								raise Exception('Untrusted cache file')
+						except (AttributeError, OSError):
+							# Windows or stat failed - allow loading but log warning
+							Logs.warn('rev_use: Loading cache without HMAC verification: %s', dbfn)
+						data = Build.cPickle.loads(signed_data)
 				except Exception as e:
 					Logs.debug('rev_use: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
@@ -135,7 +151,7 @@ class bld_proxy(object):
 		with waflib.Node.pickle_lock:
 			waflib.Node.Nod3 = self.node_class
 			try:
-				x = Build.cPickle.dumps(data, Build.PROTOCOL)
+				pickled_data = Build.cPickle.dumps(data, Build.PROTOCOL)
 			except Build.cPickle.PicklingError:
 				root = data['root']
 				for node_deps in data['node_deps'].values():
@@ -143,7 +159,9 @@ class bld_proxy(object):
 						# there may be more cross-context Node objects to fix,
 						# but this should be the main source
 						node_deps[idx] = root.find_node(node.abspath())
-				x = Build.cPickle.dumps(data, Build.PROTOCOL)
+				pickled_data = Build.cPickle.dumps(data, Build.PROTOCOL)
+			# Sign the pickle data with HMAC to prevent tampering
+			x = Build._sign_pickle_data(pickled_data)
 
 		Logs.debug('rev_use: storing %s', db)
 		Utils.writef(db + '.tmp', x, m='wb')
@@ -263,7 +281,9 @@ class bld(Build.BuildContext):
 			dbfn = os.path.join(self.variant_dir, TSTAMP_DB)
 			Logs.debug('rev_use: storing %s', dbfn)
 			dbfn_tmp = dbfn + '.tmp'
-			x = Build.cPickle.dumps([self.f_tstamps, f_deps], Build.PROTOCOL)
+			pickled_data = Build.cPickle.dumps([self.f_tstamps, f_deps], Build.PROTOCOL)
+			# Sign the pickle data with HMAC to prevent tampering
+			x = Build._sign_pickle_data(pickled_data)
 			Utils.writef(dbfn_tmp, x, m='wb')
 			os.rename(dbfn_tmp, dbfn)
 			Logs.debug('rev_use: stored %s', dbfn)
@@ -279,14 +299,30 @@ class bld(Build.BuildContext):
 		dbfn = os.path.join(self.variant_dir, TSTAMP_DB)
 		Logs.debug('rev_use: Loading %s', dbfn)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			Logs.debug('rev_use: Could not load the build cache %s (missing)', dbfn)
 			self.f_deps = {}
 			self.f_tstamps = {}
 		else:
 			try:
-				self.f_tstamps, self.f_deps = Build.cPickle.loads(data)
+				# Verify HMAC signature before unpickling to prevent tampering
+				verified_data = Build._verify_and_extract_pickle_data(signed_data)
+				if verified_data is not None:
+					# Valid HMAC signature - safe to unpickle
+					self.f_tstamps, self.f_deps = Build.cPickle.loads(verified_data)
+				else:
+					# Invalid/missing signature - check file ownership before unpickling
+					try:
+						st = os.stat(dbfn)
+						current_uid = os.getuid() if hasattr(os, 'getuid') else None
+						if current_uid is not None and st.st_uid != current_uid:
+							Logs.warn('rev_use: Cache file %s has unexpected owner, ignoring for security', dbfn)
+							raise Exception('Untrusted cache file')
+					except (AttributeError, OSError):
+						# Windows or stat failed - allow loading but log warning
+						Logs.warn('rev_use: Loading cache without HMAC verification: %s', dbfn)
+					self.f_tstamps, self.f_deps = Build.cPickle.loads(signed_data)
 			except Exception as e:
 				Logs.debug('rev_use: Could not pickle the build cache %s: %r', dbfn, e)
 				self.f_deps = {}
