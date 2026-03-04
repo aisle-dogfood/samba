@@ -6,8 +6,8 @@
 FROM quay.io/fedora/fedora:42
 
 # pass in with --build-arg while build
-ARG SHA1SUM
-RUN [ -n $SHA1SUM ] && echo $SHA1SUM > /sha1sum.txt
+ARG SHA256SUM
+RUN [ -n $SHA256SUM ] && echo $SHA256SUM > /sha256sum.txt
 
 ADD *.sh /tmp/
 # need root permission, do it before USER samba
