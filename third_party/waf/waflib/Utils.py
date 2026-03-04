@@ -9,7 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 try:
 	import cPickle
@@ -890,6 +890,38 @@ process_pool = []
 List of processes started to execute sub-process commands
 """
 
+def _make_json_serializable(obj):
+	"""
+	Convert an object to be JSON-serializable by encoding bytes as base64 strings.
+	Recursively handles lists and dictionaries.
+	"""
+	if isinstance(obj, bytes):
+		return {'__bytes__': base64.b64encode(obj).decode('ascii')}
+	elif isinstance(obj, list):
+		return [_make_json_serializable(item) for item in obj]
+	elif isinstance(obj, dict):
+		return {key: _make_json_serializable(value) for key, value in obj.items()}
+	elif obj is None or isinstance(obj, (str, int, float, bool)):
+		return obj
+	else:
+		# For other types, try to convert to string representation
+		return str(obj)
+
+def _restore_from_json(obj):
+	"""
+	Restore objects from JSON-serializable format, decoding base64 strings back to bytes.
+	Recursively handles lists and dictionaries.
+	"""
+	if isinstance(obj, dict):
+		if '__bytes__' in obj:
+			return base64.b64decode(obj['__bytes__'].encode('ascii'))
+		else:
+			return {key: _restore_from_json(value) for key, value in obj.items()}
+	elif isinstance(obj, list):
+		return [_restore_from_json(item) for item in obj]
+	else:
+		return obj
+
 def get_process():
 	"""
 	Returns a process object that can execute commands as sub-processes
@@ -915,8 +947,11 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		# Use JSON instead of pickle for secure serialization
+		serializable_data = _make_json_serializable([cmd, kwargs, cargs])
+		json_str = json.dumps(serializable_data)
+		obj = json_str.encode('utf-8')
+	except (TypeError, AttributeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,7 +971,10 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
+	# Use JSON instead of pickle for secure deserialization
+	json_str = obj.decode('utf-8')
+	serialized_lst = json.loads(json_str)
+	lst = _restore_from_json(serialized_lst)
 	# Jython wrapper failures (bash/execvp)
 	assert len(lst) == 5
 	ret, out, err, ex, trace = lst
