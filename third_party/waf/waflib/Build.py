@@ -9,12 +9,41 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, io
 try:
 	import cPickle
 except ImportError:
 	import pickle as cPickle
 from waflib import Node, Runner, TaskGen, Utils, ConfigSet, Task, Logs, Options, Context, Errors
+
+# Restricted unpickler to prevent arbitrary code execution
+class RestrictedUnpickler(cPickle.Unpickler):
+	"""
+	Restricted unpickler that only allows safe built-in types and waflib Node class.
+	This prevents pickle deserialization attacks by rejecting arbitrary classes.
+	"""
+	def find_class(self, module, name):
+		# Only allow specific safe classes
+		if module == "builtins" or module == "__builtin__":
+			# Allow safe built-in types only
+			if name in ('dict', 'list', 'tuple', 'set', 'frozenset', 'int', 'float', 'str', 'bytes', 'bool', 'NoneType'):
+				# Python 2/3 compatibility for getting builtins
+				try:
+					import builtins
+					return getattr(builtins, name)
+				except ImportError:
+					import __builtin__
+					return getattr(__builtin__, name)
+		elif module == "waflib.Node":
+			# Allow Node classes which are needed for build cache
+			if name in ('Node', 'Nod3'):
+				return getattr(Node, name)
+		# Reject everything else to prevent arbitrary code execution
+		raise cPickle.UnpicklingError("global '%s.%s' is forbidden" % (module, name))
+
+def restricted_loads(data):
+	"""Safely load pickled data using RestrictedUnpickler"""
+	return RestrictedUnpickler(io.BytesIO(data)).load()
 
 CACHE_DIR = 'c4che'
 """Name of the cache directory"""
@@ -288,7 +317,7 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					data = restricted_loads(data)
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
