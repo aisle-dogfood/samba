@@ -9,12 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
-
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 # leave this
 if os.name == 'posix' and sys.version_info[0] < 3:
@@ -890,6 +885,42 @@ process_pool = []
 List of processes started to execute sub-process commands
 """
 
+def json_decode(data):
+	"""Decode JSON data with support for bytes and subprocess constants"""
+	def decode_obj(obj):
+		if isinstance(obj, dict):
+			if '__bytes__' in obj:
+				return base64.b64decode(obj['__bytes__'].encode('utf-8'))
+			elif '__subprocess_const__' in obj:
+				const_name = obj['__subprocess_const__']
+				return getattr(subprocess, const_name)
+			return {k: decode_obj(v) for k, v in obj.items()}
+		elif isinstance(obj, list):
+			return [decode_obj(item) for item in obj]
+		return obj
+	return decode_obj(json.loads(data))
+
+def json_encode(data):
+	"""Encode data to JSON with support for bytes and subprocess constants"""
+	def encode_obj(obj):
+		if isinstance(obj, bytes):
+			return {'__bytes__': base64.b64encode(obj).decode('utf-8')}
+		elif isinstance(obj, int) and hasattr(subprocess, 'PIPE') and obj in (subprocess.PIPE, subprocess.STDOUT):
+			if obj == subprocess.PIPE:
+				return {'__subprocess_const__': 'PIPE'}
+			elif obj == subprocess.STDOUT:
+				return {'__subprocess_const__': 'STDOUT'}
+		elif hasattr(subprocess, 'DEVNULL') and isinstance(obj, int) and obj == subprocess.DEVNULL:
+			return {'__subprocess_const__': 'DEVNULL'}
+		elif isinstance(obj, dict):
+			return {k: encode_obj(v) for k, v in obj.items()}
+		elif isinstance(obj, list):
+			return [encode_obj(item) for item in obj]
+		elif isinstance(obj, tuple):
+			return [encode_obj(item) for item in obj]
+		return obj
+	return json.dumps(encode_obj(data))
+
 def get_process():
 	"""
 	Returns a process object that can execute commands as sub-processes
@@ -915,8 +946,8 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		obj = base64.b64encode(json_encode([cmd, kwargs, cargs]).encode('utf-8'))
+	except (TypeError, AttributeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,7 +967,7 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
+	lst = json_decode(base64.b64decode(obj).decode('utf-8'))
 	# Jython wrapper failures (bash/execvp)
 	assert len(lst) == 5
 	ret, out, err, ex, trace = lst
