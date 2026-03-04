@@ -144,13 +144,14 @@ static bool parse_wbinfo_domain_user(const char *domuser, fstring domain,
 static bool parse_mapping_arg(char *arg, int *id, char **sid)
 {
 	char *tmp;
+	char *saveptr = NULL;
 	int error = 0;
 
 	if (!arg || !*arg)
 		return false;
 
-	tmp = strtok(arg, ",");
-	*sid = strtok(NULL, ",");
+	tmp = strtok_r(arg, ",", &saveptr);
+	*sid = strtok_r(NULL, ",", &saveptr);
 
 	if (!tmp || !*tmp || !*sid || !**sid)
 		return false;
