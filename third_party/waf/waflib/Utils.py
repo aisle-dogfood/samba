@@ -9,7 +9,7 @@ The portability fixes try to provide a consistent behavior of the Waf API
 through Python versions 2.5 to 3.X and across different platforms (win32, linux, etc)
 """
 
-import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex
+import atexit, os, sys, errno, inspect, re, datetime, platform, base64, signal, functools, time, shlex, json
 
 try:
 	import cPickle
@@ -903,6 +903,16 @@ def get_process():
 		cmd = [sys.executable, '-c', readf(filepath)]
 		return subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 
+def decode_from_json(obj):
+	"""Decode bytes from JSON-serialized format"""
+	if isinstance(obj, dict) and '__bytes__' in obj:
+		return base64.b64decode(obj['__bytes__'].encode('ascii'))
+	elif isinstance(obj, list):
+		return [decode_from_json(item) for item in obj]
+	elif isinstance(obj, dict):
+		return {k: decode_from_json(v) for k, v in obj.items()}
+	return obj
+
 def run_prefork_process(cmd, kwargs, cargs):
 	"""
 	Delegates process execution to a pre-forked process instance.
@@ -915,8 +925,8 @@ def run_prefork_process(cmd, kwargs, cargs):
 		kwargs['stdin'] = subprocess.DEVNULL
 
 	try:
-		obj = base64.b64encode(cPickle.dumps([cmd, kwargs, cargs]))
-	except (TypeError, AttributeError):
+		obj = base64.b64encode(json.dumps([cmd, kwargs, cargs]).encode('utf-8'))
+	except (TypeError, AttributeError, ValueError):
 		return run_regular_process(cmd, kwargs, cargs)
 
 	proc = get_process()
@@ -936,7 +946,8 @@ def run_prefork_process(cmd, kwargs, cargs):
 		raise OSError('Preforked sub-process:%r is not responding, status: %r' % (proc.pid, proc.returncode))
 
 	process_pool.append(proc)
-	lst = cPickle.loads(base64.b64decode(obj))
+	lst = json.loads(base64.b64decode(obj).decode('utf-8'))
+	lst = decode_from_json(lst)
 	# Jython wrapper failures (bash/execvp)
 	assert len(lst) == 5
 	ret, out, err, ex, trace = lst
