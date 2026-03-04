@@ -8,6 +8,7 @@ from subprocess import call, check_call, Popen, PIPE
 import os
 import tempfile
 import sys
+import shlex
 from optparse import OptionParser
 
 parser = OptionParser()
@@ -36,12 +37,17 @@ parser.add_option("", "--clean", help="run make clean before each build",
 def run_cmd(cmd, dir=".", show=True, output=False, checkfail=True):
     if show:
         print("Running: '%s' in '%s'" % (cmd, dir))
-    if output:
-        return Popen([cmd], shell=True, stdout=PIPE, cwd=dir).communicate()[0]
-    elif checkfail:
-        return check_call(cmd, shell=True, cwd=dir)
+    # Convert string command to list for safe execution
+    if isinstance(cmd, str):
+        cmd_list = shlex.split(cmd)
     else:
-        return call(cmd, shell=True, cwd=dir)
+        cmd_list = cmd
+    if output:
+        return Popen(cmd_list, shell=False, stdout=PIPE, cwd=dir).communicate()[0]
+    elif checkfail:
+        return check_call(cmd_list, shell=False, cwd=dir)
+    else:
+        return call(cmd_list, shell=False, cwd=dir)
 
 
 def find_git_root():
@@ -60,7 +66,7 @@ gitroot = find_git_root()
 # create a bisect script
 f = tempfile.NamedTemporaryFile(delete=False, mode="w+t")
 f.write("set -x\n")
-f.write("cd %s || exit 125\n" % cwd)
+f.write("cd %s || exit 125\n" % shlex.quote(cwd))
 if opts.autogen:
     f.write("%s || exit 125\n" % opts.autogen_command)
 if opts.configure:
@@ -87,8 +93,8 @@ def cleanup():
 ret = -1
 try:
     run_cmd("git bisect reset", dir=gitroot, show=False, checkfail=False)
-    run_cmd("git bisect start %s %s --" % (opts.bad, opts.good), dir=gitroot)
-    ret = run_cmd("git bisect run bash %s" % f.name, dir=gitroot, show=True, checkfail=False)
+    run_cmd(["git", "bisect", "start", opts.bad, opts.good, "--"], dir=gitroot)
+    ret = run_cmd(["git", "bisect", "run", "bash", f.name], dir=gitroot, show=True, checkfail=False)
 except KeyboardInterrupt:
     print("Cleaning up")
     cleanup()
