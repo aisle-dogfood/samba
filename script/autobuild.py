@@ -20,6 +20,7 @@ from sysconfig import get_path
 import platform
 import ssl
 import shutil
+import shlex
 
 def get_libc_version():
     import ctypes
@@ -1323,6 +1324,29 @@ def run_cmd(cmd, dir=".", show=None, output=False, checkfail=True):
     else:
         return call(cmd, shell=True, cwd=dir)
 
+
+def run_cmd_safe(cmd, dir=".", show=None):
+    """Run a command safely without shell=True to prevent command injection.
+    
+    This function should be used when running user-provided commands.
+    It uses shlex.split() to safely parse the command string and executes
+    it without invoking a shell, preventing shell injection attacks.
+    
+    Args:
+        cmd: Command string to execute
+        dir: Working directory for the command
+        show: If True, print the command being run
+    """
+    if show is None:
+        do_debug("Running: '%s' in '%s'" % (cmd, dir))
+    elif show:
+        do_print("Running: '%s' in '%s'" % (cmd, dir))
+    
+    # Use shlex.split to safely parse the command without shell interpretation
+    cmd_args = shlex.split(cmd)
+    return check_call(cmd_args, cwd=dir)
+
+
 def rmdir_force(dirname, re_raise=True):
     try:
         run_cmd("test -d %s && chmod -R +w %s; rm -rf %s" % (
@@ -1928,7 +1952,7 @@ elapsed_time = time.time() - start_time
 if status == 0:
     if options.passcmd is not None:
         do_print("Running passcmd: %s" % options.passcmd)
-        run_cmd(options.passcmd, dir=test_master)
+        run_cmd_safe(options.passcmd, dir=test_master)
     if options.pushto is not None:
         push_to(options.pushto, push_branch=options.branch)
     if options.keeplogs or options.attach_logs:
