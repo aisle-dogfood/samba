@@ -50,16 +50,16 @@ def h_file(self):
 			mtime = st.st_mtime
 			size = st.st_size
 	else:
-		if len(ret) == 16:
+		if len(ret) == 32:
 			# for build directory files
 			return ret
 
 		if HASH_CACHE:
 			# check if timestamp and mtime match to avoid re-hashing
 			st = os.stat(self.abspath())
-			mtime, size = ret[16:].split(SEP)
+			mtime, size = ret[32:].split(SEP)
 			if int(1000 * st.st_mtime) == int(mtime) and st.st_size == int(size):
-				return ret[:16]
+				return ret[:32]
 
 	ret = Utils.h_file(self.abspath())
 	if HASH_CACHE:

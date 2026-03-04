@@ -44,19 +44,10 @@ except ImportError:
 from waflib import Errors
 
 try:
-	from hashlib import md5
+	from hashlib import sha256 as md5
 except ImportError:
-	try:
-		from hashlib import sha1 as md5
-	except ImportError:
-		# never fail to enable potential fixes from another module
-		pass
-else:
-	try:
-		md5().digest()
-	except ValueError:
-		# Fips? #2213
-		from hashlib import sha1 as md5
+	# never fail to enable potential fixes from another module
+	pass
 
 try:
 	import threading
@@ -79,7 +70,7 @@ except ImportError:
 			pass
 	threading.Lock = threading.Thread = Lock
 
-SIG_NIL = 'SIG_NIL_SIG_NIL_'.encode()
+SIG_NIL = 'SIG_NIL_SIG_NIL_SIG_NIL_SIG_NIL_'.encode()
 """Arbitrary null value for hashes. Modify this value according to the hash function in use"""
 
 O644 = 420
@@ -270,7 +261,7 @@ def writef(fname, data, m='w', encoding='latin-1'):
 
 def h_file(fname):
 	"""
-	Computes a hash value for a file by using md5. Use the md5_tstamp
+	Computes a hash value for a file by using SHA256. Use the md5_tstamp
 	extension to get faster build hashes if necessary.
 
 	:type fname: string
