@@ -2,7 +2,7 @@
 # encoding: utf-8
 # Thomas Nagy, 2016-2018 (ita)
 
-import os, sys, traceback, base64, signal
+import os, sys, traceback, base64, signal, json
 try:
 	import cPickle
 except ImportError:
@@ -19,12 +19,22 @@ except AttributeError:
 	class TimeoutExpired(Exception):
 		pass
 
+def encode_for_json(obj):
+	"""Convert bytes to base64 string for JSON serialization"""
+	if isinstance(obj, bytes):
+		return {'__bytes__': base64.b64encode(obj).decode('ascii')}
+	elif isinstance(obj, list):
+		return [encode_for_json(item) for item in obj]
+	elif isinstance(obj, dict):
+		return {k: encode_for_json(v) for k, v in obj.items()}
+	return obj
+
 def run():
 	txt = sys.stdin.readline().strip()
 	if not txt:
 		# parent process probably ended
 		sys.exit(18)
-	[cmd, kwargs, cargs] = cPickle.loads(base64.b64decode(txt))
+	[cmd, kwargs, cargs] = json.loads(base64.b64decode(txt).decode('utf-8'))
 	cargs = cargs or {}
 
 	if not 'close_fds' in kwargs:
@@ -55,7 +65,8 @@ def run():
 
 	# it is just text so maybe we do not need to pickle()
 	tmp = [ret, out, err, ex, trace]
-	obj = base64.b64encode(cPickle.dumps(tmp))
+	tmp = encode_for_json(tmp)
+	obj = base64.b64encode(json.dumps(tmp).encode('utf-8'))
 	sys.stdout.write(obj.decode())
 	sys.stdout.write('\n')
 	sys.stdout.flush()
