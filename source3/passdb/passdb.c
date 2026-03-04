@@ -990,7 +990,7 @@ static bool init_samu_from_buffer_v0(struct samu *sampass, uint8_t *buf, uint32_
 	uint8_t	*hours = NULL;
 	uint8_t	*lm_pw_ptr = NULL, *nt_pw_ptr = NULL;
 	uint32_t		len = 0;
-	uint32_t		lm_pw_len, nt_pw_len, hourslen;
+	uint32_t		lm_pw_len = 0, nt_pw_len = 0, hourslen;
 	bool ret = True;
 
 	if(sampass == NULL || buf == NULL) {
@@ -1129,8 +1129,8 @@ done:
 	SAFE_FREE(workstations);
 	SAFE_FREE(munged_dial);
 	SAFE_FREE(unknown_str);
-	SAFE_FREE(lm_pw_ptr);
-	SAFE_FREE(nt_pw_ptr);
+	BURN_FREE(lm_pw_ptr, lm_pw_len);
+	BURN_FREE(nt_pw_ptr, nt_pw_len);
 	SAFE_FREE(hours);
 
 	return ret;
@@ -1175,7 +1175,7 @@ static bool init_samu_from_buffer_v1(struct samu *sampass, uint8_t *buf, uint32_
 	uint8_t	*hours = NULL;
 	uint8_t	*lm_pw_ptr = NULL, *nt_pw_ptr = NULL;
 	uint32_t		len = 0;
-	uint32_t		lm_pw_len, nt_pw_len, hourslen;
+	uint32_t		lm_pw_len = 0, nt_pw_len = 0, hourslen;
 	bool ret = True;
 
 	if(sampass == NULL || buf == NULL) {
@@ -1320,8 +1320,8 @@ done:
 	SAFE_FREE(workstations);
 	SAFE_FREE(munged_dial);
 	SAFE_FREE(unknown_str);
-	SAFE_FREE(lm_pw_ptr);
-	SAFE_FREE(nt_pw_ptr);
+	BURN_FREE(lm_pw_ptr, lm_pw_len);
+	BURN_FREE(nt_pw_ptr, nt_pw_len);
 	SAFE_FREE(hours);
 
 	return ret;
@@ -1363,7 +1363,7 @@ static bool init_samu_from_buffer_v2(struct samu *sampass, uint8_t *buf, uint32_
 	uint8_t	*hours = NULL;
 	uint8_t	*lm_pw_ptr = NULL, *nt_pw_ptr = NULL, *nt_pw_hist_ptr = NULL;
 	uint32_t		len = 0;
-	uint32_t		lm_pw_len, nt_pw_len, nt_pw_hist_len, hourslen;
+	uint32_t		lm_pw_len = 0, nt_pw_len = 0, nt_pw_hist_len = 0, hourslen;
 	uint32_t pwHistLen = 0;
 	bool ret = True;
 	fstring tmp_string;
@@ -1550,9 +1550,9 @@ done:
 	SAFE_FREE(workstations);
 	SAFE_FREE(munged_dial);
 	SAFE_FREE(unknown_str);
-	SAFE_FREE(lm_pw_ptr);
-	SAFE_FREE(nt_pw_ptr);
-	SAFE_FREE(nt_pw_hist_ptr);
+	BURN_FREE(lm_pw_ptr, lm_pw_len);
+	BURN_FREE(nt_pw_ptr, nt_pw_len);
+	BURN_FREE(nt_pw_hist_ptr, nt_pw_hist_len);
 	SAFE_FREE(hours);
 
 	return ret;
@@ -1597,7 +1597,7 @@ static bool init_samu_from_buffer_v3(struct samu *sampass, uint8_t *buf, uint32_
 	uint8_t	*hours = NULL;
 	uint8_t	*lm_pw_ptr = NULL, *nt_pw_ptr = NULL, *nt_pw_hist_ptr = NULL;
 	uint32_t		len = 0;
-	uint32_t		lm_pw_len, nt_pw_len, nt_pw_hist_len, hourslen;
+	uint32_t		lm_pw_len = 0, nt_pw_len = 0, nt_pw_hist_len = 0, hourslen;
 	uint32_t pwHistLen = 0;
 	bool ret = True;
 	fstring tmp_string;
@@ -1784,9 +1784,9 @@ done:
 	SAFE_FREE(workstations);
 	SAFE_FREE(munged_dial);
 	SAFE_FREE(comment);
-	SAFE_FREE(lm_pw_ptr);
-	SAFE_FREE(nt_pw_ptr);
-	SAFE_FREE(nt_pw_hist_ptr);
+	BURN_FREE(lm_pw_ptr, lm_pw_len);
+	BURN_FREE(nt_pw_ptr, nt_pw_len);
+	BURN_FREE(nt_pw_hist_ptr, nt_pw_hist_len);
 	SAFE_FREE(hours);
 
 	return ret;
@@ -2734,8 +2734,8 @@ NTSTATUS pdb_get_trust_credentials(const char *netbios_domain,
 	status = NT_STATUS_OK;
  fail:
 	TALLOC_FREE(creds);
-	SAFE_FREE(cur_pw);
-	SAFE_FREE(prev_pw);
+	BURN_FREE_STR(cur_pw);
+	BURN_FREE_STR(prev_pw);
 	TALLOC_FREE(frame);
 	return status;
 }

@@ -606,8 +606,8 @@ static int process_nonroot(int local_flags)
 	printf("Password changed for user %s\n", username);
 
  done:
-	SAFE_FREE(old_pw);
-	SAFE_FREE(new_pw);
+	BURN_FREE_STR(old_pw);
+	BURN_FREE_STR(new_pw);
 
 	return result;
 }
