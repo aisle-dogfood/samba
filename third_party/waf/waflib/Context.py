@@ -277,8 +277,11 @@ class Context(ctx):
 				cache[node] = True
 				self.pre_recurse(node)
 				try:
+					# Security: Validate the script path before execution
+					script_path = node.abspath()
+					validate_script_path(script_path)
 					function_code = node.read('r', encoding)
-					exec(compile(function_code, node.abspath(), 'exec'), self.exec_dict)
+					exec(compile(function_code, script_path, 'exec'), self.exec_dict)
 				finally:
 					self.post_recurse(node)
 			elif not node:
@@ -663,6 +666,47 @@ Dictionary holding already loaded modules (wscript), indexed by their absolute p
 The modules are added automatically by :py:func:`waflib.Context.load_module`
 """
 
+def validate_script_path(path):
+	"""
+	Validates that a wscript path is safe to execute, preventing code injection attacks.
+	
+	:param path: file path to validate
+	:type path: string
+	:raises: Errors.WafError if path is unsafe
+	"""
+	try:
+		# Prevent null bytes in path which could bypass security checks
+		if '\x00' in path:
+			raise Errors.WafError('Path contains null bytes: %r' % path)
+		
+		# Resolve to canonical absolute path (follows symlinks)
+		real_path = os.path.realpath(path)
+		
+		# Ensure the file exists and is a regular file (not a device, socket, etc.)
+		if not os.path.isfile(real_path):
+			raise Errors.WafError('Path is not a regular file: %r' % path)
+		
+		# Prevent loading scripts from suspicious system directories
+		# This helps prevent exploitation if an attacker can control the path
+		dangerous_prefixes = ['/dev/', '/proc/', '/sys/']
+		if Utils.is_win32:
+			# On Windows, also block device paths
+			dangerous_prefixes.extend(['\\\\.\\', '//./'])
+		
+		for prefix in dangerous_prefixes:
+			if real_path.startswith(prefix):
+				raise Errors.WafError('Refusing to load script from system directory: %r' % path)
+		
+		# Check file size to prevent loading excessively large files (potential DoS)
+		# Wscript files should typically be < 1MB
+		max_size = 1024 * 1024  # 1 MB
+		file_size = os.path.getsize(real_path)
+		if file_size > max_size:
+			raise Errors.WafError('Script file too large (%d bytes): %r' % (file_size, path))
+			
+	except OSError as e:
+		raise Errors.WafError('Could not validate path %r: %s' % (path, e))
+
 def load_module(path, encoding=None):
 	"""
 	Loads a wscript file as a python module. This method caches results in :py:attr:`waflib.Context.cache_modules`
@@ -676,6 +720,9 @@ def load_module(path, encoding=None):
 		return cache_modules[path]
 	except KeyError:
 		pass
+
+	# Security: Validate the path to prevent code injection via path traversal
+	validate_script_path(path)
 
 	module = imp.new_module(WSCRIPT_FILE)
 	try:
