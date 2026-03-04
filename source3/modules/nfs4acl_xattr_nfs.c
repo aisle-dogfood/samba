@@ -671,6 +671,7 @@ static bool map_ace_nfs4_to_smb4(struct nfs4acl_config *config,
 {
 	char *name = NULL;
 	char *p = NULL;
+	char *saveptr = NULL;
 	uint32_t smb4_id;
 	bool ok;
 
@@ -696,7 +697,7 @@ static bool map_ace_nfs4_to_smb4(struct nfs4acl_config *config,
 		return true;
 	}
 
-	p = strtok(name, "@");
+	p = strtok_r(name, "@", &saveptr);
 	if (p == NULL && !config->nfs4_id_numeric) {
 		DBG_ERR("Unqualified name [%s]\n", name);
 		TALLOC_FREE(name);
