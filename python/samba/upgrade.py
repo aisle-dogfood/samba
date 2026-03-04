@@ -837,7 +837,7 @@ Please fix this account before attempting to upgrade again
         if userdata[admin_user].pw_history:
             admin_userdata.pw_history = userdata[admin_user].pw_history
         s4_passdb.update_sam_account(admin_userdata)
-        logger.info("Administrator password has been set to password of user '%s'", admin_user)
+        logger.info("Administrator password has been set successfully")
 
     if result.server_role == "active directory domain controller":
         setsysvolacl(result.samdb, result.paths.sysvol,
