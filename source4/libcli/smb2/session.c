@@ -128,6 +128,15 @@ struct smb2_session_setup_spnego_state {
 	struct iovec *recv_iov;
 };
 
+static int smb2_session_setup_spnego_state_destructor(
+		struct smb2_session_setup_spnego_state *state)
+{
+	/* Clear sensitive authentication blobs before freeing */
+	data_blob_clear_free(&state->in_secblob);
+	data_blob_clear_free(&state->out_secblob);
+	return 0;
+}
+
 static void smb2_session_setup_spnego_gensec_next(struct tevent_req *req);
 static void smb2_session_setup_spnego_gensec_done(struct tevent_req *subreq);
 static void smb2_session_setup_spnego_smb2_next(struct tevent_req *req);
@@ -159,6 +168,7 @@ struct tevent_req *smb2_session_setup_spnego_send(
 	if (req == NULL) {
 		return NULL;
 	}
+	talloc_set_destructor(state, smb2_session_setup_spnego_state_destructor);
 	state->ev = ev;
 	state->session = session;
 	state->credentials = credentials;

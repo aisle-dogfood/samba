@@ -53,6 +53,12 @@ static int sesssetup_state_destructor(struct sesssetup_state *state)
 		state->req = NULL;
 	}
 
+	/* Clear sensitive password data before freeing */
+	data_blob_clear_free(&state->setup.nt1.in.password1);
+	data_blob_clear_free(&state->setup.nt1.in.password2);
+	data_blob_clear_free(&state->setup.old.in.password);
+	data_blob_clear_free(&state->setup.spnego.in.secblob);
+
 	return 0;
 }
 
@@ -255,7 +261,7 @@ static void request_handler(struct smbcli_request *req)
 
 			c->status = smb1cli_session_set_session_key(session->smbXcli,
 								    session_key);
-			data_blob_free(&session_key);
+			data_blob_clear_free(&session_key);
 			if (!NT_STATUS_IS_OK(c->status)) {
 				composite_error(c, c->status);
 				return;
@@ -409,7 +415,7 @@ static NTSTATUS session_setup_nt1(struct composite_context *c,
 
 	nt_status = smb1cli_session_set_session_key(session->smbXcli,
 						    session_key);
-	data_blob_free(&session_key);
+	data_blob_clear_free(&session_key);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		return nt_status;
 	}
@@ -473,7 +479,7 @@ static NTSTATUS session_setup_old(struct composite_context *c,
 
 		nt_status = smb1cli_session_set_session_key(session->smbXcli,
 							    session_key);
-		data_blob_free(&session_key);
+		data_blob_clear_free(&session_key);
 		if (!NT_STATUS_IS_OK(nt_status)) {
 			return nt_status;
 		}
@@ -804,7 +810,7 @@ static void smb_composite_sesssetup_spnego_done2(struct tevent_req *subreq)
 
 		c->status = smb1cli_session_set_session_key(session->smbXcli,
 							    session_key);
-		data_blob_free(&session_key);
+		data_blob_clear_free(&session_key);
 		if (!NT_STATUS_IS_OK(c->status)) {
 			composite_error(c, c->status);
 			return;
