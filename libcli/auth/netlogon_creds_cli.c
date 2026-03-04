@@ -537,27 +537,23 @@ NTSTATUS netlogon_creds_cli_context_global(struct loadparm_context *lp_ctx,
 	}
 
 	if (require_sign_or_seal) {
-		required_flags |= NETLOGON_NEG_ARCFOUR;
 		required_flags |= NETLOGON_NEG_AUTHENTICATED_RPC;
 	} else {
 		proposed_flags &= ~NETLOGON_NEG_AUTHENTICATED_RPC;
 	}
 
 	if (reject_md5_servers) {
-		required_flags |= NETLOGON_NEG_ARCFOUR;
 		required_flags |= NETLOGON_NEG_PASSWORD_SET2;
 		required_flags |= NETLOGON_NEG_SUPPORTS_AES;
 		required_flags |= NETLOGON_NEG_AUTHENTICATED_RPC;
 	}
 
 	if (require_strong_key) {
-		required_flags |= NETLOGON_NEG_ARCFOUR;
 		required_flags |= NETLOGON_NEG_STRONG_KEYS;
 		required_flags |= NETLOGON_NEG_AUTHENTICATED_RPC;
 	}
 
 	if (reject_aes_servers) {
-		required_flags |= NETLOGON_NEG_ARCFOUR;
 		required_flags |= NETLOGON_NEG_STRONG_KEYS;
 		required_flags |= NETLOGON_NEG_PASSWORD_SET2;
 		required_flags |= NETLOGON_NEG_SUPPORTS_AES;
@@ -566,19 +562,15 @@ NTSTATUS netlogon_creds_cli_context_global(struct loadparm_context *lp_ctx,
 	}
 
 	/*
-	 * If weak crypto is disabled, do not announce that we support RC4 and
-	 * require AES.
+	 * ARCFOUR/RC4 and DES encryption are no longer supported due to 
+	 * inadequate encryption strength. Always require AES encryption
+	 * for secure communication.
 	 */
-	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
-		required_flags |= NETLOGON_NEG_SUPPORTS_AES;
-	}
+	required_flags |= NETLOGON_NEG_SUPPORTS_AES;
+	required_flags &= ~NETLOGON_NEG_ARCFOUR;
+	required_flags &= ~NETLOGON_NEG_STRONG_KEYS;
 
 	proposed_flags |= required_flags;
-
-	if (required_flags & NETLOGON_NEG_SUPPORTS_AES) {
-		required_flags &= ~NETLOGON_NEG_ARCFOUR;
-		required_flags &= ~NETLOGON_NEG_STRONG_KEYS;
-	}
 
 	if (required_flags & NETLOGON_NEG_SUPPORTS_KERBEROS_AUTH) {
 		required_flags &= ~NETLOGON_NEG_SUPPORTS_AES;

@@ -1228,14 +1228,11 @@ static NTSTATUS dcesrv_netr_ServerPasswordSet2(struct dcesrv_call_state *dce_cal
 		/*
 		 * check it's encrypted
 		 */
-	} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-		/*
-		 * check it's encrypted
-		 */
 	} else {
 		/*
-		 * netlogon_creds_decrypt_samr_CryptPassword
-		 * already checked for DCERPC_AUTH_LEVEL_PRIVACY
+		 * ARCFOUR/RC4 and DES encryption are no longer supported.
+		 * netlogon_creds_decrypt_samr_CryptPassword will have
+		 * returned NT_STATUS_DOWNGRADE_DETECTED.
 		 */
 		goto checked_encryption;
 	}
@@ -1863,11 +1860,13 @@ static NTSTATUS dcesrv_netr_LogonSamLogon_base_call(struct dcesrv_netr_LogonSamL
 			/* OK */
 		} else if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
 			/* OK */
-		} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-			/* OK */
 		} else {
-			/* Using DES to verify kerberos tickets makes no sense */
-			return NT_STATUS_INVALID_PARAMETER;
+			/*
+			 * ARCFOUR/RC4 and DES encryption are no longer supported.
+			 * netlogon_creds_decrypt_samlogon_logon will have
+			 * returned NT_STATUS_DOWNGRADE_DETECTED.
+			 */
+			return NT_STATUS_DOWNGRADE_DETECTED;
 		}
 
 		if (strcmp(r->in.logon->generic->package_name.string, "Kerberos") == 0) {
