@@ -146,6 +146,7 @@ NTSTATUS smb2_util_getatr(struct smb2_tree *tree, const char *fname,
 	parms.all_info2.in.file.handle = create_io.out.file.handle;
 	status = smb2_getinfo_file(tree, tree, &parms);
 	if (!NT_STATUS_IS_OK(status)) {
+		smb2_util_close(tree, create_io.out.file.handle);
 		return status;
 	}
 
