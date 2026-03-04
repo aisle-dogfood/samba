@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,58 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _compare_digest(a, b):
+	"""
+	Constant-time comparison to prevent timing attacks.
+	Fallback for Python < 2.7.7 / 3.3 which don't have hmac.compare_digest
+	"""
+	try:
+		return hmac.compare_digest(a, b)
+	except AttributeError:
+		# Fallback for older Python versions
+		if len(a) != len(b):
+			return False
+		result = 0
+		for x, y in zip(a, b):
+			if isinstance(x, int):
+				result |= x ^ y
+			else:
+				result |= ord(x) ^ ord(y)
+		return result == 0
+
+def _get_cache_key(cache_dir):
+	"""
+	Generate a secret key for HMAC verification of the build cache.
+	The key is derived from the cache directory path and stored in a hidden file.
+	This provides integrity checking to prevent tampering with pickled cache data.
+	"""
+	key_file = os.path.join(cache_dir, '.cache_key')
+	try:
+		if os.path.exists(key_file):
+			with open(key_file, 'rb') as f:
+				return f.read()
+	except (IOError, OSError):
+		pass
+	
+	# Generate a new random key
+	import random
+	key = hashlib.sha256(str(random.getrandbits(256)).encode('utf-8')).digest()
+	
+	try:
+		# Ensure cache directory exists
+		if not os.path.exists(cache_dir):
+			os.makedirs(cache_dir)
+		# Write key to file
+		with open(key_file, 'wb') as f:
+			f.write(key)
+		# Restrict permissions on the key file
+		if not Utils.is_win32:
+			os.chmod(key_file, 0o600)
+	except (IOError, OSError):
+		pass
+	
+	return key
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -288,7 +340,19 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature to prevent pickle deserialization attacks
+					cache_key = _get_cache_key(self.cache_dir)
+					if len(data) < 32:
+						raise ValueError('Cache file too short to contain HMAC')
+					
+					stored_hmac = data[:32]
+					pickle_data = data[32:]
+					
+					expected_hmac = hmac.new(cache_key, pickle_data, hashlib.sha256).digest()
+					if not _compare_digest(stored_hmac, expected_hmac):
+						raise ValueError('HMAC verification failed - cache may be corrupted or tampered')
+					
+					data = cPickle.loads(pickle_data)
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
@@ -315,6 +379,11 @@ class BuildContext(Context.Context):
 			x = cPickle.dumps(data, PROTOCOL)
 		finally:
 			Node.pickle_lock.release()
+
+		# Add HMAC signature to protect against tampering
+		cache_key = _get_cache_key(self.cache_dir)
+		signature = hmac.new(cache_key, x, hashlib.sha256).digest()
+		x = signature + x
 
 		Utils.writef(db + '.tmp', x, m='wb')
 
