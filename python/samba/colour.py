@@ -61,13 +61,24 @@ _gen_ansi_colours()
 # The definition of the functions looks a little odd, because we want
 # to bake in the name of the colour but not its actual value.
 
+def _make_color_func(color_name):
+    """Create a color function that safely looks up the color code at runtime.
+    
+    This uses a closure to capture the color name, avoiding the security risk
+    of using globals() with an externally-controllable index.
+    """
+    def color_func(s):
+        # Look up the color code by name from globals at call time
+        # This allows switch_colour_off/on to work correctly
+        color_code = globals().get(color_name, '')
+        return "%s%s%s" % (color_code, s, C_NORMAL)
+    return color_func
+
 for _k in list(globals().keys()):
     if _k.isupper():
-        def _f(s, name=_k):
-            return "%s%s%s" % (globals()[name], s, C_NORMAL)
-        globals()['c_%s' % _k] = _f
+        globals()['c_%s' % _k] = _make_color_func(_k)
 
-del _k, _f
+del _k
 
 
 def switch_colour_off():
