@@ -470,6 +470,7 @@ static void pipe_handler(struct tevent_context *ev, struct tevent_fd *fde,
 	int ret;
 	int status;
 	int value = 0;
+	const int max_dns_reply_size = 64 * 1024; /* 64 KiB limit */
 
 	/* if we get any event from the child then we know that we
 	   won't need to kill it off */
@@ -477,6 +478,16 @@ static void pipe_handler(struct tevent_context *ev, struct tevent_fd *fde,
 
 	if (ioctl(state->child_fd, FIONREAD, &value) != 0) {
 		value = 8192;
+	}
+
+	/* Enforce an upper bound on allocation size to prevent memory exhaustion.
+	 * DNS responses should be reasonably sized; cap at 64 KiB which is well
+	 * above typical pipe buffer sizes and sufficient for DNS resolution data.
+	 */
+	if (value > max_dns_reply_size) {
+		DEBUG(2, ("dns child returned excessive data size %d, capping at %d\n",
+			  value, max_dns_reply_size));
+		value = max_dns_reply_size;
 	}
 
 	address = talloc_array(state, char, value+1);
