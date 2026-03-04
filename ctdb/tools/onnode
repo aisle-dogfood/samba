@@ -153,12 +153,11 @@ get_nodes_with_status ()
 
     (
 	local i
-	IFS="${IFS}|"
 	while IFS="" read -r i ; do
 
 	    # Intentional word splitting
 	    # shellcheck disable=SC2086
-	    set -- $i # split line on colons
+	    IFS="${IFS}|" set -- $i # split line on colons
 	    shift     # line starts with : so 1st field is empty
 	    local pnn="$1" ; shift
 	    shift # ignore IP address but need status bits below
