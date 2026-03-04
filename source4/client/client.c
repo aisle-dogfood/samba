@@ -1588,13 +1588,52 @@ static int cmd_deltree(struct smbclient_context *ctx, const char **args)
 {
 	char *dname;
 	int ret;
+	char *input_name;
 
 	if (!args[1]) {
 		d_printf("deltree <dirname>\n");
 		return 1;
 	}
 
-	dname = talloc_asprintf(ctx, "%s%s", ctx->remote_cur_dir, args[1]);
+	input_name = args[1];
+
+	/* Validate input to prevent dangerous wildcard patterns */
+	if (strchr(input_name, '*') != NULL || strchr(input_name, '?') != NULL) {
+		d_printf("ERROR: deltree does not accept wildcard patterns (* or ?) in the directory name.\n");
+		d_printf("Please specify an explicit directory path.\n");
+		return 1;
+	}
+
+	/* Prevent deletion of current or parent directory references */
+	if (strcmp(input_name, ".") == 0 || strcmp(input_name, "..") == 0 ||
+	    strcmp(input_name, ".\\") == 0 || strcmp(input_name, "..\\") == 0 ||
+	    strcmp(input_name, "./") == 0 || strcmp(input_name, "../") == 0) {
+		d_printf("ERROR: Cannot use deltree on current (.) or parent (..) directory references.\n");
+		return 1;
+	}
+
+	/* Prevent deletion from root directory if input is empty or just separators */
+	if (input_name[0] == '\0' || 
+	    strcmp(input_name, "\\") == 0 || strcmp(input_name, "/") == 0) {
+		d_printf("ERROR: Cannot deltree the root directory or empty path.\n");
+		return 1;
+	}
+
+	dname = talloc_asprintf(ctx, "%s%s", ctx->remote_cur_dir, input_name);
+
+	/* Prompt for confirmation before destructive operation */
+	if (ctx->prompt) {
+		char *quest = talloc_asprintf(ctx, 
+			"WARNING: This will recursively delete the entire directory tree at '%s'\n"
+			"         including all files, subdirectories, and hidden/system files.\n"
+			"Proceed with deletion? [y/N] ", dname);
+		if (!yesno(quest)) {
+			talloc_free(quest);
+			d_printf("Deltree operation cancelled.\n");
+			return 0;
+		}
+		talloc_free(quest);
+	}
 
 	ret = smbcli_deltree(ctx->cli->tree, dname);
 
