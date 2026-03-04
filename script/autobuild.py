@@ -20,6 +20,7 @@ from sysconfig import get_path
 import platform
 import ssl
 import shutil
+import shlex
 
 def get_libc_version():
     import ctypes
@@ -1310,18 +1311,31 @@ def do_debug(msg):
 
 
 def run_cmd(cmd, dir=".", show=None, output=False, checkfail=True):
+    # Determine if cmd is a list (safe mode) or string (shell mode)
+    use_shell = isinstance(cmd, str)
+    cmd_display = cmd if use_shell else ' '.join(cmd)
+    
     if show is None:
-        do_debug("Running: '%s' in '%s'" % (cmd, dir))
+        do_debug("Running: '%s' in '%s'" % (cmd_display, dir))
     elif show:
-        do_print("Running: '%s' in '%s'" % (cmd, dir))
+        do_print("Running: '%s' in '%s'" % (cmd_display, dir))
 
     if output:
-        out = check_output([cmd], shell=True, cwd=dir)
+        if use_shell:
+            out = check_output([cmd], shell=True, cwd=dir)
+        else:
+            out = check_output(cmd, shell=False, cwd=dir)
         return out.decode(encoding='utf-8', errors='backslashreplace')
     elif checkfail:
-        return check_call(cmd, shell=True, cwd=dir)
+        if use_shell:
+            return check_call(cmd, shell=True, cwd=dir)
+        else:
+            return check_call(cmd, shell=False, cwd=dir)
     else:
-        return call(cmd, shell=True, cwd=dir)
+        if use_shell:
+            return call(cmd, shell=True, cwd=dir)
+        else:
+            return call(cmd, shell=False, cwd=dir)
 
 def rmdir_force(dirname, re_raise=True):
     try:
@@ -1674,30 +1688,30 @@ def rebase_tree(rebase_url, rebase_branch="master"):
     do_print("Rebasing on %s" % rebase_url)
     run_cmd("git describe HEAD", show=True, dir=test_master)
     run_cmd("git remote add -t %s %s %s" %
-            (rebase_branch, rebase_remote, rebase_url),
+            (shlex.quote(rebase_branch), rebase_remote, shlex.quote(rebase_url)),
             show=True, dir=test_master)
     run_cmd("git fetch %s" % rebase_remote, show=True, dir=test_master)
     if options.fix_whitespace:
         run_cmd("git rebase --force-rebase --whitespace=fix %s/%s" %
-                (rebase_remote, rebase_branch),
+                (rebase_remote, shlex.quote(rebase_branch)),
                 show=True, dir=test_master)
     else:
         run_cmd("git rebase --force-rebase %s/%s" %
-                (rebase_remote, rebase_branch),
+                (rebase_remote, shlex.quote(rebase_branch)),
                 show=True, dir=test_master)
     diff = run_cmd("git --no-pager diff HEAD %s/%s" %
-                   (rebase_remote, rebase_branch),
+                   (rebase_remote, shlex.quote(rebase_branch)),
                    dir=test_master, output=True)
     if diff == '':
         do_print("No differences between HEAD and %s/%s - exiting" %
                  (rebase_remote, rebase_branch))
         sys.exit(0)
     run_cmd("git describe %s/%s" %
-            (rebase_remote, rebase_branch),
+            (rebase_remote, shlex.quote(rebase_branch)),
             show=True, dir=test_master)
     run_cmd("git describe HEAD", show=True, dir=test_master)
     run_cmd("git --no-pager diff --stat HEAD %s/%s" %
-            (rebase_remote, rebase_branch),
+            (rebase_remote, shlex.quote(rebase_branch)),
             show=True, dir=test_master)
 
 
@@ -1710,10 +1724,10 @@ def push_to(push_url, push_branch="master"):
         # the notes method doesn't work yet, as metze hasn't allowed refs/notes/* in master
         # run_cmd("EDITOR=script/commit_mark.sh git notes edit HEAD", dir=test_master)
     run_cmd("git remote add -t %s %s %s" %
-            (push_branch, push_remote, push_url),
+            (shlex.quote(push_branch), push_remote, shlex.quote(push_url)),
             show=True, dir=test_master)
     run_cmd("git push %s +HEAD:%s" %
-            (push_remote, push_branch),
+            (push_remote, shlex.quote(push_branch)),
             show=True, dir=test_master)
 
 
@@ -1928,7 +1942,7 @@ elapsed_time = time.time() - start_time
 if status == 0:
     if options.passcmd is not None:
         do_print("Running passcmd: %s" % options.passcmd)
-        run_cmd(options.passcmd, dir=test_master)
+        run_cmd(shlex.split(options.passcmd), dir=test_master)
     if options.pushto is not None:
         push_to(options.pushto, push_branch=options.branch)
     if options.keeplogs or options.attach_logs:
