@@ -1093,6 +1093,37 @@ static NTSTATUS find_drsuapi_attr_dn(TALLOC_CTX *mem_ctx,
 #define GET_UINT32(attr) GET_UINT32_EX(attr, false)
 #define GET_UINT64(attr) GET_UINT64_EX(attr, false)
 
+/* Special version for sensitive password blobs that jumps to cleanup on error */
+#define GET_SENSITIVE_BLOB(attr, cleanup_label) do { \
+	NTSTATUS _status; \
+	uint32_t _cnt; \
+	DATA_BLOB *_vals = NULL; \
+	attr = data_blob_null; \
+	_status = find_drsuapi_attr_blob(mem_ctx, cur, \
+					 DRSUAPI_ATTID_ ## attr, \
+					 &_cnt, &_vals); \
+	if (NT_STATUS_EQUAL(_status, NT_STATUS_PROPSET_NOT_FOUND)) { \
+		_status = NT_STATUS_OK; \
+		_cnt = 0; \
+	} \
+	if (!NT_STATUS_IS_OK(_status)) { \
+		DEBUG(0,(__location__ "attr[%s] %s\n", \
+			#attr, nt_errstr(_status))); \
+		status = _status; \
+		goto cleanup_label; \
+	} \
+	if (_cnt > 1) { \
+		talloc_free(_vals); \
+		DEBUG(0,(__location__ "attr[%s] count[%u]\n", #attr, _cnt)); \
+		status = NT_STATUS_INTERNAL_DB_CORRUPTION; \
+		goto cleanup_label; \
+	} else if (_cnt == 1) { \
+		attr = _vals[0]; \
+		(void)talloc_steal(mem_ctx, _vals[0].data); \
+	} \
+	talloc_free(_vals); \
+} while(0)
+
 /* Convert a struct samu_DELTA to a struct samu. */
 #define STRING_CHANGED (old_string && !new_string) ||\
 		    (!old_string && new_string) ||\
@@ -1133,8 +1164,8 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	DATA_BLOB logonHours;
 	uint32_t badPwdCount;
 	uint32_t logonCount;
-	DATA_BLOB unicodePwd;
-	DATA_BLOB dBCSPwd;
+	DATA_BLOB unicodePwd = data_blob_null;
+	DATA_BLOB dBCSPwd = data_blob_null;
 
 	uint32_t rid = 0;
 	uint32_t acct_flags;
@@ -1162,12 +1193,12 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	GET_BLOB(logonHours);
 	GET_UINT32(badPwdCount);
 	GET_UINT32(logonCount);
-	GET_BLOB(unicodePwd);
-	GET_BLOB(dBCSPwd);
+	GET_SENSITIVE_BLOB(unicodePwd, cleanup_sensitive);
+	GET_SENSITIVE_BLOB(dBCSPwd, cleanup_sensitive);
 
 	status = dom_sid_split_rid(mem_ctx, &objectSid, NULL, &rid);
 	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+		goto cleanup_sensitive;
 	}
 	acct_flags = ds_uf2acb(userAccountControl);
 
@@ -1353,7 +1384,14 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	DEBUG(0,("sam_account_from_object(%s, %s) done\n",
 		 sAMAccountName,
 		 dom_sid_str_buf(&objectSid, &buf)));
-	return NT_STATUS_OK;
+	
+	status = NT_STATUS_OK;
+
+cleanup_sensitive:
+	/* Clear sensitive password hash data from memory */
+	data_blob_clear(&unicodePwd);
+	data_blob_clear(&dBCSPwd);
+	return status;
 }
 
 /****************************************************************
