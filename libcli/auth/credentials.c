@@ -178,34 +178,11 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
 }
 
 /*
-  initialise the credentials state for old-style 64 bit session keys
-
-  this call is made after the netr_ServerReqChallenge call
-*/
-static NTSTATUS netlogon_creds_init_64bit(struct netlogon_creds_CredentialState *creds,
-					 const struct netr_Credential *client_challenge,
-					 const struct netr_Credential *server_challenge,
-					 const struct samr_Password *machine_password)
-{
-	uint32_t sum[2];
-	uint8_t sum2[8];
-	int rc;
-
-	sum[0] = IVAL(client_challenge->data, 0) + IVAL(server_challenge->data, 0);
-	sum[1] = IVAL(client_challenge->data, 4) + IVAL(server_challenge->data, 4);
-
-	SIVAL(sum2,0,sum[0]);
-	SIVAL(sum2,4,sum[1]);
-
-	ZERO_ARRAY(creds->session_key);
-
-	rc = des_crypt128(creds->session_key, sum2, machine_password->hash);
-	if (rc != 0) {
-		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
-	}
-
-	return NT_STATUS_OK;
-}
+ * Note: netlogon_creds_init_64bit() has been removed due to inadequate
+ * encryption strength (DES-based). All credential initialization now
+ * requires at least 128-bit encryption (MD5-based) or stronger
+ * (AES/HMAC-SHA256). See CVE-2022-38023 and related security advisories.
+ */
 
 /*
   initialise the credentials state for ADS-style 128 bit session keys
