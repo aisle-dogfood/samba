@@ -395,22 +395,39 @@ done:
    entry set > 0, or the "Additional restrictions for anonymous
    connections" set in the win2k Local Security Policy.
 
-   Caller to free() result in domain, username, password
+   Caller to free() result in domain, username using SAFE_FREE() and password using BURN_FREE_STR()
 */
 
 static void cm_get_ipc_userpass(char **username, char **domain, char **password)
 {
+	size_t password_size = 0;
+	char *raw_password = NULL;
+
 	*username = (char *)secrets_fetch(SECRETS_AUTH_USER, NULL);
 	*domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, NULL);
-	*password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, NULL);
+	raw_password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, &password_size);
+
+	/* Ensure password is properly null-terminated */
+	if (raw_password != NULL) {
+		*password = malloc(password_size + 1);
+		if (*password != NULL) {
+			memcpy(*password, raw_password, password_size);
+			(*password)[password_size] = '\0';
+		}
+		BURN_FREE(raw_password, password_size);
+	} else {
+		*password = NULL;
+	}
 
 	if (*username && **username) {
 
 		if (!*domain || !**domain)
 			*domain = smb_xstrdup(lp_workgroup());
 
-		if (!*password || !**password)
+		if (!*password || !**password) {
+			BURN_FREE_STR(*password);
 			*password = smb_xstrdup("");
+		}
 
 		DEBUG(3, ("cm_get_ipc_userpass: Retrieved auth-user from secrets.tdb [%s\\%s]\n",
 			  *domain, *username));
@@ -419,6 +436,7 @@ static void cm_get_ipc_userpass(char **username, char **domain, char **password)
 		DEBUG(3, ("cm_get_ipc_userpass: No auth-user defined\n"));
 		*username = smb_xstrdup("");
 		*domain = smb_xstrdup("");
+		BURN_FREE_STR(*password);
 		*password = smb_xstrdup("");
 	}
 }
@@ -486,7 +504,7 @@ static NTSTATUS cm_get_ipc_credentials(TALLOC_CTX *mem_ctx,
 	TALLOC_FREE(creds);
 	SAFE_FREE(username);
 	SAFE_FREE(netbios_domain);
-	SAFE_FREE(password);
+	BURN_FREE_STR(password);
 	TALLOC_FREE(frame);
 	return status;
 }
@@ -524,7 +542,7 @@ static bool cm_is_ipc_credentials(struct cli_credentials *creds)
  done:
 	SAFE_FREE(ipc_account);
 	SAFE_FREE(ipc_domain);
-	SAFE_FREE(ipc_password);
+	BURN_FREE_STR(ipc_password);
 	TALLOC_FREE(frame);
 	return ret;
 }
