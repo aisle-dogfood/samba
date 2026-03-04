@@ -649,12 +649,26 @@ def PROCESS_SEPARATE_RULE(self, rule):
         You should have file named wscript_<stage>_rule in the current directory
         where stage is either 'configure' or 'build'
     '''
+    # Security: Validate rule parameter to prevent path traversal attacks
+    # Only allow alphanumeric characters, underscores, and hyphens
+    if not re.match(r'^[a-zA-Z0-9_-]+$', rule):
+        raise Errors.WafError('Invalid rule name "%s". Rule names must contain only alphanumeric characters, underscores, and hyphens.' % rule)
+    
     stage = ''
     if isinstance(self, Configure.ConfigurationContext):
         stage = 'configure'
     elif isinstance(self, Build.BuildContext):
         stage = 'build'
     file_path = os.path.join(self.path.abspath(), WSCRIPT_FILE+'_'+stage+'_'+rule)
+    
+    # Security: Verify the resolved path is within the expected directory
+    # This prevents symlink-based path traversal attacks
+    expected_dir = os.path.realpath(self.path.abspath())
+    real_file_path = os.path.realpath(file_path)
+    # Ensure the path is within expected directory or exactly equals it
+    if not (real_file_path == expected_dir or real_file_path.startswith(expected_dir + os.sep)):
+        raise Errors.WafError('Invalid rule "%s": resolved path is outside the expected directory' % rule)
+    
     node = self.root.find_node(file_path)
     if node:
         try:
