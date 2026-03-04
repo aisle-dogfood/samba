@@ -12,6 +12,7 @@ def build(ctx):
 only the symbols starting with 'mylib_' will be exported.
 """
 
+import ast
 import re
 from waflib.Context import STDOUT
 from waflib.Task import Task
@@ -42,7 +43,7 @@ class compile_sym(Task):
 	def run(self):
 		syms = {}
 		for x in self.inputs:
-			slist = eval(x.read())
+			slist = ast.literal_eval(x.read())
 			for s in slist:
 				syms[s] = 1
 		lsyms = list(syms.keys())
