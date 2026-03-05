@@ -134,6 +134,20 @@ static void smb2_session_setup_spnego_smb2_next(struct tevent_req *req);
 static void smb2_session_setup_spnego_smb2_done(struct tevent_req *subreq);
 static void smb2_session_setup_spnego_both_ready(struct tevent_req *req);
 
+static int smb2_session_setup_spnego_destructor(
+	struct smb2_session_setup_spnego_state *state)
+{
+	/*
+	 * Clear sensitive credential data from memory before deallocation.
+	 * This prevents SPNEGO/NTLM blobs from lingering in heap memory
+	 * where they could be exposed via memory dumps or other memory
+	 * inspection techniques.
+	 */
+	data_blob_clear(&state->in_secblob);
+	data_blob_clear(&state->out_secblob);
+	return 0;
+}
+
 /*
   a composite function that does a full SPNEGO session setup
  */
@@ -159,6 +173,7 @@ struct tevent_req *smb2_session_setup_spnego_send(
 	if (req == NULL) {
 		return NULL;
 	}
+	talloc_set_destructor(state, smb2_session_setup_spnego_destructor);
 	state->ev = ev;
 	state->session = session;
 	state->credentials = credentials;
