@@ -1786,6 +1786,21 @@ static void netlogon_creds_cli_auth_srvauth_done(struct tevent_req *subreq)
 			 * lets retry with the negotiated flags
 			 */
 			state->current_flags = nego_f;
+
+			/*
+			 * Prevent downgrade to DES encryption which is no longer
+			 * supported due to inadequate encryption strength.
+			 * Require at least ARCFOUR or AES for secure communication.
+			 */
+			if (!(state->current_flags & NETLOGON_NEG_SUPPORTS_AES) &&
+			    !(state->current_flags & NETLOGON_NEG_ARCFOUR)) {
+				DBG_ERR("Downgrade to DES encryption blocked: "
+					"current[0x%08X] negotiated[0x%08X]\n",
+					state->current_flags, srv_f);
+				tevent_req_nterror(req, NT_STATUS_DOWNGRADE_DETECTED);
+				return;
+			}
+
 			netlogon_creds_cli_auth_challenge_start(req);
 			return;
 		}
