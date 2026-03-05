@@ -147,7 +147,7 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 		return NT_STATUS_INTERNAL_ERROR;
 	}
 
-	/* Derive a proper AES key from the session key using SHA-256 */
+	/* Derive both AES key and IV from the session key using SHA-256 */
 	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
 	if (rc < 0) {
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
@@ -162,8 +162,31 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 	/* Get first 16 bytes of SHA-256 hash for AES-128 key */
 	gnutls_hash_deinit(hash_hnd, derived_key);
 
-	/* Generate a random IV for AES encryption */
-	generate_random_buffer(iv, sizeof(iv));
+	/* Derive IV from session key - use last 16 bytes of SHA-256 hash */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
+	if (rc < 0) {
+		ZERO_ARRAY(derived_key);
+		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	}
+	
+	/* Add salt to derive different value for IV */
+	const uint8_t iv_salt[] = "SAMR_IV_DERIVATION";
+	rc = gnutls_hash(hash_hnd, iv_salt, sizeof(iv_salt) - 1);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		ZERO_ARRAY(derived_key);
+		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	}
+	
+	rc = gnutls_hash(hash_hnd, session_key->data, session_key->length);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		ZERO_ARRAY(derived_key);
+		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
+	}
+	
+	/* Get first 16 bytes for IV */
+	gnutls_hash_deinit(hash_hnd, iv);
 
 	rc = gnutls_cipher_init(&cipher_hnd,
 				GNUTLS_CIPHER_AES_128_CBC,
@@ -178,6 +201,7 @@ NTSTATUS init_samr_CryptPassword(const char *pwd,
 				   516);
 	gnutls_cipher_deinit(cipher_hnd);
 	ZERO_ARRAY(derived_key);
+	ZERO_ARRAY(iv);
 	if (rc != 0) {
 		return gnutls_error_to_ntstatus(rc, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER);
 	}

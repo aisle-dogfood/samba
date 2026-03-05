@@ -582,7 +582,6 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 	DATA_BLOB new_password;
 	DATA_BLOB session_key = data_blob(NULL, 0);
 	gnutls_cipher_hd_t cipher_hnd = NULL;
-	gnutls_datum_t _session_key;
 	struct auth_session_info *session_info =
 		dcesrv_call_session_info(dce_call);
 	struct loadparm_context *lp_ctx = dce_call->conn->dce_ctx->lp_ctx;
@@ -602,22 +601,72 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 		return nt_status;
 	}
 
-	_session_key = (gnutls_datum_t) {
-		.data = session_key.data,
-		.size = session_key.length,
+	/* Decrypt using AES-128-CBC with derived key and IV */
+	uint8_t derived_key[16] = {0}; /* AES-128 requires 16-byte key */
+	uint8_t iv[16] = {0}; /* AES block size is 16 bytes */
+	gnutls_datum_t aes_key = {
+		.data = derived_key,
+		.size = sizeof(derived_key),
 	};
-
-	/*
-	 * This is safe to support as we only have a session key
-	 * over a SMB connection which we force to be encrypted.
-	 */
-	GNUTLS_FIPS140_SET_LAX_MODE();
-	rc = gnutls_cipher_init(&cipher_hnd,
-				GNUTLS_CIPHER_ARCFOUR_128,
-				&_session_key,
-				NULL);
+	gnutls_datum_t iv_datum = {
+		.data = iv,
+		.size = sizeof(iv),
+	};
+	gnutls_hash_hd_t hash_hnd = NULL;
+	
+	/* Derive AES key from the session key using SHA-256 */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
 	if (rc < 0) {
-		GNUTLS_FIPS140_SET_STRICT_MODE();
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	rc = gnutls_hash(hash_hnd, session_key.data, session_key.length);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	/* Get first 16 bytes of SHA-256 hash for AES-128 key */
+	gnutls_hash_deinit(hash_hnd, derived_key);
+
+	/* Derive IV from session key - must match client derivation */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
+	if (rc < 0) {
+		ZERO_ARRAY(derived_key);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	/* Add salt to derive different value for IV */
+	const uint8_t iv_salt[] = "SAMR_IV_DERIVATION";
+	rc = gnutls_hash(hash_hnd, iv_salt, sizeof(iv_salt) - 1);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		ZERO_ARRAY(derived_key);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	rc = gnutls_hash(hash_hnd, session_key.data, session_key.length);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		ZERO_ARRAY(derived_key);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	/* Get first 16 bytes for IV */
+	gnutls_hash_deinit(hash_hnd, iv);
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_128_CBC,
+				&aes_key,
+				&iv_datum);
+	if (rc < 0) {
+		ZERO_ARRAY(derived_key);
+		ZERO_ARRAY(iv);
 		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
 		goto out;
 	}
@@ -626,7 +675,8 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 				   pwbuf->data,
 				   516);
 	gnutls_cipher_deinit(cipher_hnd);
-	GNUTLS_FIPS140_SET_STRICT_MODE();
+	ZERO_ARRAY(derived_key);
+	ZERO_ARRAY(iv);
 	if (rc < 0) {
 		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
 		goto out;
@@ -688,14 +738,63 @@ NTSTATUS samr_set_password_ex(struct dcesrv_call_state *dce_call,
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
-	GNUTLS_FIPS140_SET_LAX_MODE();
-	rc = samba_gnutls_arcfour_confounded_md5(&confounder,
-						 &session_key,
-						 &pw_data,
-						 SAMBA_GNUTLS_DECRYPT);
-	GNUTLS_FIPS140_SET_STRICT_MODE();
+	/* Decrypt using AES-256-CBC */
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	uint8_t derived_key[32] = {0}; /* AES-256 requires 32-byte key */
+	gnutls_datum_t aes_key = {
+		.data = derived_key,
+		.size = sizeof(derived_key),
+	};
+	uint8_t iv[16] = {0}; /* AES block size is 16 bytes */
+	gnutls_datum_t iv_datum = {
+		.data = iv,
+		.size = sizeof(iv),
+	};
+	gnutls_hash_hd_t hash_hnd = NULL;
+	
+	/* Derive AES key from session key and confounder using SHA-256 */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
 	if (rc < 0) {
-		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_HASH_NOT_SUPPORTED);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	rc = gnutls_hash(hash_hnd, session_key.data, session_key.length);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	rc = gnutls_hash(hash_hnd, confounder.data, confounder.length);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+	
+	gnutls_hash_deinit(hash_hnd, derived_key);
+
+	/* Use the confounder as IV for AES decryption */
+	memcpy(iv, confounder.data, sizeof(iv));
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_CBC,
+				&aes_key,
+				&iv_datum);
+	if (rc != 0) {
+		ZERO_ARRAY(derived_key);
+		ZERO_ARRAY(iv);
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
+		goto out;
+	}
+
+	rc = gnutls_cipher_decrypt(cipher_hnd, pw_data.data, pw_data.length);
+	gnutls_cipher_deinit(cipher_hnd);
+	ZERO_ARRAY(derived_key);
+	ZERO_ARRAY(iv);
+	if (rc != 0) {
+		nt_status = gnutls_error_to_ntstatus(rc, NT_STATUS_CRYPTO_SYSTEM_INVALID);
 		goto out;
 	}
 
