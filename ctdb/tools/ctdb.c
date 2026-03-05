@@ -344,7 +344,7 @@ static bool parse_nodestring(TALLOC_CTX *mem_ctx, struct ctdb_context *ctdb,
 
 		goto done;
 	} else {
-		char *ns, *tok;
+		char *ns, *tok, *saveptr;
 		int error = 0;
 
 		ns = talloc_strdup(mem_ctx, nodestring);
@@ -352,7 +352,7 @@ static bool parse_nodestring(TALLOC_CTX *mem_ctx, struct ctdb_context *ctdb,
 			return false;
 		}
 
-		tok = strtok(ns, ",");
+		tok = strtok_r(ns, ",", &saveptr);
 		while (tok != NULL) {
 			uint32_t pnn;
 
@@ -376,7 +376,7 @@ static bool parse_nodestring(TALLOC_CTX *mem_ctx, struct ctdb_context *ctdb,
 			nodemap2->node[nodemap2->num] = *node;
 			nodemap2->num += 1;
 
-			tok = strtok(NULL, ",");
+			tok = strtok_r(NULL, ",", &saveptr);
 		}
 	}
 
