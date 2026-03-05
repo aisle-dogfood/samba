@@ -342,19 +342,25 @@ bool secrets_fetch_trust_account_password_legacy(const char *domain,
 	if (!(pass = (struct machine_acct_pass *)secrets_fetch(
 		      trust_keystr(domain), &size))) {
 		DEBUG(5, ("secrets_fetch failed!\n"));
+		/* Clear output buffer on error to prevent information leakage */
+		BURN_PTR_SIZE(ret_pwd, 16);
 		return False;
 	}
 
 	if (size != sizeof(*pass)) {
 		DEBUG(0, ("secrets were of incorrect size!\n"));
 		BURN_FREE(pass, size);
+		/* Clear output buffer on error to prevent information leakage */
+		BURN_PTR_SIZE(ret_pwd, 16);
 		return False;
 	}
 
 	if (pass_last_set_time) {
 		*pass_last_set_time = pass->mod_time;
 	}
-	memcpy(ret_pwd, pass->hash, 16);
+	
+	/* Use sizeof for safer credential copy */
+	memcpy(ret_pwd, pass->hash, sizeof(pass->hash));
 
 	if (channel) {
 		*channel = get_default_sec_channel();
