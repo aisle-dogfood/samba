@@ -95,7 +95,7 @@ def render(dists):
             with io.open(path, mode='wt', encoding='utf8') as fp:
                 fp.write(config[key])
             if path.endswith('.sh'):
-                os.chmod(path, 0o755)
+                os.chmod(path, 0o750)
 
     key = 'Vagrantfile'
     path = os.path.join(OUT, key)
