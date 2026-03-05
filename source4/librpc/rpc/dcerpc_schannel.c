@@ -490,6 +490,20 @@ static void continue_srv_auth2(struct tevent_req *subreq)
 
 		s->local_negotiate_flags &= s->remote_negotiate_flags;
 
+		/*
+		 * Prevent downgrade to DES encryption which is no longer
+		 * supported due to inadequate encryption strength.
+		 * Require at least ARCFOUR or AES for secure communication.
+		 */
+		if (!(s->local_negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) &&
+		    !(s->local_negotiate_flags & NETLOGON_NEG_ARCFOUR)) {
+			DBG_ERR("Downgrade to DES encryption blocked: "
+				"local[0x%08X] remote[0x%08X]\n",
+				s->local_negotiate_flags, rf);
+			composite_error(c, NT_STATUS_DOWNGRADE_DETECTED);
+			return;
+		}
+
 		generate_random_buffer(s->credentials1.data,
 				       sizeof(s->credentials1.data));
 
