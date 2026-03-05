@@ -53,6 +53,20 @@ static int sesssetup_state_destructor(struct sesssetup_state *state)
 		state->req = NULL;
 	}
 
+	/*
+	 * Clear sensitive credential data from memory before deallocation.
+	 * This prevents plaintext passwords and NTLM responses from lingering
+	 * in heap memory where they could be exposed via memory dumps or
+	 * other memory inspection techniques.
+	 */
+	data_blob_clear(&state->setup.nt1.in.password1);
+	data_blob_clear(&state->setup.nt1.in.password2);
+	data_blob_clear(&state->setup.old.in.password);
+	data_blob_clear(&state->setup.spnego.in.secblob);
+	data_blob_clear(&state->setup.spnego.out.secblob);
+	data_blob_clear(&state->setup.smb2.in.secblob);
+	data_blob_clear(&state->setup.smb2.out.secblob);
+
 	return 0;
 }
 
