@@ -32,11 +32,19 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include <gnutls/gnutls.h>
+#include <gnutls/crypto.h>
+#include "lib/crypto/gnutls_helpers.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
 
 static struct db_context *db_ctx;
+
+/* Encryption parameters for password storage */
+#define SECRETS_ENCRYPTION_KEY_SIZE 16
+#define SECRETS_ENCRYPTION_IV_SIZE 12
+#define SECRETS_ENCRYPTION_TAG_SIZE 16
 
 /* open up the secrets database with specified private_dir path */
 bool secrets_init_path(const char *private_dir)
@@ -94,6 +102,261 @@ struct db_context *secrets_db_ctx(void)
 void secrets_shutdown(void)
 {
 	TALLOC_FREE(db_ctx);
+}
+
+/*
+ * Get or create encryption key for password protection
+ * The key is stored in the secrets database itself
+ */
+static bool get_encryption_key(uint8_t key[SECRETS_ENCRYPTION_KEY_SIZE])
+{
+	const char *key_name = "SECRETS/CREDENTIALS_ENCRYPTION_KEY";
+	void *key_data = NULL;
+	size_t key_size = 0;
+	bool ok;
+	
+	/* Try to fetch existing key */
+	key_data = secrets_fetch(key_name, &key_size);
+	
+	if (key_data != NULL && key_size == SECRETS_ENCRYPTION_KEY_SIZE) {
+		memcpy(key, key_data, SECRETS_ENCRYPTION_KEY_SIZE);
+		BURN_PTR_SIZE(key_data, key_size);
+		SAFE_FREE(key_data);
+		return true;
+	}
+	
+	if (key_data != NULL) {
+		BURN_PTR_SIZE(key_data, key_size);
+		SAFE_FREE(key_data);
+	}
+	
+	/* Generate new key */
+	generate_random_buffer(key, SECRETS_ENCRYPTION_KEY_SIZE);
+	
+	/* Store the key for future use */
+	ok = secrets_store(key_name, key, SECRETS_ENCRYPTION_KEY_SIZE);
+	if (!ok) {
+		DBG_ERR("Failed to store encryption key\n");
+		BURN_PTR_SIZE(key, SECRETS_ENCRYPTION_KEY_SIZE);
+		return false;
+	}
+	
+	return true;
+}
+
+/*
+ * Encrypt a password using AES-128-GCM
+ * Returns encrypted data in format: [IV(12)][ciphertext][tag(16)]
+ */
+static bool encrypt_secret(TALLOC_CTX *mem_ctx,
+			   const char *plaintext,
+			   size_t plaintext_len,
+			   uint8_t **encrypted_out,
+			   size_t *encrypted_len_out)
+{
+	uint8_t key[SECRETS_ENCRYPTION_KEY_SIZE];
+	uint8_t iv[SECRETS_ENCRYPTION_IV_SIZE];
+	uint8_t tag[SECRETS_ENCRYPTION_TAG_SIZE];
+	uint8_t *ciphertext = NULL;
+	uint8_t *result = NULL;
+	size_t total_len;
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	int rc;
+	bool ok;
+	
+	if (plaintext == NULL || plaintext_len == 0) {
+		return false;
+	}
+	
+	/* Get encryption key */
+	ok = get_encryption_key(key);
+	if (!ok) {
+		return false;
+	}
+	
+	/* Generate random IV */
+	generate_random_buffer(iv, SECRETS_ENCRYPTION_IV_SIZE);
+	
+	/* Allocate ciphertext buffer */
+	ciphertext = talloc_array(mem_ctx, uint8_t, plaintext_len);
+	if (ciphertext == NULL) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		return false;
+	}
+	
+	/* Initialize cipher */
+	key_datum.data = key;
+	key_datum.size = SECRETS_ENCRYPTION_KEY_SIZE;
+	iv_datum.data = iv;
+	iv_datum.size = SECRETS_ENCRYPTION_IV_SIZE;
+	
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_128_GCM,
+				&key_datum,
+				&iv_datum);
+	
+	BURN_PTR_SIZE(key, sizeof(key));
+	
+	if (rc < 0) {
+		DBG_ERR("Failed to initialize cipher: %s\n", gnutls_strerror(rc));
+		talloc_free(ciphertext);
+		return false;
+	}
+	
+	/* Encrypt using AEAD */
+	rc = gnutls_cipher_encrypt2(cipher_hnd,
+				    (const uint8_t *)plaintext, plaintext_len,
+				    ciphertext, plaintext_len);
+	if (rc < 0) {
+		DBG_ERR("Encryption failed: %s\n", gnutls_strerror(rc));
+		gnutls_cipher_deinit(cipher_hnd);
+		talloc_free(ciphertext);
+		return false;
+	}
+	
+	/* Get authentication tag */
+	rc = gnutls_cipher_tag(cipher_hnd, tag, SECRETS_ENCRYPTION_TAG_SIZE);
+	gnutls_cipher_deinit(cipher_hnd);
+	
+	if (rc < 0) {
+		DBG_ERR("Failed to get authentication tag: %s\n", gnutls_strerror(rc));
+		talloc_free(ciphertext);
+		return false;
+	}
+	
+	/* Combine IV + ciphertext + tag */
+	total_len = SECRETS_ENCRYPTION_IV_SIZE + plaintext_len + SECRETS_ENCRYPTION_TAG_SIZE;
+	result = talloc_array(mem_ctx, uint8_t, total_len);
+	if (result == NULL) {
+		talloc_free(ciphertext);
+		return false;
+	}
+	
+	memcpy(result, iv, SECRETS_ENCRYPTION_IV_SIZE);
+	memcpy(result + SECRETS_ENCRYPTION_IV_SIZE, ciphertext, plaintext_len);
+	memcpy(result + SECRETS_ENCRYPTION_IV_SIZE + plaintext_len, tag, SECRETS_ENCRYPTION_TAG_SIZE);
+	
+	talloc_free(ciphertext);
+	
+	*encrypted_out = result;
+	*encrypted_len_out = total_len;
+	
+	return true;
+}
+
+/*
+ * Decrypt a password using AES-128-GCM
+ * Expects data in format: [IV(12)][ciphertext][tag(16)]
+ */
+static bool decrypt_secret(TALLOC_CTX *mem_ctx,
+			   const uint8_t *encrypted,
+			   size_t encrypted_len,
+			   char **plaintext_out,
+			   size_t *plaintext_len_out)
+{
+	uint8_t key[SECRETS_ENCRYPTION_KEY_SIZE];
+	const uint8_t *iv;
+	const uint8_t *ciphertext;
+	const uint8_t *tag;
+	uint8_t *plaintext = NULL;
+	size_t ciphertext_len;
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	int rc;
+	bool ok;
+	
+	/* Validate input size */
+	if (encrypted_len < (SECRETS_ENCRYPTION_IV_SIZE + SECRETS_ENCRYPTION_TAG_SIZE)) {
+		DBG_ERR("Encrypted data too small\n");
+		return false;
+	}
+	
+	/* Extract components */
+	iv = encrypted;
+	ciphertext_len = encrypted_len - SECRETS_ENCRYPTION_IV_SIZE - SECRETS_ENCRYPTION_TAG_SIZE;
+	ciphertext = encrypted + SECRETS_ENCRYPTION_IV_SIZE;
+	tag = encrypted + SECRETS_ENCRYPTION_IV_SIZE + ciphertext_len;
+	
+	/* Get encryption key */
+	ok = get_encryption_key(key);
+	if (!ok) {
+		return false;
+	}
+	
+	/* Allocate plaintext buffer */
+	plaintext = talloc_array(mem_ctx, uint8_t, ciphertext_len + 1);
+	if (plaintext == NULL) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		return false;
+	}
+	
+	memcpy(plaintext, ciphertext, ciphertext_len);
+	
+	/* Initialize cipher */
+	key_datum.data = key;
+	key_datum.size = SECRETS_ENCRYPTION_KEY_SIZE;
+	iv_datum.data = (uint8_t *)iv;
+	iv_datum.size = SECRETS_ENCRYPTION_IV_SIZE;
+	
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_128_GCM,
+				&key_datum,
+				&iv_datum);
+	
+	BURN_PTR_SIZE(key, sizeof(key));
+	
+	if (rc < 0) {
+		DBG_ERR("Failed to initialize cipher for decryption: %s\n", gnutls_strerror(rc));
+		talloc_free(plaintext);
+		return false;
+	}
+	
+	/* Decrypt and verify tag using AEAD */
+	rc = gnutls_cipher_decrypt2(cipher_hnd,
+				    ciphertext, ciphertext_len,
+				    plaintext, ciphertext_len);
+	if (rc < 0) {
+		DBG_ERR("Decryption failed: %s\n", gnutls_strerror(rc));
+		gnutls_cipher_deinit(cipher_hnd);
+		BURN_PTR_SIZE(plaintext, ciphertext_len);
+		talloc_free(plaintext);
+		return false;
+	}
+	
+	/* Verify authentication tag */
+	{
+		uint8_t computed_tag[SECRETS_ENCRYPTION_TAG_SIZE];
+		rc = gnutls_cipher_tag(cipher_hnd, computed_tag, SECRETS_ENCRYPTION_TAG_SIZE);
+		gnutls_cipher_deinit(cipher_hnd);
+		
+		if (rc < 0) {
+			DBG_ERR("Failed to compute tag: %s\n", gnutls_strerror(rc));
+			BURN_PTR_SIZE(plaintext, ciphertext_len);
+			talloc_free(plaintext);
+			return false;
+		}
+		
+		/* Constant-time comparison of tags */
+		if (memcmp(computed_tag, tag, SECRETS_ENCRYPTION_TAG_SIZE) != 0) {
+			DBG_ERR("Authentication tag verification failed\n");
+			BURN_PTR_SIZE(plaintext, ciphertext_len);
+			BURN_PTR_SIZE(computed_tag, sizeof(computed_tag));
+			talloc_free(plaintext);
+			return false;
+		}
+		BURN_PTR_SIZE(computed_tag, sizeof(computed_tag));
+	}
+	
+	/* Null-terminate for string safety */
+	plaintext[ciphertext_len] = '\0';
+	
+	*plaintext_out = (char *)plaintext;
+	*plaintext_len_out = ciphertext_len;
+	
+	return true;
 }
 
 /* read a entry from the secrets database - the caller must free the result
@@ -188,10 +451,31 @@ bool secrets_store_creds(struct cli_credentials *creds)
 		return false;
 	}
 
-	ok = secrets_store(SECRETS_AUTH_PASSWORD, p, strlen(p) + 1);
-	if (!ok) {
-		DBG_ERR("Failed storing auth password\n");
-		return false;
+	/* Encrypt password before storing */
+	{
+		TALLOC_CTX *tmp_ctx = talloc_new(NULL);
+		uint8_t *encrypted = NULL;
+		size_t encrypted_len = 0;
+		
+		if (tmp_ctx == NULL) {
+			return false;
+		}
+		
+		ok = encrypt_secret(tmp_ctx, p, strlen(p) + 1, &encrypted, &encrypted_len);
+		if (!ok) {
+			DBG_ERR("Failed to encrypt auth password\n");
+			talloc_free(tmp_ctx);
+			return false;
+		}
+		
+		ok = secrets_store(SECRETS_AUTH_PASSWORD, encrypted, encrypted_len);
+		BURN_PTR_SIZE(encrypted, encrypted_len);
+		talloc_free(tmp_ctx);
+		
+		if (!ok) {
+			DBG_ERR("Failed storing auth password\n");
+			return false;
+		}
 	}
 
 	return true;
@@ -505,13 +789,34 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 		*domain = NULL;
 	}
 	
+	/* Decrypt password if present */
 	if (raw_password != NULL) {
-		*password = malloc(password_size + 1);
-		if (*password != NULL) {
-			memcpy(*password, raw_password, password_size);
-			(*password)[password_size] = '\0';
+		TALLOC_CTX *tmp_ctx = talloc_new(NULL);
+		char *decrypted = NULL;
+		size_t decrypted_len = 0;
+		bool ok;
+		
+		if (tmp_ctx == NULL) {
+			BURN_FREE(raw_password, password_size);
+			*password = NULL;
+		} else {
+			ok = decrypt_secret(tmp_ctx, (uint8_t *)raw_password, password_size,
+					    &decrypted, &decrypted_len);
+			BURN_FREE(raw_password, password_size);
+			
+			if (ok && decrypted != NULL) {
+				*password = malloc(decrypted_len + 1);
+				if (*password != NULL) {
+					memcpy(*password, decrypted, decrypted_len);
+					(*password)[decrypted_len] = '\0';
+				}
+				BURN_PTR_SIZE(decrypted, decrypted_len);
+			} else {
+				DBG_WARNING("Failed to decrypt password, using NULL\n");
+				*password = NULL;
+			}
+			talloc_free(tmp_ctx);
 		}
-		BURN_FREE(raw_password, password_size);
 	} else {
 		*password = NULL;
 	}
