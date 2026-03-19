@@ -307,7 +307,7 @@ int ctdb_ltdb_lock_requeue(struct ctdb_db_context *ctdb_db,
 
 	/* when torturing, ensure we test the contended path */
 	if ((ctdb_db->ctdb->flags & CTDB_FLAG_TORTURE) &&
-	    random() % 5 == 0) {
+	    generate_random() % 5 == 0) {
 		ret = -1;
 		tdb_chainunlock(tdb, key);
 	}
