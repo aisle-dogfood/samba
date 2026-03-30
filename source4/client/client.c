@@ -1587,6 +1587,7 @@ delete a whole directory tree
 static int cmd_deltree(struct smbclient_context *ctx, const char **args)
 {
 	char *dname;
+	char *quest;
 	int ret;
 
 	if (!args[1]) {
@@ -1595,6 +1596,22 @@ static int cmd_deltree(struct smbclient_context *ctx, const char **args)
 	}
 
 	dname = talloc_asprintf(ctx, "%s%s", ctx->remote_cur_dir, args[1]);
+
+	/* Warn about potentially dangerous patterns */
+	if (strpbrk(args[1], "*?") != NULL) {
+		d_printf("WARNING: Pattern contains wildcards - this may delete multiple directories!\n");
+	}
+
+	/* Confirm destructive operation */
+	quest = talloc_asprintf(ctx, 
+		"Recursively delete directory tree %s (including all files, subdirectories, hidden and system files)? ", 
+		dname);
+	if (ctx->prompt && !yesno(quest)) {
+		talloc_free(quest);
+		d_printf("deltree cancelled.\n");
+		return 0;
+	}
+	talloc_free(quest);
 
 	ret = smbcli_deltree(ctx->cli->tree, dname);
 
