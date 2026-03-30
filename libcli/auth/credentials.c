@@ -157,19 +157,12 @@ static NTSTATUS netlogon_creds_step_crypt(struct netlogon_creds_CredentialState 
 		if (!NT_STATUS_IS_OK(status)) {
 			return status;
 		}
-	} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-		memcpy(out->data, in->data, sizeof(out->data));
-
-		status = netlogon_creds_arcfour_crypt(creds,
-						      out->data,
-						      sizeof(out->data));
-		if (!NT_STATUS_IS_OK(status)) {
-			return status;
-		}
 	} else {
 		/*
-		 * DES encryption is no longer supported due to inadequate encryption strength.
-		 * Require AES or ARCFOUR encryption for secure communication.
+		 * Only AES encryption is supported to prevent use of weak ciphers.
+		 * ARCFOUR (RC4) and DES are no longer supported due to inadequate
+		 * encryption strength. AES-128 or better is required for secure
+		 * Netlogon communication.
 		 */
 		return NT_STATUS_NOT_SUPPORTED;
 	}
@@ -1092,38 +1085,11 @@ static NTSTATUS netlogon_creds_crypt_samlogon_validation(struct netlogon_creds_C
 				return status;
 			}
 		}
-	} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-		/*
-		 * Don't crypt an all-zero key, it would give away
-		 * the NETLOGON pipe session key
-		 *
-		 * But for ServerAuthenticateKerberos we don't care
-		 * as we use a random key
-		 */
-		if (creds->authenticate_kerberos ||
-		    !all_zero(base->key.key, sizeof(base->key.key))) {
-			status = netlogon_creds_arcfour_crypt(creds,
-							      base->key.key,
-							      sizeof(base->key.key));
-			if (!NT_STATUS_IS_OK(status)) {
-				return status;
-			}
-		}
-
-		if (creds->authenticate_kerberos ||
-		    !all_zero(base->LMSessKey.key,
-			      sizeof(base->LMSessKey.key))) {
-			status = netlogon_creds_arcfour_crypt(creds,
-							      base->LMSessKey.key,
-							      sizeof(base->LMSessKey.key));
-			if (!NT_STATUS_IS_OK(status)) {
-				return status;
-			}
-		}
 	} else {
 		/*
-		 * DES encryption is no longer supported due to inadequate
-		 * encryption strength. Require at least ARCFOUR or AES.
+		 * Only AES encryption is supported to prevent use of weak ciphers.
+		 * ARCFOUR (RC4) and DES are no longer supported due to inadequate
+		 * encryption strength.
 		 */
 		return NT_STATUS_DOWNGRADE_DETECTED;
 	}
@@ -1230,32 +1196,11 @@ static NTSTATUS netlogon_creds_crypt_samlogon_logon(struct netlogon_creds_Creden
 					return status;
 				}
 			}
-		} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-			uint8_t *h;
-
-			h = logon->password->lmpassword.hash;
-			if (!all_zero(h, 16)) {
-				status = netlogon_creds_arcfour_crypt(creds,
-								      h,
-								      16);
-				if (!NT_STATUS_IS_OK(status)) {
-					return status;
-				}
-			}
-
-			h = logon->password->ntpassword.hash;
-			if (!all_zero(h, 16)) {
-				status = netlogon_creds_arcfour_crypt(creds,
-								      h,
-								      16);
-				if (!NT_STATUS_IS_OK(status)) {
-					return status;
-				}
-			}
 		} else {
 			/*
-			 * DES encryption is no longer supported due to inadequate
-			 * encryption strength. Require at least ARCFOUR or AES.
+			 * Only AES encryption is supported to prevent use of weak ciphers.
+			 * ARCFOUR (RC4) and DES are no longer supported due to inadequate
+			 * encryption strength.
 			 */
 			return NT_STATUS_DOWNGRADE_DETECTED;
 		}
@@ -1289,19 +1234,28 @@ static NTSTATUS netlogon_creds_crypt_samlogon_logon(struct netlogon_creds_Creden
 			if (!NT_STATUS_IS_OK(status)) {
 				return status;
 			}
-		} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-			status = netlogon_creds_arcfour_crypt(creds,
-							      logon->generic->data,
-							      logon->generic->length);
-			if (!NT_STATUS_IS_OK(status)) {
-				return status;
-			}
-		} else if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
+		} else if (auth_level == DCERPC_AUTH_LEVEL_PRIVACY) {
 			/*
-			 * Using DES to verify kerberos tickets makes no sense,
-			 * but if the connection is encrypted we don't care...
+			 * ARCFOUR is deprecated for security. However, if the RPC
+			 * connection is already encrypted at PRIVACY level, the specific
+			 * cipher used here is less critical. Still, we enforce AES when
+			 * the connection is not privacy-protected.
 			 */
-			return NT_STATUS_INVALID_PARAMETER;
+			if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+				status = netlogon_creds_arcfour_crypt(creds,
+								      logon->generic->data,
+								      logon->generic->length);
+				if (!NT_STATUS_IS_OK(status)) {
+					return status;
+				}
+			}
+		} else {
+			/*
+			 * Only AES encryption is supported to prevent use of weak ciphers.
+			 * ARCFOUR (RC4) and DES are no longer supported unless the
+			 * connection is already encrypted at PRIVACY level.
+			 */
+			return NT_STATUS_DOWNGRADE_DETECTED;
 		}
 		break;
 
@@ -1432,21 +1386,25 @@ static NTSTATUS netlogon_creds_crypt_samr_CryptPassword(
 						  ARRAY_SIZE(pass->data));
 	}
 
-	if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-		return netlogon_creds_arcfour_crypt(creds,
-						    pass->data,
-						    ARRAY_SIZE(pass->data));
+	if (auth_level == DCERPC_AUTH_LEVEL_PRIVACY) {
+		/*
+		 * ARCFOUR is deprecated for security. However, if the RPC
+		 * connection is already encrypted at PRIVACY level, allow it.
+		 */
+		if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+			return netlogon_creds_arcfour_crypt(creds,
+							    pass->data,
+							    ARRAY_SIZE(pass->data));
+		}
+		return NT_STATUS_OK;
 	}
 
 	/*
-	 * Using DES to verify to encrypt the password makes no sense,
-	 * but if the connection is encrypted we don't care...
+	 * Only AES encryption is supported to prevent use of weak ciphers.
+	 * ARCFOUR (RC4) and DES are no longer supported unless the
+	 * connection is already encrypted at PRIVACY level.
 	 */
-	if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	return NT_STATUS_OK;
+	return NT_STATUS_DOWNGRADE_DETECTED;
 }
 
 NTSTATUS netlogon_creds_decrypt_samr_CryptPassword(struct netlogon_creds_CredentialState *creds,
@@ -1508,21 +1466,25 @@ static NTSTATUS netlogon_creds_crypt_SendToSam(
 						  opaque_length);
 	}
 
-	if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
-		return netlogon_creds_arcfour_crypt(creds,
-						    opaque_data,
-						    opaque_length);
+	if (auth_level == DCERPC_AUTH_LEVEL_PRIVACY) {
+		/*
+		 * ARCFOUR is deprecated for security. However, if the RPC
+		 * connection is already encrypted at PRIVACY level, allow it.
+		 */
+		if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+			return netlogon_creds_arcfour_crypt(creds,
+							    opaque_data,
+							    opaque_length);
+		}
+		return NT_STATUS_OK;
 	}
 
 	/*
-	 * Using DES to verify to encrypt the data makes no sense,
-	 * but if the connection is encrypted we don't care...
+	 * Only AES encryption is supported to prevent use of weak ciphers.
+	 * ARCFOUR (RC4) and DES are no longer supported unless the
+	 * connection is already encrypted at PRIVACY level.
 	 */
-	if (auth_level != DCERPC_AUTH_LEVEL_PRIVACY) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	return NT_STATUS_OK;
+	return NT_STATUS_DOWNGRADE_DETECTED;
 }
 
 NTSTATUS netlogon_creds_decrypt_SendToSam(struct netlogon_creds_CredentialState *creds,
