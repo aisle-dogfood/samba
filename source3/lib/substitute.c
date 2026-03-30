@@ -258,8 +258,7 @@ static char *realloc_expand_env_var(char *str, char *p)
 
 /****************************************************************************
  Do some standard substitutions in a string.
- len is the length in bytes of the space allowed in string str. If zero means
- don't allow expansions.
+ len is the size of the destination buffer in bytes.
 ****************************************************************************/
 
 void standard_sub_basic(const char *smb_name, const char *domain_name,
@@ -268,7 +267,7 @@ void standard_sub_basic(const char *smb_name, const char *domain_name,
 	char *s;
 
 	if ( (s = talloc_sub_basic(talloc_tos(), smb_name, domain_name, str )) != NULL ) {
-		strncpy( str, s, len );
+		strlcpy( str, s, len );
 	}
 
 	TALLOC_FREE( s );

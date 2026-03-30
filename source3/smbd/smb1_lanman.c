@@ -688,7 +688,7 @@ static void fill_printq_info_52(struct spoolss_DriverInfo3 *driver,
 	PACKS(desc, "z", driver->monitor_name); /* language monitor */
 
 	fstrcpy(location, "\\\\%L\\print$\\WIN40\\0");
-	standard_sub_basic( "", "", location, sizeof(location)-1 );
+	standard_sub_basic( "", "", location, sizeof(location) );
 	PACKS(desc,"z", location);                          /* share to retrieve files */
 
 	PACKS(desc,"z", driver->default_datatype);    /* default data type */
