@@ -851,7 +851,9 @@ static uint32_t new_generation(void)
 	uint32_t generation;
 
 	while (1) {
-		generation = random();
+		uint8_t v[4];
+		generate_random_buffer(v, 4);
+		generation = IVAL(v, 0);
 
 		if (generation != INVALID_GENERATION) {
 			break;

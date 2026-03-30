@@ -1164,7 +1164,9 @@ static uint32_t new_generation(uint32_t old_generation)
 	uint32_t generation;
 
 	while (1) {
-		generation = random();
+		uint8_t v[4];
+		generate_random_buffer(v, 4);
+		generation = IVAL(v, 0);
 		if (generation != INVALID_GENERATION &&
 		    generation != old_generation) {
 			break;
