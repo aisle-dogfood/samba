@@ -32,6 +32,9 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include <gnutls/gnutls.h>
+#include <gnutls/crypto.h>
+#include "lib/crypto/gnutls_helpers.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
@@ -249,6 +252,274 @@ static char *trustdom_keystr(const char *domain)
 	return keystr;
 }
 
+/*
+ * Derive a 256-bit encryption key for trusted domain password protection.
+ * Uses system-specific data to ensure the key is unique per installation.
+ * The key is derived from: local machine SID + domain name + version string
+ */
+static bool derive_trustdom_encryption_key(TALLOC_CTX *mem_ctx,
+					   const char *domain,
+					   uint8_t key_out[32])
+{
+	DATA_BLOB domain_blob = data_blob_string_const(domain);
+	DATA_BLOB context_blob = data_blob_string_const("SAMBA_TRUSTDOM_KEY_V1");
+	struct dom_sid local_sid;
+	char *sid_str = NULL;
+	DATA_BLOB sid_blob = {0};
+	uint8_t *combined = NULL;
+	size_t combined_len;
+	gnutls_hash_hd_t hash_hnd = NULL;
+	int rc;
+	bool ok;
+
+	/* Get local machine SID for additional entropy */
+	ok = secrets_fetch_domain_sid(lp_netbios_name(), &local_sid);
+	if (ok) {
+		sid_str = dom_sid_string(mem_ctx, &local_sid);
+		if (sid_str != NULL) {
+			sid_blob = data_blob_string_const(sid_str);
+		}
+	}
+
+	/* Combine local SID, domain name, and context for key derivation */
+	combined_len = sid_blob.length + domain_blob.length + context_blob.length;
+	combined = talloc_array(mem_ctx, uint8_t, combined_len);
+	if (combined == NULL) {
+		TALLOC_FREE(sid_str);
+		return false;
+	}
+
+	if (sid_blob.length > 0) {
+		memcpy(combined, sid_blob.data, sid_blob.length);
+	}
+	memcpy(combined + sid_blob.length, domain_blob.data, domain_blob.length);
+	memcpy(combined + sid_blob.length + domain_blob.length,
+	       context_blob.data, context_blob.length);
+
+	TALLOC_FREE(sid_str);
+
+	/* Derive key using SHA-256 */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
+	if (rc < 0) {
+		TALLOC_FREE(combined);
+		return false;
+	}
+
+	rc = gnutls_hash(hash_hnd, combined, combined_len);
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		TALLOC_FREE(combined);
+		return false;
+	}
+
+	gnutls_hash_deinit(hash_hnd, key_out);
+	BURN_PTR_SIZE(combined, combined_len);
+	TALLOC_FREE(combined);
+
+	return true;
+}
+
+/*
+ * Encrypt a trusted domain password using AES-256-GCM
+ */
+static bool encrypt_trustdom_password(TALLOC_CTX *mem_ctx,
+				      const char *domain,
+				      const char *plaintext_pwd,
+				      DATA_BLOB *encrypted_blob)
+{
+	uint8_t key[32];
+	uint8_t iv[16];
+	uint8_t tag[16];
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	size_t pwd_len;
+	uint8_t *ciphertext = NULL;
+	uint8_t *result = NULL;
+	int rc;
+	bool ok;
+
+	if (plaintext_pwd == NULL) {
+		return false;
+	}
+
+	pwd_len = strlen(plaintext_pwd);
+	if (pwd_len == 0) {
+		return false;
+	}
+
+	/* Derive encryption key */
+	ok = derive_trustdom_encryption_key(mem_ctx, domain, key);
+	if (!ok) {
+		return false;
+	}
+
+	/* Generate random IV */
+	generate_random_buffer(iv, sizeof(iv));
+
+	/* Allocate ciphertext buffer */
+	ciphertext = talloc_array(mem_ctx, uint8_t, pwd_len);
+	if (ciphertext == NULL) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		return false;
+	}
+	memcpy(ciphertext, plaintext_pwd, pwd_len);
+
+	/* Initialize cipher */
+	key_datum.data = key;
+	key_datum.size = sizeof(key);
+	iv_datum.data = iv;
+	iv_datum.size = sizeof(iv);
+
+	rc = gnutls_cipher_init(&cipher_hnd, GNUTLS_CIPHER_AES_256_GCM,
+				&key_datum, &iv_datum);
+	if (rc < 0) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		BURN_PTR_SIZE(ciphertext, pwd_len);
+		TALLOC_FREE(ciphertext);
+		return false;
+	}
+
+	/* Encrypt */
+	rc = gnutls_cipher_encrypt(cipher_hnd, ciphertext, pwd_len);
+	if (rc < 0) {
+		gnutls_cipher_deinit(cipher_hnd);
+		BURN_PTR_SIZE(key, sizeof(key));
+		BURN_PTR_SIZE(ciphertext, pwd_len);
+		TALLOC_FREE(ciphertext);
+		return false;
+	}
+
+	/* Get authentication tag */
+	rc = gnutls_cipher_tag(cipher_hnd, tag, sizeof(tag));
+	gnutls_cipher_deinit(cipher_hnd);
+	
+	if (rc < 0) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		BURN_PTR_SIZE(ciphertext, pwd_len);
+		TALLOC_FREE(ciphertext);
+		return false;
+	}
+
+	BURN_PTR_SIZE(key, sizeof(key));
+
+	/* Build result: IV (16) + tag (16) + ciphertext */
+	result = talloc_array(mem_ctx, uint8_t, 16 + 16 + pwd_len);
+	if (result == NULL) {
+		BURN_PTR_SIZE(ciphertext, pwd_len);
+		TALLOC_FREE(ciphertext);
+		return false;
+	}
+
+	memcpy(result, iv, 16);
+	memcpy(result + 16, tag, 16);
+	memcpy(result + 32, ciphertext, pwd_len);
+
+	BURN_PTR_SIZE(ciphertext, pwd_len);
+	TALLOC_FREE(ciphertext);
+
+	*encrypted_blob = data_blob_talloc(mem_ctx, result, 32 + pwd_len);
+	TALLOC_FREE(result);
+
+	return (encrypted_blob->data != NULL);
+}
+
+/*
+ * Decrypt a trusted domain password using AES-256-GCM
+ */
+static bool decrypt_trustdom_password(TALLOC_CTX *mem_ctx,
+				      const char *domain,
+				      const DATA_BLOB *encrypted_blob,
+				      char **plaintext_pwd)
+{
+	uint8_t key[32];
+	uint8_t iv[16];
+	uint8_t tag[16];
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	size_t ciphertext_len;
+	uint8_t *plaintext = NULL;
+	char *result = NULL;
+	int rc;
+	bool ok;
+
+	/* Encrypted blob must be at least IV(16) + tag(16) */
+	if (encrypted_blob == NULL || encrypted_blob->length < 32) {
+		return false;
+	}
+
+	ciphertext_len = encrypted_blob->length - 32;
+
+	/* Extract IV and tag */
+	memcpy(iv, encrypted_blob->data, 16);
+	memcpy(tag, encrypted_blob->data + 16, 16);
+
+	/* Derive decryption key */
+	ok = derive_trustdom_encryption_key(mem_ctx, domain, key);
+	if (!ok) {
+		return false;
+	}
+
+	/* Allocate plaintext buffer */
+	plaintext = talloc_array(mem_ctx, uint8_t, ciphertext_len + 1);
+	if (plaintext == NULL) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		return false;
+	}
+	memcpy(plaintext, encrypted_blob->data + 32, ciphertext_len);
+
+	/* Initialize cipher */
+	key_datum.data = key;
+	key_datum.size = sizeof(key);
+	iv_datum.data = iv;
+	iv_datum.size = sizeof(iv);
+
+	rc = gnutls_cipher_init(&cipher_hnd, GNUTLS_CIPHER_AES_256_GCM,
+				&key_datum, &iv_datum);
+	if (rc < 0) {
+		BURN_PTR_SIZE(key, sizeof(key));
+		BURN_PTR_SIZE(plaintext, ciphertext_len);
+		TALLOC_FREE(plaintext);
+		return false;
+	}
+
+	/* Set and verify authentication tag */
+	rc = gnutls_cipher_tag(cipher_hnd, tag, sizeof(tag));
+	if (rc < 0) {
+		gnutls_cipher_deinit(cipher_hnd);
+		BURN_PTR_SIZE(key, sizeof(key));
+		BURN_PTR_SIZE(plaintext, ciphertext_len);
+		TALLOC_FREE(plaintext);
+		return false;
+	}
+
+	/* Decrypt */
+	rc = gnutls_cipher_decrypt(cipher_hnd, plaintext, ciphertext_len);
+	gnutls_cipher_deinit(cipher_hnd);
+	BURN_PTR_SIZE(key, sizeof(key));
+
+	if (rc < 0) {
+		BURN_PTR_SIZE(plaintext, ciphertext_len);
+		TALLOC_FREE(plaintext);
+		return false;
+	}
+
+	/* Null-terminate and return */
+	plaintext[ciphertext_len] = '\0';
+	result = talloc_strdup(mem_ctx, (char *)plaintext);
+	BURN_PTR_SIZE(plaintext, ciphertext_len);
+	TALLOC_FREE(plaintext);
+
+	if (result == NULL) {
+		return false;
+	}
+
+	talloc_keep_secret(result);
+	*plaintext_pwd = result;
+	return true;
+}
+
 /************************************************************************
  Routine to get account password to trusted domain
 ************************************************************************/
@@ -258,9 +529,9 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 {
 	struct TRUSTED_DOM_PASS pass;
 	enum ndr_err_code ndr_err;
-
-	/* unpacking structures */
 	DATA_BLOB blob;
+	char *decrypted_pwd = NULL;
+	bool is_encrypted = false;
 
 	/* fetching trusted domain password structure */
 	if (!(blob.data = (uint8_t *)secrets_fetch(trustdom_keystr(domain),
@@ -284,13 +555,43 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 		talloc_keep_secret(discard_const_p(char, pass.pass));
 	}
 
+	/* Check if password is encrypted (starts with magic marker) */
+	if (pass.pass != NULL && pass.pass_len >= 32 &&
+	    strncmp(pass.pass, "ENCRYPTED:", 10) == 0) {
+		DATA_BLOB encrypted_data;
+		bool ok;
+
+		is_encrypted = true;
+		/* Skip the "ENCRYPTED:" prefix */
+		encrypted_data.data = (uint8_t *)(pass.pass + 10);
+		encrypted_data.length = pass.pass_len - 10;
+
+		ok = decrypt_trustdom_password(talloc_tos(), domain,
+					       &encrypted_data,
+					       &decrypted_pwd);
+		if (!ok) {
+			DEBUG(0, ("Failed to decrypt trusted domain password for %s\n",
+				  domain));
+			return false;
+		}
+	}
+
 	/* the trust's password */
 	if (pwd) {
-		*pwd = SMB_STRDUP(pass.pass);
+		if (is_encrypted) {
+			*pwd = SMB_STRDUP(decrypted_pwd);
+			BURN_STR(decrypted_pwd);
+			TALLOC_FREE(decrypted_pwd);
+		} else {
+			*pwd = SMB_STRDUP(pass.pass);
+		}
 		if (!*pwd) {
 			return False;
 		}
 		talloc_keep_secret(*pwd);
+	} else if (is_encrypted) {
+		BURN_STR(decrypted_pwd);
+		TALLOC_FREE(decrypted_pwd);
 	}
 
 	/* last change time */
@@ -316,12 +617,35 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
                                            const struct dom_sid *sid)
 {
 	bool ret;
-
-	/* packing structures */
 	DATA_BLOB blob;
+	DATA_BLOB encrypted_pwd;
 	enum ndr_err_code ndr_err;
 	struct TRUSTED_DOM_PASS pass;
+	char *encrypted_pwd_str = NULL;
+	bool ok;
+	TALLOC_CTX *tmp_ctx = talloc_tos();
+
 	ZERO_STRUCT(pass);
+
+	/* Encrypt the password */
+	ok = encrypt_trustdom_password(tmp_ctx, domain, pwd, &encrypted_pwd);
+	if (!ok) {
+		DEBUG(0, ("Failed to encrypt trusted domain password for %s\n",
+			  domain));
+		return false;
+	}
+
+	/* Prepare encrypted password string with magic marker */
+	encrypted_pwd_str = talloc_asprintf(tmp_ctx, "ENCRYPTED:%*s",
+					    (int)encrypted_pwd.length,
+					    "");
+	if (encrypted_pwd_str == NULL) {
+		data_blob_clear_free(&encrypted_pwd);
+		return false;
+	}
+	
+	/* Copy encrypted data after the prefix */
+	memcpy(encrypted_pwd_str + 10, encrypted_pwd.data, encrypted_pwd.length);
 
 	pass.uni_name = domain;
 	pass.uni_name_len = strlen(domain)+1;
@@ -329,15 +653,20 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 	/* last change time */
 	pass.mod_time = time(NULL);
 
-	/* password of the trust */
-	pass.pass_len = strlen(pwd);
-	pass.pass = pwd;
+	/* encrypted password of the trust */
+	pass.pass_len = 10 + encrypted_pwd.length;
+	pass.pass = encrypted_pwd_str;
 
 	/* domain sid */
 	sid_copy(&pass.domain_sid, sid);
 
-	ndr_err = ndr_push_struct_blob(&blob, talloc_tos(), &pass,
+	ndr_err = ndr_push_struct_blob(&blob, tmp_ctx, &pass,
 			(ndr_push_flags_fn_t)ndr_push_TRUSTED_DOM_PASS);
+	
+	/* Clear encrypted password from memory */
+	data_blob_clear_free(&encrypted_pwd);
+	BURN_STR(encrypted_pwd_str);
+
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
 		return false;
 	}
