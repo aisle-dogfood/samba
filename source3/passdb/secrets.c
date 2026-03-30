@@ -32,11 +32,18 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include "lib/crypto/gnutls_helpers.h"
+#include <gnutls/gnutls.h>
+#include <gnutls/crypto.h>
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
 
 static struct db_context *db_ctx;
+
+/* Magic header to identify encrypted credential data */
+#define SECRETS_CRED_ENCRYPTED_MAGIC "SAMBACRYPTV1"
+#define SECRETS_CRED_ENCRYPTED_MAGIC_LEN 12
 
 /* open up the secrets database with specified private_dir path */
 bool secrets_init_path(const char *private_dir)
@@ -94,6 +101,266 @@ struct db_context *secrets_db_ctx(void)
 void secrets_shutdown(void)
 {
 	TALLOC_FREE(db_ctx);
+}
+
+/*
+ * Derive a machine-specific encryption key for protecting credentials at rest.
+ * Uses machine hostname and private directory path as entropy sources.
+ */
+static bool secrets_derive_encryption_key(uint8_t key_out[32])
+{
+	gnutls_hash_hd_t hash_hnd = NULL;
+	const char *hostname = NULL;
+	const char *private_dir = NULL;
+	const char *salt = "SAMBA_SECRETS_ENCRYPTION_V1";
+	int rc;
+
+	/* Get machine-specific identifiers */
+	hostname = lp_netbios_name();
+	private_dir = lp_private_dir();
+
+	if (hostname == NULL || private_dir == NULL) {
+		DEBUG(0, ("Failed to get machine identifiers for key derivation\n"));
+		return false;
+	}
+
+	/* Use SHA-256 to derive a 32-byte key from machine-specific data */
+	rc = gnutls_hash_init(&hash_hnd, GNUTLS_DIG_SHA256);
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_hash_init failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	rc = gnutls_hash(hash_hnd, salt, strlen(salt));
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		DEBUG(0, ("gnutls_hash failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	rc = gnutls_hash(hash_hnd, hostname, strlen(hostname));
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		DEBUG(0, ("gnutls_hash failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	rc = gnutls_hash(hash_hnd, private_dir, strlen(private_dir));
+	if (rc < 0) {
+		gnutls_hash_deinit(hash_hnd, NULL);
+		DEBUG(0, ("gnutls_hash failed: %s\n", gnutls_strerror(rc)));
+		return false;
+	}
+
+	gnutls_hash_deinit(hash_hnd, key_out);
+	return true;
+}
+
+/*
+ * Encrypt credential data before storing in secrets.tdb
+ * Format: [MAGIC(12)][IV(16)][TAG(16)][CIPHERTEXT(variable)]
+ */
+static bool secrets_encrypt_credential(const char *plaintext,
+					uint8_t **encrypted_out,
+					size_t *encrypted_size_out)
+{
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	uint8_t key[32]; /* AES-256 key */
+	uint8_t iv[16];  /* AES block size */
+	uint8_t tag[16]; /* GCM auth tag */
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	size_t plaintext_len;
+	uint8_t *ciphertext = NULL;
+	uint8_t *result = NULL;
+	size_t result_size;
+	int rc;
+	bool ok;
+
+	if (plaintext == NULL || encrypted_out == NULL || encrypted_size_out == NULL) {
+		return false;
+	}
+
+	plaintext_len = strlen(plaintext) + 1; /* Include null terminator */
+
+	/* Derive encryption key */
+	ok = secrets_derive_encryption_key(key);
+	if (!ok) {
+		return false;
+	}
+
+	/* Generate random IV */
+	generate_random_buffer(iv, sizeof(iv));
+
+	/* Allocate ciphertext buffer (same size as plaintext for GCM) */
+	ciphertext = malloc(plaintext_len);
+	if (ciphertext == NULL) {
+		ZERO_ARRAY(key);
+		return false;
+	}
+
+	/* Initialize GCM cipher */
+	key_datum.data = key;
+	key_datum.size = sizeof(key);
+	iv_datum.data = iv;
+	iv_datum.size = sizeof(iv);
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_GCM,
+				&key_datum,
+				&iv_datum);
+	if (rc != 0) {
+		DEBUG(0, ("gnutls_cipher_init failed: %s\n", gnutls_strerror(rc)));
+		ZERO_ARRAY(key);
+		free(ciphertext);
+		return false;
+	}
+
+	/* Encrypt the plaintext */
+	rc = gnutls_cipher_encrypt2(cipher_hnd,
+				    plaintext, plaintext_len,
+				    ciphertext, plaintext_len);
+	if (rc != 0) {
+		DEBUG(0, ("gnutls_cipher_encrypt2 failed: %s\n", gnutls_strerror(rc)));
+		gnutls_cipher_deinit(cipher_hnd);
+		ZERO_ARRAY(key);
+		BURN_PTR_SIZE(ciphertext, plaintext_len);
+		free(ciphertext);
+		return false;
+	}
+
+	/* Get authentication tag */
+	rc = gnutls_cipher_tag(cipher_hnd, tag, sizeof(tag));
+	gnutls_cipher_deinit(cipher_hnd);
+	ZERO_ARRAY(key);
+
+	if (rc != 0) {
+		DEBUG(0, ("gnutls_cipher_tag failed: %s\n", gnutls_strerror(rc)));
+		BURN_PTR_SIZE(ciphertext, plaintext_len);
+		free(ciphertext);
+		return false;
+	}
+
+	/* Build result: [MAGIC][IV][TAG][CIPHERTEXT] */
+	result_size = SECRETS_CRED_ENCRYPTED_MAGIC_LEN + sizeof(iv) + sizeof(tag) + plaintext_len;
+	result = malloc(result_size);
+	if (result == NULL) {
+		BURN_PTR_SIZE(ciphertext, plaintext_len);
+		free(ciphertext);
+		return false;
+	}
+
+	memcpy(result, SECRETS_CRED_ENCRYPTED_MAGIC, SECRETS_CRED_ENCRYPTED_MAGIC_LEN);
+	memcpy(result + SECRETS_CRED_ENCRYPTED_MAGIC_LEN, iv, sizeof(iv));
+	memcpy(result + SECRETS_CRED_ENCRYPTED_MAGIC_LEN + sizeof(iv), tag, sizeof(tag));
+	memcpy(result + SECRETS_CRED_ENCRYPTED_MAGIC_LEN + sizeof(iv) + sizeof(tag),
+	       ciphertext, plaintext_len);
+
+	BURN_PTR_SIZE(ciphertext, plaintext_len);
+	free(ciphertext);
+
+	*encrypted_out = result;
+	*encrypted_size_out = result_size;
+	return true;
+}
+
+/*
+ * Decrypt credential data retrieved from secrets.tdb
+ * Returns decrypted plaintext (caller must free with BURN_FREE_STR)
+ */
+static char *secrets_decrypt_credential(const uint8_t *encrypted_data,
+					size_t encrypted_size)
+{
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	uint8_t key[32];
+	const uint8_t *iv;
+	const uint8_t *tag;
+	const uint8_t *ciphertext;
+	size_t ciphertext_len;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	char *plaintext = NULL;
+	int rc;
+	bool ok;
+
+	/* Validate minimum size: MAGIC + IV + TAG + at least 1 byte data */
+	if (encrypted_data == NULL ||
+	    encrypted_size < (SECRETS_CRED_ENCRYPTED_MAGIC_LEN + 16 + 16 + 1)) {
+		return NULL;
+	}
+
+	/* Check magic header */
+	if (memcmp(encrypted_data, SECRETS_CRED_ENCRYPTED_MAGIC,
+		   SECRETS_CRED_ENCRYPTED_MAGIC_LEN) != 0) {
+		/* Not encrypted data, might be legacy plaintext */
+		return NULL;
+	}
+
+	/* Extract components */
+	iv = encrypted_data + SECRETS_CRED_ENCRYPTED_MAGIC_LEN;
+	tag = iv + 16;
+	ciphertext = tag + 16;
+	ciphertext_len = encrypted_size - SECRETS_CRED_ENCRYPTED_MAGIC_LEN - 16 - 16;
+
+	/* Derive decryption key */
+	ok = secrets_derive_encryption_key(key);
+	if (!ok) {
+		return NULL;
+	}
+
+	/* Allocate plaintext buffer */
+	plaintext = malloc(ciphertext_len);
+	if (plaintext == NULL) {
+		ZERO_ARRAY(key);
+		return NULL;
+	}
+
+	/* Initialize GCM cipher */
+	key_datum.data = key;
+	key_datum.size = sizeof(key);
+	iv_datum.data = (uint8_t *)iv;
+	iv_datum.size = 16;
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_GCM,
+				&key_datum,
+				&iv_datum);
+	if (rc != 0) {
+		DEBUG(0, ("gnutls_cipher_init failed: %s\n", gnutls_strerror(rc)));
+		ZERO_ARRAY(key);
+		free(plaintext);
+		return NULL;
+	}
+
+	/* Set expected authentication tag */
+	rc = gnutls_cipher_add_auth(cipher_hnd, tag, 16);
+	if (rc != 0) {
+		DEBUG(0, ("gnutls_cipher_add_auth failed: %s\n", gnutls_strerror(rc)));
+		gnutls_cipher_deinit(cipher_hnd);
+		ZERO_ARRAY(key);
+		free(plaintext);
+		return NULL;
+	}
+
+	/* Decrypt the ciphertext */
+	rc = gnutls_cipher_decrypt2(cipher_hnd,
+				    ciphertext, ciphertext_len,
+				    plaintext, ciphertext_len);
+	gnutls_cipher_deinit(cipher_hnd);
+	ZERO_ARRAY(key);
+
+	if (rc != 0) {
+		DEBUG(0, ("gnutls_cipher_decrypt2 failed (auth tag mismatch?): %s\n",
+			  gnutls_strerror(rc)));
+		BURN_PTR_SIZE(plaintext, ciphertext_len);
+		free(plaintext);
+		return NULL;
+	}
+
+	/* Ensure null termination */
+	plaintext[ciphertext_len - 1] = '\0';
+
+	return plaintext;
 }
 
 /* read a entry from the secrets database - the caller must free the result
@@ -157,6 +424,8 @@ bool secrets_store(const char *key, const void *data, size_t size)
 bool secrets_store_creds(struct cli_credentials *creds)
 {
 	const char *p = NULL;
+	uint8_t *encrypted_password = NULL;
+	size_t encrypted_size = 0;
 	bool ok;
 
 	p = cli_credentials_get_username(creds);
@@ -188,9 +457,23 @@ bool secrets_store_creds(struct cli_credentials *creds)
 		return false;
 	}
 
-	ok = secrets_store(SECRETS_AUTH_PASSWORD, p, strlen(p) + 1);
+	/* Encrypt password before storing to protect credentials at rest */
+	ok = secrets_encrypt_credential(p, &encrypted_password, &encrypted_size);
 	if (!ok) {
-		DBG_ERR("Failed storing auth password\n");
+		DBG_ERR("Failed encrypting auth password\n");
+		return false;
+	}
+
+	ok = secrets_store(SECRETS_AUTH_PASSWORD, encrypted_password, encrypted_size);
+	
+	/* Always securely free encrypted buffer */
+	if (encrypted_password != NULL) {
+		BURN_PTR_SIZE(encrypted_password, encrypted_size);
+		free(encrypted_password);
+	}
+
+	if (!ok) {
+		DBG_ERR("Failed storing encrypted auth password\n");
 		return false;
 	}
 
@@ -475,12 +758,13 @@ bool secrets_fetch_afs_key(const char *cell, struct afs_key *result)
 void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 {
 	size_t username_size, domain_size, password_size;
-	char *raw_username, *raw_domain, *raw_password;
+	uint8_t *raw_username, *raw_domain, *raw_password;
+	char *decrypted_password = NULL;
 	
 	/* Fetch raw data from secrets database */
-	raw_username = (char *)secrets_fetch(SECRETS_AUTH_USER, &username_size);
-	raw_domain = (char *)secrets_fetch(SECRETS_AUTH_DOMAIN, &domain_size);
-	raw_password = (char *)secrets_fetch(SECRETS_AUTH_PASSWORD, &password_size);
+	raw_username = (uint8_t *)secrets_fetch(SECRETS_AUTH_USER, &username_size);
+	raw_domain = (uint8_t *)secrets_fetch(SECRETS_AUTH_DOMAIN, &domain_size);
+	raw_password = (uint8_t *)secrets_fetch(SECRETS_AUTH_PASSWORD, &password_size);
 	
 	/* Ensure null-termination for string safety */
 	if (raw_username != NULL) {
@@ -506,11 +790,21 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 	}
 	
 	if (raw_password != NULL) {
-		*password = malloc(password_size + 1);
-		if (*password != NULL) {
-			memcpy(*password, raw_password, password_size);
-			(*password)[password_size] = '\0';
+		/* Attempt to decrypt password (handles encrypted format) */
+		decrypted_password = secrets_decrypt_credential(raw_password, password_size);
+		
+		if (decrypted_password != NULL) {
+			/* Successfully decrypted */
+			*password = decrypted_password;
+		} else {
+			/* Not encrypted, treat as legacy plaintext for backward compatibility */
+			*password = malloc(password_size + 1);
+			if (*password != NULL) {
+				memcpy(*password, raw_password, password_size);
+				(*password)[password_size] = '\0';
+			}
 		}
+		
 		BURN_FREE(raw_password, password_size);
 	} else {
 		*password = NULL;
