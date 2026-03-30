@@ -820,7 +820,7 @@ def create_zone_file(logger, paths, dnsdomain,
         try:
             os.chown(paths.dns, -1, paths.bind_gid)
             # chmod needed to cope with umask
-            os.chmod(paths.dns, 0o664)
+            os.chmod(paths.dns, 0o660)
         except OSError:
             if 'SAMBA_SELFTEST' not in os.environ:
                 logger.error("Failed to chown %s to bind gid %u" % (
