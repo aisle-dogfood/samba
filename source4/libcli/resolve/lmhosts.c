@@ -89,7 +89,7 @@ static struct composite_context *resolve_name_lmhosts_send(
 
 
 		state->names = talloc_realloc(state, state->names, char *, i+2);
-		if (composite_nomem(state->addrs, c)) return c;
+		if (composite_nomem(state->names, c)) return c;
 
 		state->names[i] = talloc_strdup(state->names, name->name);
 		if (composite_nomem(state->names[i], c)) return c;
