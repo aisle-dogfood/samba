@@ -479,6 +479,14 @@ static void pipe_handler(struct tevent_context *ev, struct tevent_fd *fde,
 		value = 8192;
 	}
 
+	/*
+	 * Enforce a maximum buffer size to prevent memory exhaustion
+	 * from unbounded allocations based on FIONREAD. Cap at 64 KiB.
+	 */
+	if (value > 65536) {
+		value = 65536;
+	}
+
 	address = talloc_array(state, char, value+1);
 	if (address) {
 		/* yes, we don't care about EAGAIN or other niceities
