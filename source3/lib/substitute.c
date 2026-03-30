@@ -268,7 +268,7 @@ void standard_sub_basic(const char *smb_name, const char *domain_name,
 	char *s;
 
 	if ( (s = talloc_sub_basic(talloc_tos(), smb_name, domain_name, str )) != NULL ) {
-		strncpy( str, s, len );
+		strlcpy(str, s, len);
 	}
 
 	TALLOC_FREE( s );
