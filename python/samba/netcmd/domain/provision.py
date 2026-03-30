@@ -364,6 +364,10 @@ class cmd_domain_provision(Command):
         except ProvisioningError as e:
             raise CommandError("Provision failed", e)
 
+        # Print generated admin password directly to output (not logs) for security
+        if result.adminpass_generated:
+            self.outf.write("Admin password:        %s\n" % result.adminpass)
+
         result.report_logger(self.logger)
 
     def _get_nameserver_ip(self):

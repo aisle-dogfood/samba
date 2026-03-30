@@ -189,7 +189,7 @@ class ProvisionResultTests(TestCase):
         result.adminpass = "geheim"
         entries = self.report_logger(result)
         self.assertEqual(entries[1],
-                          ("INFO", 'Admin password:        geheim'))
+                          ("INFO", 'Admin password:        <generated - see output above>'))
 
 
 class DetermineNetbiosNameTests(TestCase):

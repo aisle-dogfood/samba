@@ -192,7 +192,7 @@ def check_targetdir(logger, targetdir):
 
 # For '--no-secrets' backups, this sets the Administrator user's password to a
 # randomly-generated value. This is similar to the provision behaviour
-def set_admin_password(logger, samdb):
+def set_admin_password(logger, samdb, outf=None):
     """Sets a randomly generated password for the backup DB's admin user"""
 
     # match the admin user by RID
@@ -207,7 +207,10 @@ def set_admin_password(logger, samdb):
     username = str(res[0]['samaccountname'])
 
     adminpass = samba.generate_random_password(12, 32)
-    logger.info("Setting %s password in backup to: %s" % (username, adminpass))
+    # Print password directly to output (not logs) for security
+    if outf is not None:
+        outf.write("Setting %s password in backup to: %s\n" % (username, adminpass))
+    logger.info("Setting %s password in backup to: <generated - see output above>" % username)
     logger.info("Run 'samba-tool user setpassword %s' after restoring DB" %
                 username)
     samdb.setpassword(search_expr, adminpass, force_change_at_next_login=False,
@@ -306,7 +309,7 @@ class cmd_domain_backup_online(samba.netcmd.Command):
 
             # ensure the admin user always has a password set (same as provision)
             if no_secrets:
-                set_admin_password(logger, samdb)
+                set_admin_password(logger, samdb, self.outf)
 
             # Add everything in the tmpdir to the backup tar file
             backup_file = backup_filepath(targetdir, realm, time_str)
@@ -947,7 +950,7 @@ class cmd_domain_backup_rename(samba.netcmd.Command):
 
         # ensure the admin user always has a password set (same as provision)
         if no_secrets:
-            set_admin_password(logger, samdb)
+            set_admin_password(logger, samdb, self.outf)
 
         # Add everything in the tmpdir to the backup tar file
         backup_file = backup_filepath(targetdir, new_dns_realm, time_str)
