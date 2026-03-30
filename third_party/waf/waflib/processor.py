@@ -2,11 +2,7 @@
 # encoding: utf-8
 # Thomas Nagy, 2016-2018 (ita)
 
-import os, sys, traceback, base64, signal
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import os, sys, traceback, base64, signal, json
 
 try:
 	import subprocess32 as subprocess
@@ -19,12 +15,29 @@ except AttributeError:
 	class TimeoutExpired(Exception):
 		pass
 
+def _deserialize_kwargs_from_json(serialized):
+	"""
+	Restores kwargs dict from JSON-serialized form by converting special markers.
+	"""
+	kwargs = {}
+	for key, value in serialized.items():
+		if value == '__DEVNULL__':
+			kwargs[key] = subprocess.DEVNULL if hasattr(subprocess, 'DEVNULL') else None
+		elif value == '__PIPE__':
+			kwargs[key] = subprocess.PIPE
+		elif value == '__STDOUT__':
+			kwargs[key] = subprocess.STDOUT
+		else:
+			kwargs[key] = value
+	return kwargs
+
 def run():
 	txt = sys.stdin.readline().strip()
 	if not txt:
 		# parent process probably ended
 		sys.exit(18)
-	[cmd, kwargs, cargs] = cPickle.loads(base64.b64decode(txt))
+	[cmd, serialized_kwargs, cargs] = json.loads(base64.b64decode(txt).decode('utf-8'))
+	kwargs = _deserialize_kwargs_from_json(serialized_kwargs)
 	cargs = cargs or {}
 
 	if not 'close_fds' in kwargs:
@@ -53,9 +66,11 @@ def run():
 		trace = str(cmd) + '\n' + ''.join(exc_lines)
 		ex = e.__class__.__name__
 
-	# it is just text so maybe we do not need to pickle()
-	tmp = [ret, out, err, ex, trace]
-	obj = base64.b64encode(cPickle.dumps(tmp))
+	# Encode binary data as base64 for JSON compatibility
+	out_encoded = base64.b64encode(out).decode('utf-8') if out is not None else None
+	err_encoded = base64.b64encode(err).decode('utf-8') if err is not None else None
+	tmp = [ret, out_encoded, err_encoded, ex, trace]
+	obj = base64.b64encode(json.dumps(tmp).encode('utf-8'))
 	sys.stdout.write(obj.decode())
 	sys.stdout.write('\n')
 	sys.stdout.flush()
