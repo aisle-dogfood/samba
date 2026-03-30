@@ -153,6 +153,8 @@ NTSTATUS smbcli_tconX(struct smbcli_state *cli, const char *sharename,
 	}
 
 out:
+	/* Clear password from memory before freeing */
+	data_blob_clear(&tcon.tconx.in.password);
 	talloc_free(mem_ctx);
 
 	return status;
