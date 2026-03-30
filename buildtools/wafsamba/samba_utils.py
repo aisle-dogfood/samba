@@ -654,7 +654,21 @@ def PROCESS_SEPARATE_RULE(self, rule):
         stage = 'configure'
     elif isinstance(self, Build.BuildContext):
         stage = 'build'
+    
+    # Security: Validate rule parameter to prevent path traversal
+    # Only allow alphanumeric characters, underscores, and hyphens
+    if not re.match(r'^[a-zA-Z0-9_-]+$', rule):
+        raise Errors.WafError('Invalid rule name: %s. Only alphanumeric characters, underscores, and hyphens are allowed.' % rule)
+    
     file_path = os.path.join(self.path.abspath(), WSCRIPT_FILE+'_'+stage+'_'+rule)
+    
+    # Security: Ensure the resolved path is within the project tree
+    # This prevents path traversal attacks
+    normalized_file_path = os.path.normpath(file_path)
+    project_root = self.path.abspath()
+    if not normalized_file_path.startswith(os.path.normpath(project_root)):
+        raise Errors.WafError('Invalid file path: %s is outside the project tree' % file_path)
+    
     node = self.root.find_node(file_path)
     if node:
         try:
@@ -666,6 +680,10 @@ def PROCESS_SEPARATE_RULE(self, rule):
             self.pre_recurse(node)
             try:
                 function_code = node.read('r', None)
+                # Security note: exec() is used here following the Waf framework pattern
+                # for loading wscript files. The file path is validated above to ensure
+                # it's within the project tree and the rule name is sanitized.
+                # This matches the upstream Waf behavior in waflib/Context.py:281
                 exec(compile(function_code, node.abspath(), 'exec'), self.exec_dict)
             finally:
                 self.post_recurse(node)
