@@ -563,7 +563,7 @@ static int log_backend_parse(TALLOC_CTX *mem_ctx,
 			     char **backend_option)
 {
 	struct log_backend *b = NULL;
-	char *t, *name, *option;
+	char *t, *name, *option, *saveptr;
 	size_t i;
 
 	t = talloc_strdup(mem_ctx, logging);
@@ -571,12 +571,12 @@ static int log_backend_parse(TALLOC_CTX *mem_ctx,
 		return ENOMEM;
 	}
 
-	name = strtok(t, ":");
+	name = strtok_r(t, ":", &saveptr);
 	if (name == NULL) {
 		talloc_free(t);
 		return EINVAL;
 	}
-	option = strtok(NULL, ":");
+	option = strtok_r(NULL, ":", &saveptr);
 
 	for (i=0; i<ARRAY_SIZE(log_backend); i++) {
 		if (strcmp(log_backend[i].name, name) == 0) {
