@@ -310,32 +310,10 @@ NTSTATUS nbtd_startup_interfaces(struct nbtd_server *nbtsrv, struct loadparm_con
 	TALLOC_CTX *tmp_ctx = talloc_new(nbtsrv);
 	NTSTATUS status;
 
-	/* if we are allowing incoming packets from any address, then
-	   we also need to bind to the wildcard address */
-	if (!lpcfg_bind_interfaces_only(lp_ctx)) {
-		const char *primary_address;
-
-		primary_address = iface_list_first_v4(ifaces);
-
-		/* the primary address is the address we will return
-		   for non-WINS queries not made on a specific
-		   interface */
-		if (primary_address == NULL) {
-			primary_address = inet_ntoa(interpret_addr2(
-							    lpcfg_netbios_name(lp_ctx)));
-		}
-
-		primary_address = talloc_strdup(tmp_ctx, primary_address);
-		NT_STATUS_HAVE_NO_MEMORY(primary_address);
-
-		status = nbtd_add_socket(nbtsrv, 
-					 lp_ctx,
-					 "0.0.0.0",
-					 primary_address,
-					 talloc_strdup(tmp_ctx, "255.255.255.255"),
-					 talloc_strdup(tmp_ctx, "0.0.0.0"));
-		NT_STATUS_NOT_OK_RETURN(status);
-	}
+	/* Only bind to configured interfaces.
+	   The bind_interfaces_only parameter controls packet filtering,
+	   not whether to create wildcard bindings that expose services
+	   on all network interfaces. */
 
 	for (i=0; i<num_interfaces; i++) {
 		const char *bcast;
