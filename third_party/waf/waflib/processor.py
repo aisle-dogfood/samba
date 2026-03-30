@@ -2,11 +2,7 @@
 # encoding: utf-8
 # Thomas Nagy, 2016-2018 (ita)
 
-import os, sys, traceback, base64, signal
-try:
-	import cPickle
-except ImportError:
-	import pickle as cPickle
+import os, sys, traceback, base64, signal, json
 
 try:
 	import subprocess32 as subprocess
@@ -24,7 +20,7 @@ def run():
 	if not txt:
 		# parent process probably ended
 		sys.exit(18)
-	[cmd, kwargs, cargs] = cPickle.loads(base64.b64decode(txt))
+	[cmd, kwargs, cargs] = json.loads(base64.b64decode(txt).decode('utf-8'))
 	cargs = cargs or {}
 
 	if not 'close_fds' in kwargs:
@@ -54,8 +50,15 @@ def run():
 		ex = e.__class__.__name__
 
 	# it is just text so maybe we do not need to pickle()
+	# Convert bytes to base64-encoded strings for JSON serialization
+	if isinstance(out, bytes):
+		out = base64.b64encode(out).decode('ascii')
+		out = {'__bytes__': out}
+	if isinstance(err, bytes):
+		err = base64.b64encode(err).decode('ascii')
+		err = {'__bytes__': err}
 	tmp = [ret, out, err, ex, trace]
-	obj = base64.b64encode(cPickle.dumps(tmp))
+	obj = base64.b64encode(json.dumps(tmp).encode('utf-8'))
 	sys.stdout.write(obj.decode())
 	sys.stdout.write('\n')
 	sys.stdout.flush()
