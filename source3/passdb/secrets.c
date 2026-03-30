@@ -32,9 +32,17 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include "lib/crypto/gnutls_helpers.h"
+#include "lib/util/genrand.h"
+#include "lib/util/base64.h"
+#include <gnutls/gnutls.h>
+#include <gnutls/crypto.h>
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
+
+#define SECRETS_ENCRYPTION_KEY "SECRETS/ENCRYPTION_KEY"
+#define ENCRYPTED_PASSWORD_PREFIX "ENCRYPTED:"
 
 static struct db_context *db_ctx;
 
@@ -94,6 +102,220 @@ struct db_context *secrets_db_ctx(void)
 void secrets_shutdown(void)
 {
 	TALLOC_FREE(db_ctx);
+}
+
+/*
+ * Get or create an encryption key for protecting secrets at rest
+ */
+static bool secrets_get_encryption_key(uint8_t key_out[32])
+{
+	void *key_data = NULL;
+	size_t key_size = 0;
+	bool ret = false;
+
+	/* Try to fetch existing key */
+	key_data = secrets_fetch(SECRETS_ENCRYPTION_KEY, &key_size);
+	
+	if (key_data != NULL && key_size == 32) {
+		memcpy(key_out, key_data, 32);
+		ret = true;
+		BURN_FREE(key_data, key_size);
+		return ret;
+	}
+	
+	/* Key doesn't exist or is invalid, create a new one */
+	if (key_data != NULL) {
+		BURN_FREE(key_data, key_size);
+	}
+	
+	generate_random_buffer(key_out, 32);
+	
+	/* Store the key for future use */
+	ret = secrets_store(SECRETS_ENCRYPTION_KEY, key_out, 32);
+	if (!ret) {
+		DEBUG(0, ("Failed to store encryption key\n"));
+		ZERO_ARRAY(key_out);
+		return false;
+	}
+	
+	return true;
+}
+
+/*
+ * Encrypt sensitive password data before storage
+ */
+static bool secrets_encrypt_password(TALLOC_CTX *mem_ctx,
+				     const char *plaintext,
+				     DATA_BLOB *ciphertext)
+{
+	uint8_t key[32];
+	uint8_t iv[16];
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	int rc;
+	size_t plaintext_len;
+	size_t padded_len;
+	uint8_t *padded_data = NULL;
+	uint8_t padding;
+
+	if (plaintext == NULL || ciphertext == NULL) {
+		return false;
+	}
+
+	/* Get encryption key */
+	if (!secrets_get_encryption_key(key)) {
+		return false;
+	}
+
+	/* Generate random IV */
+	generate_random_buffer(iv, sizeof(iv));
+
+	plaintext_len = strlen(plaintext);
+	/* PKCS#7 padding to 16-byte boundary */
+	padding = 16 - (plaintext_len % 16);
+	padded_len = plaintext_len + padding;
+
+	padded_data = talloc_zero_array(mem_ctx, uint8_t, padded_len);
+	if (padded_data == NULL) {
+		ZERO_ARRAY(key);
+		return false;
+	}
+
+	memcpy(padded_data, plaintext, plaintext_len);
+	/* Apply PKCS#7 padding */
+	memset(padded_data + plaintext_len, padding, padding);
+
+	key_datum.data = key;
+	key_datum.size = 32;
+	iv_datum.data = iv;
+	iv_datum.size = 16;
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_CBC,
+				&key_datum,
+				&iv_datum);
+	ZERO_ARRAY(key);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_init failed: %s\n",
+			  gnutls_strerror(rc)));
+		BURN_FREE(padded_data, padded_len);
+		return false;
+	}
+
+	rc = gnutls_cipher_encrypt(cipher_hnd, padded_data, padded_len);
+	gnutls_cipher_deinit(cipher_hnd);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_encrypt failed: %s\n",
+			  gnutls_strerror(rc)));
+		BURN_FREE(padded_data, padded_len);
+		return false;
+	}
+
+	/* Prepend IV to ciphertext */
+	*ciphertext = data_blob_talloc(mem_ctx, NULL, 16 + padded_len);
+	if (ciphertext->data == NULL) {
+		BURN_FREE(padded_data, padded_len);
+		return false;
+	}
+
+	memcpy(ciphertext->data, iv, 16);
+	memcpy(ciphertext->data + 16, padded_data, padded_len);
+	BURN_FREE(padded_data, padded_len);
+
+	return true;
+}
+
+/*
+ * Decrypt password data retrieved from storage
+ */
+static bool secrets_decrypt_password(TALLOC_CTX *mem_ctx,
+				     const DATA_BLOB *ciphertext,
+				     char **plaintext)
+{
+	uint8_t key[32];
+	uint8_t iv[16];
+	gnutls_cipher_hd_t cipher_hnd = NULL;
+	gnutls_datum_t key_datum;
+	gnutls_datum_t iv_datum;
+	int rc;
+	uint8_t *decrypted_data = NULL;
+	size_t ciphertext_len;
+	uint8_t padding;
+	size_t plaintext_len;
+
+	if (ciphertext == NULL || plaintext == NULL) {
+		return false;
+	}
+
+	/* Need at least IV (16 bytes) + one block (16 bytes) */
+	if (ciphertext->length < 32) {
+		DEBUG(0, ("Ciphertext too short for decryption\n"));
+		return false;
+	}
+
+	/* Get encryption key */
+	if (!secrets_get_encryption_key(key)) {
+		return false;
+	}
+
+	/* Extract IV from the beginning of ciphertext */
+	memcpy(iv, ciphertext->data, 16);
+	ciphertext_len = ciphertext->length - 16;
+
+	decrypted_data = talloc_zero_array(mem_ctx, uint8_t, ciphertext_len + 1);
+	if (decrypted_data == NULL) {
+		ZERO_ARRAY(key);
+		return false;
+	}
+
+	memcpy(decrypted_data, ciphertext->data + 16, ciphertext_len);
+
+	key_datum.data = key;
+	key_datum.size = 32;
+	iv_datum.data = iv;
+	iv_datum.size = 16;
+
+	rc = gnutls_cipher_init(&cipher_hnd,
+				GNUTLS_CIPHER_AES_256_CBC,
+				&key_datum,
+				&iv_datum);
+	ZERO_ARRAY(key);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_init failed: %s\n",
+			  gnutls_strerror(rc)));
+		BURN_FREE(decrypted_data, ciphertext_len);
+		return false;
+	}
+
+	rc = gnutls_cipher_decrypt(cipher_hnd, decrypted_data, ciphertext_len);
+	gnutls_cipher_deinit(cipher_hnd);
+
+	if (rc < 0) {
+		DEBUG(0, ("gnutls_cipher_decrypt failed: %s\n",
+			  gnutls_strerror(rc)));
+		BURN_FREE(decrypted_data, ciphertext_len);
+		return false;
+	}
+
+	/* Remove PKCS#7 padding */
+	padding = decrypted_data[ciphertext_len - 1];
+	if (padding == 0 || padding > 16 || padding > ciphertext_len) {
+		DEBUG(0, ("Invalid padding in decrypted data\n"));
+		BURN_FREE(decrypted_data, ciphertext_len);
+		return false;
+	}
+
+	plaintext_len = ciphertext_len - padding;
+	decrypted_data[plaintext_len] = '\0';
+
+	*plaintext = (char *)decrypted_data;
+	talloc_keep_secret(*plaintext);
+
+	return true;
 }
 
 /* read a entry from the secrets database - the caller must free the result
@@ -258,6 +480,9 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 {
 	struct TRUSTED_DOM_PASS pass;
 	enum ndr_err_code ndr_err;
+	TALLOC_CTX *tmp_ctx = NULL;
+	const char *stored_pass = NULL;
+	char *decrypted_pass = NULL;
 
 	/* unpacking structures */
 	DATA_BLOB blob;
@@ -269,25 +494,61 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 		return False;
 	}
 
+	tmp_ctx = talloc_new(NULL);
+	if (tmp_ctx == NULL) {
+		BURN_FREE(blob.data, blob.length);
+		return false;
+	}
+
 	/* unpack trusted domain password */
-	ndr_err = ndr_pull_struct_blob(&blob, talloc_tos(), &pass,
+	ndr_err = ndr_pull_struct_blob(&blob, tmp_ctx, &pass,
 			(ndr_pull_flags_fn_t)ndr_pull_TRUSTED_DOM_PASS);
 
 	/* This blob is NOT talloc based! */
 	BURN_FREE(blob.data, blob.length);
 
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+		talloc_free(tmp_ctx);
 		return false;
 	}
 
-	if (pass.pass != NULL) {
-		talloc_keep_secret(discard_const_p(char, pass.pass));
+	stored_pass = pass.pass;
+	if (stored_pass != NULL) {
+		talloc_keep_secret(discard_const_p(char, stored_pass));
+	}
+
+	/* Check if password is encrypted */
+	if (stored_pass != NULL && 
+	    strncmp(stored_pass, ENCRYPTED_PASSWORD_PREFIX,
+		    strlen(ENCRYPTED_PASSWORD_PREFIX)) == 0) {
+		/* Password is encrypted, decrypt it */
+		const char *encrypted_b64 = stored_pass + strlen(ENCRYPTED_PASSWORD_PREFIX);
+		DATA_BLOB encrypted_blob;
+		
+		encrypted_blob = base64_decode_data_blob_talloc(tmp_ctx, encrypted_b64);
+		if (encrypted_blob.data == NULL) {
+			DEBUG(0, ("Failed to decode base64 encrypted password\n"));
+			talloc_free(tmp_ctx);
+			return false;
+		}
+
+		if (!secrets_decrypt_password(tmp_ctx, &encrypted_blob, &decrypted_pass)) {
+			DEBUG(0, ("Failed to decrypt trusted domain password\n"));
+			data_blob_clear_free(&encrypted_blob);
+			talloc_free(tmp_ctx);
+			return false;
+		}
+		data_blob_clear_free(&encrypted_blob);
+		
+		stored_pass = decrypted_pass;
+		talloc_keep_secret(decrypted_pass);
 	}
 
 	/* the trust's password */
 	if (pwd) {
-		*pwd = SMB_STRDUP(pass.pass);
+		*pwd = SMB_STRDUP(stored_pass);
 		if (!*pwd) {
+			talloc_free(tmp_ctx);
 			return False;
 		}
 		talloc_keep_secret(*pwd);
@@ -299,6 +560,7 @@ bool secrets_fetch_trusted_domain_password(const char *domain, char** pwd,
 	/* domain sid */
 	if (sid != NULL) sid_copy(sid, &pass.domain_sid);
 
+	talloc_free(tmp_ctx);
 	return True;
 }
 
@@ -316,12 +578,50 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
                                            const struct dom_sid *sid)
 {
 	bool ret;
+	TALLOC_CTX *tmp_ctx = NULL;
 
 	/* packing structures */
 	DATA_BLOB blob;
+	DATA_BLOB encrypted_pwd;
 	enum ndr_err_code ndr_err;
 	struct TRUSTED_DOM_PASS pass;
+	char *encrypted_pwd_b64 = NULL;
+	char *encrypted_pwd_str = NULL;
 	ZERO_STRUCT(pass);
+	ZERO_STRUCT(encrypted_pwd);
+
+	tmp_ctx = talloc_new(NULL);
+	if (tmp_ctx == NULL) {
+		return false;
+	}
+
+	/* Encrypt the password before storing */
+	if (!secrets_encrypt_password(tmp_ctx, pwd, &encrypted_pwd)) {
+		DEBUG(0, ("Failed to encrypt trusted domain password\n"));
+		talloc_free(tmp_ctx);
+		return false;
+	}
+
+	/* Encode encrypted password as base64 */
+	encrypted_pwd_b64 = base64_encode_data_blob(tmp_ctx, encrypted_pwd);
+	data_blob_clear_free(&encrypted_pwd);
+	
+	if (encrypted_pwd_b64 == NULL) {
+		DEBUG(0, ("Failed to base64 encode encrypted password\n"));
+		talloc_free(tmp_ctx);
+		return false;
+	}
+
+	/* Prefix with marker to indicate encryption */
+	encrypted_pwd_str = talloc_asprintf(tmp_ctx, "%s%s",
+					    ENCRYPTED_PASSWORD_PREFIX,
+					    encrypted_pwd_b64);
+	BURN_FREE_STR(encrypted_pwd_b64);
+	
+	if (encrypted_pwd_str == NULL) {
+		talloc_free(tmp_ctx);
+		return false;
+	}
 
 	pass.uni_name = domain;
 	pass.uni_name_len = strlen(domain)+1;
@@ -329,16 +629,18 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 	/* last change time */
 	pass.mod_time = time(NULL);
 
-	/* password of the trust */
-	pass.pass_len = strlen(pwd);
-	pass.pass = pwd;
+	/* Store encrypted password */
+	pass.pass_len = strlen(encrypted_pwd_str);
+	pass.pass = encrypted_pwd_str;
 
 	/* domain sid */
 	sid_copy(&pass.domain_sid, sid);
 
-	ndr_err = ndr_push_struct_blob(&blob, talloc_tos(), &pass,
+	ndr_err = ndr_push_struct_blob(&blob, tmp_ctx, &pass,
 			(ndr_push_flags_fn_t)ndr_push_TRUSTED_DOM_PASS);
+
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+		talloc_free(tmp_ctx);
 		return false;
 	}
 
@@ -346,6 +648,7 @@ bool secrets_store_trusted_domain_password(const char* domain, const char* pwd,
 
 	/* This blob is talloc based. */
 	data_blob_clear_free(&blob);
+	talloc_free(tmp_ctx);
 
 	return ret;
 }
@@ -363,15 +666,57 @@ bool secrets_store_ldap_pw(const char* dn, char* pw)
 {
 	char *key = NULL;
 	bool ret;
+	TALLOC_CTX *tmp_ctx = NULL;
+	DATA_BLOB encrypted_pwd;
+	char *encrypted_pwd_b64 = NULL;
+	char *encrypted_pwd_str = NULL;
 
 	if (asprintf(&key, "%s/%s", SECRETS_LDAP_BIND_PW, dn) < 0) {
 		DEBUG(0, ("secrets_store_ldap_pw: asprintf failed!\n"));
 		return False;
 	}
 
-	ret = secrets_store(key, pw, strlen(pw)+1);
+	tmp_ctx = talloc_new(NULL);
+	if (tmp_ctx == NULL) {
+		SAFE_FREE(key);
+		return false;
+	}
+
+	/* Encrypt the password before storing */
+	if (!secrets_encrypt_password(tmp_ctx, pw, &encrypted_pwd)) {
+		DEBUG(0, ("Failed to encrypt LDAP password\n"));
+		SAFE_FREE(key);
+		talloc_free(tmp_ctx);
+		return false;
+	}
+
+	/* Encode encrypted password as base64 */
+	encrypted_pwd_b64 = base64_encode_data_blob(tmp_ctx, encrypted_pwd);
+	data_blob_clear_free(&encrypted_pwd);
+	
+	if (encrypted_pwd_b64 == NULL) {
+		DEBUG(0, ("Failed to base64 encode encrypted LDAP password\n"));
+		SAFE_FREE(key);
+		talloc_free(tmp_ctx);
+		return false;
+	}
+
+	/* Prefix with marker to indicate encryption */
+	encrypted_pwd_str = talloc_asprintf(tmp_ctx, "%s%s",
+					    ENCRYPTED_PASSWORD_PREFIX,
+					    encrypted_pwd_b64);
+	BURN_FREE_STR(encrypted_pwd_b64);
+	
+	if (encrypted_pwd_str == NULL) {
+		SAFE_FREE(key);
+		talloc_free(tmp_ctx);
+		return false;
+	}
+
+	ret = secrets_store(key, encrypted_pwd_str, strlen(encrypted_pwd_str)+1);
 
 	SAFE_FREE(key);
+	talloc_free(tmp_ctx);
 	return ret;
 }
 
@@ -383,6 +728,8 @@ bool fetch_ldap_pw(char **dn, char** pw)
 {
 	char *key = NULL;
 	size_t size = 0;
+	char *stored_pw = NULL;
+	TALLOC_CTX *tmp_ctx = NULL;
 
 	*dn = smb_xstrdup(lp_ldap_admin_dn());
 
@@ -392,12 +739,58 @@ bool fetch_ldap_pw(char **dn, char** pw)
 		return false;
 	}
 
-	*pw=(char *)secrets_fetch(key, &size);
+	stored_pw = (char *)secrets_fetch(key, &size);
 	SAFE_FREE(key);
 
-	if (*pw == NULL || size == 0 || (*pw)[size-1] != '\0') {
+	if (stored_pw == NULL || size == 0 || stored_pw[size-1] != '\0') {
 		DBG_ERR("No valid password for %s\n", *dn);
-		BURN_FREE_STR(*pw);
+		BURN_FREE_STR(stored_pw);
+		SAFE_FREE(*dn);
+		return false;
+	}
+
+	/* Check if password is encrypted */
+	if (strncmp(stored_pw, ENCRYPTED_PASSWORD_PREFIX,
+		    strlen(ENCRYPTED_PASSWORD_PREFIX)) == 0) {
+		/* Password is encrypted, decrypt it */
+		const char *encrypted_b64 = stored_pw + strlen(ENCRYPTED_PASSWORD_PREFIX);
+		DATA_BLOB encrypted_blob;
+		char *decrypted_pw = NULL;
+
+		tmp_ctx = talloc_new(NULL);
+		if (tmp_ctx == NULL) {
+			BURN_FREE_STR(stored_pw);
+			SAFE_FREE(*dn);
+			return false;
+		}
+
+		encrypted_blob = base64_decode_data_blob_talloc(tmp_ctx, encrypted_b64);
+		BURN_FREE_STR(stored_pw);
+		
+		if (encrypted_blob.data == NULL) {
+			DEBUG(0, ("Failed to decode base64 encrypted LDAP password\n"));
+			talloc_free(tmp_ctx);
+			SAFE_FREE(*dn);
+			return false;
+		}
+
+		if (!secrets_decrypt_password(tmp_ctx, &encrypted_blob, &decrypted_pw)) {
+			DEBUG(0, ("Failed to decrypt LDAP password\n"));
+			data_blob_clear_free(&encrypted_blob);
+			talloc_free(tmp_ctx);
+			SAFE_FREE(*dn);
+			return false;
+		}
+		data_blob_clear_free(&encrypted_blob);
+
+		*pw = smb_xstrdup(decrypted_pw);
+		talloc_free(tmp_ctx);
+	} else {
+		/* Legacy plaintext password */
+		*pw = stored_pw;
+	}
+
+	if (*pw == NULL) {
 		SAFE_FREE(*dn);
 		return false;
 	}
