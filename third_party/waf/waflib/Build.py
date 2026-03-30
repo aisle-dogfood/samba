@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,44 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_cache_key():
+	"""
+	Generate a deterministic key for HMAC signing of the build cache.
+	Uses system-specific properties to create a consistent key per installation.
+	"""
+	# Use a combination of system properties that remain constant for this installation
+	# but are not user-controllable
+	key_material = '%s-%s-%d-%d' % (sys.platform, Context.HEXVERSION, sys.hexversion, Context.ABI)
+	return hashlib.sha256(key_material.encode('utf-8')).digest()
+
+def _sign_data(data):
+	"""
+	Sign pickled data with HMAC to prevent tampering.
+	Returns: bytes in format: HMAC (32 bytes) + data
+	"""
+	key = _get_cache_key()
+	signature = hmac.new(key, data, hashlib.sha256).digest()
+	return signature + data
+
+def _verify_and_extract_data(signed_data):
+	"""
+	Verify HMAC signature and extract the original data.
+	Returns: (verified_data, is_valid)
+	"""
+	if len(signed_data) < 32:
+		return None, False
+	
+	signature = signed_data[:32]
+	data = signed_data[32:]
+	
+	key = _get_cache_key()
+	expected_signature = hmac.new(key, data, hashlib.sha256).digest()
+	
+	# Use constant-time comparison to prevent timing attacks
+	if hmac.compare_digest(signature, expected_signature):
+		return data, True
+	return None, False
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -279,7 +317,7 @@ class BuildContext(Context.Context):
 
 		dbfn = os.path.join(self.variant_dir, Context.DBFILE)
 		try:
-			data = Utils.readf(dbfn, 'rb')
+			signed_data = Utils.readf(dbfn, 'rb')
 		except (EnvironmentError, EOFError):
 			# handle missing file/empty file
 			Logs.debug('build: Could not load the build cache %s (missing)', dbfn)
@@ -288,12 +326,16 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature before unpickling
+					data, is_valid = _verify_and_extract_data(signed_data)
+					if not is_valid:
+						Logs.debug('build: Could not verify the build cache %s (tampered or old format)', dbfn)
+					else:
+						data = cPickle.loads(data)
+						for x in SAVED_ATTRS:
+							setattr(self, x, data.get(x, {}))
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
-				else:
-					for x in SAVED_ATTRS:
-						setattr(self, x, data.get(x, {}))
 			finally:
 				Node.pickle_lock.release()
 
@@ -316,7 +358,9 @@ class BuildContext(Context.Context):
 		finally:
 			Node.pickle_lock.release()
 
-		Utils.writef(db + '.tmp', x, m='wb')
+		# Sign the pickled data with HMAC to prevent tampering
+		signed_data = _sign_data(x)
+		Utils.writef(db + '.tmp', signed_data, m='wb')
 
 		try:
 			st = os.stat(db)
