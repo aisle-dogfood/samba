@@ -1313,6 +1313,8 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 	DATA_BLOB session_key = data_blob_null;
 	struct samr_CryptPassword crypt_pwd;
 	struct samr_CryptPasswordEx crypt_pwd_ex;
+	struct samr_EncryptedPasswordAES crypt_pwd_aes;
+	DATA_BLOB salt = data_blob_null;
 
 	ZERO_STRUCT(sam_pol);
 	ZERO_STRUCT(domain_pol);
@@ -1542,7 +1544,7 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 		goto done;
 	}
 
-	/* Set password on machine account - first try level 26 */
+	/* Set password on machine account - first try level 26 (RC4) */
 
 	/*
 	 * increase the timeout as password filter modules on the DC
@@ -1553,22 +1555,53 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 	status = init_samr_CryptPasswordEx(r->in.machine_password,
 					   &session_key,
 					   &crypt_pwd_ex);
-	if (!NT_STATUS_IS_OK(status)) {
+	
+	if (NT_STATUS_EQUAL(status, NT_STATUS_ACCESS_DISABLED_BY_POLICY_OTHER)) {
+		/*
+		 * RC4 encryption is disabled (e.g., FIPS mode).
+		 * Fall back to AES-based password encryption (level 31).
+		 */
+		salt = data_blob_talloc_zero(mem_ctx, 16);
+		if (salt.data == NULL) {
+			status = NT_STATUS_NO_MEMORY;
+			goto error;
+		}
+		generate_random_buffer(salt.data, salt.length);
+
+		status = init_samr_CryptPasswordAES(mem_ctx,
+						    r->in.machine_password,
+						    &salt,
+						    &session_key,
+						    &crypt_pwd_aes);
+		if (!NT_STATUS_IS_OK(status)) {
+			goto error;
+		}
+
+		user_info.info31.password = crypt_pwd_aes;
+		user_info.info31.password_expired = PASS_DONT_CHANGE_AT_NEXT_LOGON;
+
+		status = dcerpc_samr_SetUserInfo2(b, mem_ctx,
+						  &user_pol,
+						  UserInternal7InformationNew,
+						  &user_info,
+						  &result);
+	} else if (!NT_STATUS_IS_OK(status)) {
 		goto error;
+	} else {
+		/* RC4 encryption succeeded, use level 26 */
+		user_info.info26.password = crypt_pwd_ex;
+		user_info.info26.password_expired = PASS_DONT_CHANGE_AT_NEXT_LOGON;
+
+		status = dcerpc_samr_SetUserInfo2(b, mem_ctx,
+						  &user_pol,
+						  UserInternal5InformationNew,
+						  &user_info,
+						  &result);
 	}
-
-	user_info.info26.password = crypt_pwd_ex;
-	user_info.info26.password_expired = PASS_DONT_CHANGE_AT_NEXT_LOGON;
-
-	status = dcerpc_samr_SetUserInfo2(b, mem_ctx,
-					  &user_pol,
-					  UserInternal5InformationNew,
-					  &user_info,
-					  &result);
 
 	if (NT_STATUS_EQUAL(status, NT_STATUS_RPC_ENUM_VALUE_OUT_OF_RANGE)) {
 
-		/* retry with level 24 */
+		/* retry with level 24 (older RC4-based protocol) */
 
 		status = init_samr_CryptPassword(r->in.machine_password,
 						 &session_key,
@@ -1622,6 +1655,7 @@ error:
 	}
 
 	data_blob_clear_free(&session_key);
+	data_blob_clear_free(&salt);
 
 	if (is_valid_policy_hnd(&sam_pol)) {
 		dcerpc_samr_Close(b, mem_ctx, &sam_pol, &result);
