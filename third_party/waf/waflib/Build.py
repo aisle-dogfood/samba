@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,15 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_pickle_key(top_dir, out_dir):
+	"""
+	Generate a secret key for HMAC signature of pickle files.
+	The key is derived from the project paths to prevent tampering.
+	"""
+	# Use absolute paths and combine them with a salt
+	key_material = '%s:%s:%s' % (os.path.abspath(top_dir), os.path.abspath(out_dir), Context.HEXVERSION)
+	return hashlib.sha256(key_material.encode('utf-8')).digest()
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -288,7 +297,22 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature to prevent pickle deserialization attacks
+					if len(data) < 32:
+						raise ValueError('Invalid cache file format')
+					
+					stored_signature = data[:32]
+					pickle_data = data[32:]
+					
+					# Compute expected signature
+					key = _get_pickle_key(self.top_dir, self.out_dir)
+					expected_signature = hmac.new(key, pickle_data, hashlib.sha256).digest()
+					
+					# Constant-time comparison to prevent timing attacks
+					if not hmac.compare_digest(stored_signature, expected_signature):
+						raise ValueError('Cache file signature verification failed - possible tampering detected')
+					
+					data = cPickle.loads(pickle_data)
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
@@ -316,7 +340,12 @@ class BuildContext(Context.Context):
 		finally:
 			Node.pickle_lock.release()
 
-		Utils.writef(db + '.tmp', x, m='wb')
+		# Add HMAC signature to prevent tampering
+		key = _get_pickle_key(self.top_dir, self.out_dir)
+		signature = hmac.new(key, x, hashlib.sha256).digest()
+		signed_data = signature + x
+
+		Utils.writef(db + '.tmp', signed_data, m='wb')
 
 		try:
 			st = os.stat(db)
