@@ -9,7 +9,7 @@ The inheritance tree is the following:
 
 """
 
-import os, sys, errno, re, shutil, stat
+import os, sys, errno, re, shutil, stat, hmac, hashlib
 try:
 	import cPickle
 except ImportError:
@@ -45,6 +45,19 @@ POST_LAZY = 1
 PROTOCOL = -1
 if sys.platform == 'cli':
 	PROTOCOL = 0
+
+def _get_cache_signing_key(cache_dir):
+	"""
+	Generate a signing key for HMAC to protect pickle cache files.
+	Uses the absolute path of the cache directory and system info to derive a key.
+	This prevents cache files from being tampered with or reused across different builds.
+	"""
+	key_material = (
+		cache_dir.encode('utf-8', 'surrogateescape') +
+		sys.platform.encode('utf-8') +
+		str(sys.hexversion).encode('utf-8')
+	)
+	return hashlib.sha256(key_material).digest()
 
 class BuildContext(Context.Context):
 	'''executes the build'''
@@ -288,7 +301,20 @@ class BuildContext(Context.Context):
 				Node.pickle_lock.acquire()
 				Node.Nod3 = self.node_class
 				try:
-					data = cPickle.loads(data)
+					# Verify HMAC signature before unpickling (32 bytes for SHA256)
+					if len(data) < 32:
+						raise ValueError('Cache file too short to contain valid signature')
+					
+					signing_key = _get_cache_signing_key(os.path.abspath(self.cache_dir))
+					stored_signature = data[:32]
+					pickle_data = data[32:]
+					expected_signature = hmac.new(signing_key, pickle_data, hashlib.sha256).digest()
+					
+					# Use constant-time comparison to prevent timing attacks
+					if not hmac.compare_digest(stored_signature, expected_signature):
+						raise ValueError('Cache file signature verification failed - file may have been tampered with')
+					
+					data = cPickle.loads(pickle_data)
 				except Exception as e:
 					Logs.debug('build: Could not pickle the build cache %s: %r', dbfn, e)
 				else:
@@ -315,6 +341,12 @@ class BuildContext(Context.Context):
 			x = cPickle.dumps(data, PROTOCOL)
 		finally:
 			Node.pickle_lock.release()
+
+		# Sign the pickled data with HMAC to prevent tampering
+		signing_key = _get_cache_signing_key(os.path.abspath(self.cache_dir))
+		signature = hmac.new(signing_key, x, hashlib.sha256).digest()
+		# Prepend signature to the data (32 bytes for SHA256)
+		x = signature + x
 
 		Utils.writef(db + '.tmp', x, m='wb')
 
