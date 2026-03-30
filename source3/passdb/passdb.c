@@ -2485,6 +2485,7 @@ static bool get_trust_pw_hash2(const char *domain,
 
 		previous_nt_hash = SMB_MALLOC_P(struct samr_Password);
 		if (previous_nt_hash == NULL) {
+			ZERO_STRUCT(*current_nt_hash);
 			return false;
 		}
 
@@ -2530,6 +2531,7 @@ bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
 	}
 
 	memcpy(ret_pwd, current_nt_hash.hash, sizeof(current_nt_hash.hash));
+	ZERO_STRUCT(current_nt_hash);
 	return true;
 }
 
@@ -2736,6 +2738,7 @@ NTSTATUS pdb_get_trust_credentials(const char *netbios_domain,
 	TALLOC_FREE(creds);
 	SAFE_FREE(cur_pw);
 	SAFE_FREE(prev_pw);
+	ZERO_STRUCT(cur_nt_hash);
 	TALLOC_FREE(frame);
 	return status;
 }
