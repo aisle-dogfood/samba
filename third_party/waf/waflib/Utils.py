@@ -44,19 +44,10 @@ except ImportError:
 from waflib import Errors
 
 try:
-	from hashlib import md5
+	from hashlib import sha256 as md5
 except ImportError:
-	try:
-		from hashlib import sha1 as md5
-	except ImportError:
-		# never fail to enable potential fixes from another module
-		pass
-else:
-	try:
-		md5().digest()
-	except ValueError:
-		# Fips? #2213
-		from hashlib import sha1 as md5
+	# never fail to enable potential fixes from another module
+	pass
 
 try:
 	import threading
@@ -270,7 +261,7 @@ def writef(fname, data, m='w', encoding='latin-1'):
 
 def h_file(fname):
 	"""
-	Computes a hash value for a file by using md5. Use the md5_tstamp
+	Computes a hash value for a file by using sha256. Use the md5_tstamp
 	extension to get faster build hashes if necessary.
 
 	:type fname: string
