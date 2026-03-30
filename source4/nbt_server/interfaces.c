@@ -314,6 +314,8 @@ NTSTATUS nbtd_startup_interfaces(struct nbtd_server *nbtsrv, struct loadparm_con
 	   we also need to bind to the wildcard address */
 	if (!lpcfg_bind_interfaces_only(lp_ctx)) {
 		const char *primary_address;
+		size_t num_binds = 0;
+		char **wcard;
 
 		primary_address = iface_list_first_v4(ifaces);
 
@@ -328,35 +330,47 @@ NTSTATUS nbtd_startup_interfaces(struct nbtd_server *nbtsrv, struct loadparm_con
 		primary_address = talloc_strdup(tmp_ctx, primary_address);
 		NT_STATUS_HAVE_NO_MEMORY(primary_address);
 
-		status = nbtd_add_socket(nbtsrv, 
-					 lp_ctx,
-					 "0.0.0.0",
-					 primary_address,
-					 talloc_strdup(tmp_ctx, "255.255.255.255"),
-					 talloc_strdup(tmp_ctx, "0.0.0.0"));
-		NT_STATUS_NOT_OK_RETURN(status);
-	}
+		wcard = iface_list_wildcard(tmp_ctx);
+		NT_STATUS_HAVE_NO_MEMORY(wcard);
 
-	for (i=0; i<num_interfaces; i++) {
-		const char *bcast;
-		const char *address, *netmask;
-
-		if (!iface_list_n_is_v4(ifaces, i)) {
-			/* v4 only for NBT protocol */
-			continue;
+		for (i = 0; wcard[i] != NULL; i++) {
+			status = nbtd_add_socket(nbtsrv, 
+						 lp_ctx,
+						 wcard[i],
+						 primary_address,
+						 talloc_strdup(tmp_ctx, "255.255.255.255"),
+						 talloc_strdup(tmp_ctx, "0.0.0.0"));
+			if (NT_STATUS_IS_OK(status)) {
+				num_binds++;
+			}
 		}
+		talloc_free(wcard);
+		if (num_binds == 0) {
+			return NT_STATUS_INVALID_PARAMETER_MIX;
+		}
+	} else {
+		/* bind interfaces only - listen on specific interfaces */
+		for (i=0; i<num_interfaces; i++) {
+			const char *bcast;
+			const char *address, *netmask;
 
-		bcast = iface_list_n_bcast(ifaces, i);
-		/* we can't assume every interface is broadcast capable */
-		if (bcast == NULL) continue;
+			if (!iface_list_n_is_v4(ifaces, i)) {
+				/* v4 only for NBT protocol */
+				continue;
+			}
 
-		address = talloc_strdup(tmp_ctx, iface_list_n_ip(ifaces, i));
-		bcast   = talloc_strdup(tmp_ctx, bcast);
-		netmask = talloc_strdup(tmp_ctx, iface_list_n_netmask(ifaces, i));
+			bcast = iface_list_n_bcast(ifaces, i);
+			/* we can't assume every interface is broadcast capable */
+			if (bcast == NULL) continue;
 
-		status = nbtd_add_socket(nbtsrv, lp_ctx,
-					 address, address, bcast, netmask);
-		NT_STATUS_NOT_OK_RETURN(status);
+			address = talloc_strdup(tmp_ctx, iface_list_n_ip(ifaces, i));
+			bcast   = talloc_strdup(tmp_ctx, bcast);
+			netmask = talloc_strdup(tmp_ctx, iface_list_n_netmask(ifaces, i));
+
+			status = nbtd_add_socket(nbtsrv, lp_ctx,
+						 address, address, bcast, netmask);
+			NT_STATUS_NOT_OK_RETURN(status);
+		}
 	}
 
 	if (lpcfg_wins_server_list(lp_ctx)) {
