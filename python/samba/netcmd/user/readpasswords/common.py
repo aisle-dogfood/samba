@@ -26,7 +26,6 @@ import datetime
 import errno
 import io
 import os
-from hashlib import sha1
 
 import ldb
 from samba import credentials, nttime2float
@@ -91,6 +90,9 @@ else:
 
 
 disabled_virtual_attributes = {
+    "virtualSSHA": {
+        "reason": "uses insecure SHA-1 hash algorithm. Use virtualCryptSHA256 or virtualCryptSHA512 instead"
+    },
 }
 
 virtual_attributes = {
@@ -141,9 +143,6 @@ def get_crypt_value(alg, utf8pw, rounds=0):
             crypt_salt, len(crypt_value), expected_len))
     return crypt_value
 
-
-
-virtual_attributes["virtualSSHA"] = {}
 
 for (alg, attr) in [("5", "virtualCryptSHA256"), ("6", "virtualCryptSHA512")]:
     try:
@@ -724,19 +723,6 @@ class GetPasswordCommand(Command):
                 v = get_cleartext(attr_opts)
                 if v is None:
                     continue
-            elif a == "virtualSSHA":
-                b = get_cleartext(attr_opts)
-                if b is None:
-                    continue
-                u8 = get_utf8(a, b, username or account_name)
-                if u8 is None:
-                    continue
-                salt = os.urandom(4)
-                h = sha1()
-                h.update(u8)
-                h.update(salt)
-                bv = h.digest() + salt
-                v = "{SSHA}" + base64.b64encode(bv).decode('utf8')
             elif a == "virtualCryptSHA256":
                 rounds = get_rounds(attr_opts)
                 x = get_virtual_crypt_value(a, 5, rounds, username, account_name)
