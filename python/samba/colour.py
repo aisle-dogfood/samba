@@ -61,9 +61,17 @@ _gen_ansi_colours()
 # The definition of the functions looks a little odd, because we want
 # to bake in the name of the colour but not its actual value.
 
+# Whitelist of valid color names for safe globals lookup
+_VALID_COLOUR_NAMES = set()
+
 for _k in list(globals().keys()):
     if _k.isupper():
+        _VALID_COLOUR_NAMES.add(_k)
         def _f(s, name=_k):
+            # Validate name is in whitelist before globals lookup to prevent
+            # arbitrary code execution via malicious name parameter
+            if name not in _VALID_COLOUR_NAMES:
+                raise ValueError("Invalid colour name: %s" % name)
             return "%s%s%s" % (globals()[name], s, C_NORMAL)
         globals()['c_%s' % _k] = _f
 
