@@ -1167,6 +1167,8 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 
 	status = dom_sid_split_rid(mem_ctx, &objectSid, NULL, &rid);
 	if (!NT_STATUS_IS_OK(status)) {
+		data_blob_clear(&unicodePwd);
+		data_blob_clear(&dBCSPwd);
 		return status;
 	}
 	acct_flags = ds_uf2acb(userAccountControl);
@@ -1341,6 +1343,10 @@ static NTSTATUS sam_account_from_object(struct samu *account,
 	if (unicodePwd.length == 16 && !all_zero(unicodePwd.data, 16)) {
 		pdb_set_nt_passwd(account, unicodePwd.data, PDB_CHANGED);
 	}
+
+	/* Clear password hashes from memory */
+	data_blob_clear(&unicodePwd);
+	data_blob_clear(&dBCSPwd);
 
 	/* TODO: history */
 
