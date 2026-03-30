@@ -32,6 +32,8 @@
 #include "../libcli/security/security.h"
 #include "util_tdb.h"
 #include "auth/credentials/credentials.h"
+#include "passdb/machine_sid.h"
+#include "../lib/crypto/md4.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
@@ -94,6 +96,114 @@ struct db_context *secrets_db_ctx(void)
 void secrets_shutdown(void)
 {
 	TALLOC_FREE(db_ctx);
+}
+
+/**
+ * Derive an encryption key from the machine SID for local password encryption.
+ * Returns a DATA_BLOB containing the derived key that must be freed by caller.
+ */
+static DATA_BLOB secrets_get_encryption_key(void)
+{
+	struct dom_sid *sid;
+	char *sid_str;
+	DATA_BLOB key_blob;
+	uint8_t key_hash[16];
+	
+	/* Get machine SID */
+	sid = get_global_sam_sid();
+	if (sid == NULL) {
+		DBG_ERR("Failed to get machine SID for encryption key\n");
+		return data_blob_null;
+	}
+	
+	/* Convert SID to string and hash it to derive encryption key */
+	sid_str = dom_sid_string(talloc_tos(), sid);
+	if (sid_str == NULL) {
+		return data_blob_null;
+	}
+	
+	/* Use MD4 to derive a 16-byte key from the SID string */
+	mdfour(key_hash, (const unsigned char *)sid_str, strlen(sid_str));
+	
+	TALLOC_FREE(sid_str);
+	
+	/* Create key blob (session encryption needs at least 7 bytes) */
+	key_blob = data_blob_talloc(NULL, key_hash, sizeof(key_hash));
+	
+	return key_blob;
+}
+
+/**
+ * Encrypt a password string for secure storage in secrets database.
+ * Returns encrypted DATA_BLOB that must be freed by caller.
+ */
+static DATA_BLOB secrets_encrypt_password(const char *password)
+{
+	DATA_BLOB key_blob;
+	DATA_BLOB encrypted;
+	
+	if (password == NULL) {
+		return data_blob_null;
+	}
+	
+	key_blob = secrets_get_encryption_key();
+	if (key_blob.data == NULL) {
+		return data_blob_null;
+	}
+	
+	/* Use session encryption to encrypt the password */
+	encrypted = sess_encrypt_string(password, &key_blob);
+	
+	data_blob_free(&key_blob);
+	
+	return encrypted;
+}
+
+/**
+ * Decrypt a password from secrets database.
+ * Returns decrypted password string that must be freed with BURN_FREE_STR().
+ * 
+ * For backward compatibility, this function attempts to detect if the data
+ * is already plaintext (legacy format) or encrypted (new format).
+ */
+static char *secrets_decrypt_password(TALLOC_CTX *mem_ctx, const uint8_t *encrypted_data, size_t encrypted_size)
+{
+	DATA_BLOB key_blob;
+	DATA_BLOB encrypted_blob;
+	char *decrypted;
+	
+	if (encrypted_data == NULL || encrypted_size == 0) {
+		return NULL;
+	}
+	
+	/* Check if data appears to be encrypted (minimum size for encrypted data is 8 bytes) */
+	if (encrypted_size < 8) {
+		/* Data is too small to be encrypted, likely plaintext legacy format */
+		DBG_WARNING("Password appears to be in legacy plaintext format, re-encryption recommended\n");
+		decrypted = talloc_strndup(mem_ctx, (const char *)encrypted_data, encrypted_size);
+		return decrypted;
+	}
+	
+	key_blob = secrets_get_encryption_key();
+	if (key_blob.data == NULL) {
+		return NULL;
+	}
+	
+	encrypted_blob = data_blob_const(encrypted_data, encrypted_size);
+	
+	/* Attempt to decrypt using session decryption */
+	decrypted = sess_decrypt_string(mem_ctx, &encrypted_blob, &key_blob);
+	
+	data_blob_free(&key_blob);
+	
+	/* If decryption failed, this might be legacy plaintext data */
+	if (decrypted == NULL) {
+		DBG_WARNING("Decryption failed, treating as legacy plaintext password\n");
+		/* Treat as plaintext for backward compatibility */
+		decrypted = talloc_strndup(mem_ctx, (const char *)encrypted_data, encrypted_size);
+	}
+	
+	return decrypted;
 }
 
 /* read a entry from the secrets database - the caller must free the result
@@ -188,9 +298,18 @@ bool secrets_store_creds(struct cli_credentials *creds)
 		return false;
 	}
 
-	ok = secrets_store(SECRETS_AUTH_PASSWORD, p, strlen(p) + 1);
+	/* Encrypt password before storing */
+	DATA_BLOB encrypted_password = secrets_encrypt_password(p);
+	if (encrypted_password.data == NULL) {
+		DBG_ERR("Failed encrypting auth password\n");
+		return false;
+	}
+
+	ok = secrets_store(SECRETS_AUTH_PASSWORD, encrypted_password.data, encrypted_password.length);
+	data_blob_free(&encrypted_password);
+	
 	if (!ok) {
-		DBG_ERR("Failed storing auth password\n");
+		DBG_ERR("Failed storing encrypted auth password\n");
 		return false;
 	}
 
@@ -506,12 +625,23 @@ void secrets_fetch_ipc_userpass(char **username, char **domain, char **password)
 	}
 	
 	if (raw_password != NULL) {
-		*password = malloc(password_size + 1);
-		if (*password != NULL) {
-			memcpy(*password, raw_password, password_size);
-			(*password)[password_size] = '\0';
-		}
+		/* Decrypt password retrieved from database */
+		char *decrypted_password = secrets_decrypt_password(talloc_tos(), 
+								     (const uint8_t *)raw_password, 
+								     password_size);
 		BURN_FREE(raw_password, password_size);
+		
+		if (decrypted_password != NULL) {
+			size_t decrypted_len = strlen(decrypted_password);
+			*password = malloc(decrypted_len + 1);
+			if (*password != NULL) {
+				memcpy(*password, decrypted_password, decrypted_len + 1);
+			}
+			BURN_FREE_STR(decrypted_password);
+		} else {
+			DBG_ERR("Failed to decrypt stored password\n");
+			*password = NULL;
+		}
 	} else {
 		*password = NULL;
 	}
