@@ -53,6 +53,29 @@ static int sesssetup_state_destructor(struct sesssetup_state *state)
 		state->req = NULL;
 	}
 
+	/*
+	 * Clear sensitive credential data from memory before deallocation
+	 * to prevent potential exposure via heap inspection (CWE-244, CWE-316).
+	 * We call data_blob_clear() rather than data_blob_clear_free() because
+	 * the talloc hierarchy will handle memory deallocation.
+	 */
+	switch (state->setup.old.level) {
+	case RAW_SESSSETUP_OLD:
+		data_blob_clear(&state->setup.old.in.password);
+		break;
+	case RAW_SESSSETUP_NT1:
+		data_blob_clear(&state->setup.nt1.in.password1);
+		data_blob_clear(&state->setup.nt1.in.password2);
+		break;
+	case RAW_SESSSETUP_SPNEGO:
+		data_blob_clear(&state->setup.spnego.in.secblob);
+		data_blob_clear(&state->setup.spnego.out.secblob);
+		break;
+	case RAW_SESSSETUP_SMB2:
+		/* SMB2 uses different session setup mechanism */
+		break;
+	}
+
 	return 0;
 }
 
