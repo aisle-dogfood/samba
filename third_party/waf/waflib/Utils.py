@@ -47,7 +47,7 @@ try:
 	from hashlib import md5
 except ImportError:
 	try:
-		from hashlib import sha1 as md5
+		from hashlib import sha256 as md5
 	except ImportError:
 		# never fail to enable potential fixes from another module
 		pass
@@ -56,7 +56,7 @@ else:
 		md5().digest()
 	except ValueError:
 		# Fips? #2213
-		from hashlib import sha1 as md5
+		from hashlib import sha256 as md5
 
 try:
 	import threading
