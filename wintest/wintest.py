@@ -176,7 +176,11 @@ class wintest():
         else:
             self.info('$ ' + cmd)
         if output:
-            return subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=dir).communicate()[0]
+            if isinstance(cmd, list):
+                shell = False
+            else:
+                shell = True
+            return subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=dir).communicate()[0]
         if isinstance(cmd, list):
             shell = False
         else:
