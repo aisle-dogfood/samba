@@ -71,6 +71,10 @@ static NTSTATUS connect_tcon(struct composite_context *c,
 	NTSTATUS status;
 
 	status = smb_raw_tcon_recv(state->req, c, state->io_tcon);
+	
+	/* Clear password from memory */
+	data_blob_clear(&state->io_tcon->tconx.in.password);
+	
 	NT_STATUS_NOT_OK_RETURN(status);
 
 	if (state->io_tcon->tconx.out.options & SMB_EXTENDED_SIGNATURES) {

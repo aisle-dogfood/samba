@@ -174,6 +174,9 @@ NTSTATUS smbsrv_tcon_backend(struct smbsrv_request *req, union smb_tcon *con)
 
 		status = make_connection(req, con->tcon.in.service, password, con->tcon.in.dev);
 		
+		/* Clear password from memory */
+		data_blob_clear(&password);
+		
 		if (!NT_STATUS_IS_OK(status)) {
 			return status;
 		}
@@ -188,6 +191,10 @@ NTSTATUS smbsrv_tcon_backend(struct smbsrv_request *req, union smb_tcon *con)
 
 	status = make_connection(req, con->tconx.in.path, con->tconx.in.password, 
 				 con->tconx.in.device);
+	
+	/* Clear password from memory */
+	data_blob_clear(&con->tconx.in.password);
+	
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
