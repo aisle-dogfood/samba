@@ -710,13 +710,13 @@ def create_dns_dir(logger, paths):
     except OSError:
         pass
 
-    os.mkdir(dns_dir, 0o770)
+    os.mkdir(dns_dir, 0o750)
 
     if paths.bind_gid is not None:
         try:
             os.chown(dns_dir, -1, paths.bind_gid)
             # chmod needed to cope with umask
-            os.chmod(dns_dir, 0o770)
+            os.chmod(dns_dir, 0o750)
         except OSError:
             if 'SAMBA_SELFTEST' not in os.environ:
                 logger.error("Failed to chown %s to bind gid %u" % (
@@ -750,7 +750,7 @@ def create_dns_dir_keytab_link(logger, paths):
         # chown the dns.keytab in the bind-dns directory
         if paths.bind_gid is not None:
             try:
-                os.chmod(paths.binddns_dir, 0o770)
+                os.chmod(paths.binddns_dir, 0o750)
                 os.chown(paths.binddns_dir, -1, paths.bind_gid)
             except OSError:
                 if 'SAMBA_SELFTEST' not in os.environ:
@@ -947,7 +947,7 @@ def create_samdb_copy(samdb, logger, paths, names, domainsid, domainguid):
                 for d in dirs:
                     dpath = os.path.join(dirname, d)
                     os.chown(dpath, -1, paths.bind_gid)
-                    os.chmod(dpath, 0o770)
+                    os.chmod(dpath, 0o750)
                 for f in files:
                     if f.endswith(('.ldb', '.tdb', 'ldb-lock')):
                         fpath = os.path.join(dirname, f)
