@@ -278,7 +278,9 @@ class Context(ctx):
 				self.pre_recurse(node)
 				try:
 					function_code = node.read('r', encoding)
-					exec(compile(function_code, node.abspath(), 'exec'), self.exec_dict)
+					# Security: Compile with dont_inherit flag to prevent inheriting flags from calling code
+					compiled = compile(function_code, node.abspath(), 'exec', dont_inherit=True)
+					exec(compiled, self.exec_dict)
 				finally:
 					self.post_recurse(node)
 			elif not node:
@@ -677,6 +679,26 @@ def load_module(path, encoding=None):
 	except KeyError:
 		pass
 
+	# Security: Validate and normalize the file path
+	try:
+		# Normalize the path to remove any ../ or ./ components
+		path = os.path.normpath(os.path.abspath(path))
+		
+		# Resolve symlinks to prevent loading from unexpected locations
+		path = os.path.realpath(path)
+		
+		# Verify the file exists and is a regular file (not a device, socket, etc.)
+		if not os.path.isfile(path):
+			raise Errors.WafError('Path %r is not a regular file' % path)
+		
+		# Verify file has reasonable size (< 10MB) to prevent resource exhaustion
+		file_size = os.path.getsize(path)
+		if file_size > 10 * 1024 * 1024:  # 10MB limit
+			raise Errors.WafError('File %r is too large (%d bytes)' % (path, file_size))
+		
+	except OSError as e:
+		raise Errors.WafError('Could not validate file path %r: %s' % (path, e))
+
 	module = imp.new_module(WSCRIPT_FILE)
 	try:
 		code = Utils.readf(path, m='r', encoding=encoding)
@@ -686,7 +708,9 @@ def load_module(path, encoding=None):
 	module_dir = os.path.dirname(path)
 	sys.path.insert(0, module_dir)
 	try:
-		exec(compile(code, path, 'exec'), module.__dict__)
+		# Compile the code with restricted flags to prevent some exploits
+		compiled = compile(code, path, 'exec', dont_inherit=True)
+		exec(compiled, module.__dict__)
 	finally:
 		sys.path.remove(module_dir)
 

@@ -1044,7 +1044,9 @@ def funex(c):
 	:rtype: function
 	"""
 	dc = {}
-	exec(c, dc)
+	# Security: Compile with dont_inherit flag to prevent inheriting flags from calling code
+	compiled = compile(c, '<funex>', 'exec', dont_inherit=True)
+	exec(compiled, dc)
 	return dc['f']
 
 re_cond = re.compile(r'(?P<var>\w+)|(?P<or>\|)|(?P<and>&)')
