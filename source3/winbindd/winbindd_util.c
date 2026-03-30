@@ -1519,6 +1519,8 @@ bool init_domain_list(void)
 					  "local AD domain join password for "
 					  "winbindd's internal use into "
 					  "secrets.tdb\n"));
+				/* Securely clear the sensitive password hash */
+				BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 				return false;
 			}
 			ok = get_trust_pw_hash(domain->name,
@@ -1530,6 +1532,8 @@ bool init_domain_list(void)
 					  "written local AD domain join "
 					  "password for winbindd's internal "
 					  "use in secrets.tdb\n"));
+				/* Securely clear the sensitive password hash */
+				BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 				return false;
 			}
 		}
@@ -1547,8 +1551,12 @@ bool init_domain_list(void)
 			DBG_ERR("pdb_filter_hints(%s) - %s\n",
 				domain->name,
 				nt_errstr(status));
+			/* Securely clear the sensitive password hash */
+			BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 			return false;
 		}
+		/* Securely clear the sensitive password hash */
+		BURN_PTR_SIZE(&current_nt_hash, sizeof(current_nt_hash));
 	} else {
 		uint32_t trust_flags;
 		enum netr_SchannelType secure_channel_type;
