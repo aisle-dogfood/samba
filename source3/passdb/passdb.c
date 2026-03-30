@@ -2734,8 +2734,8 @@ NTSTATUS pdb_get_trust_credentials(const char *netbios_domain,
 	status = NT_STATUS_OK;
  fail:
 	TALLOC_FREE(creds);
-	SAFE_FREE(cur_pw);
-	SAFE_FREE(prev_pw);
+	BURN_FREE_STR(cur_pw);
+	BURN_FREE_STR(prev_pw);
 	TALLOC_FREE(frame);
 	return status;
 }
