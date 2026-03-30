@@ -35,13 +35,13 @@ parser.add_option("", "--clean", help="run make clean before each build",
 
 def run_cmd(cmd, dir=".", show=True, output=False, checkfail=True):
     if show:
-        print("Running: '%s' in '%s'" % (cmd, dir))
+        print("Running: '%s' in '%s'" % (' '.join(cmd) if isinstance(cmd, list) else cmd, dir))
     if output:
-        return Popen([cmd], shell=True, stdout=PIPE, cwd=dir).communicate()[0]
+        return Popen(cmd, shell=False, stdout=PIPE, cwd=dir).communicate()[0]
     elif checkfail:
-        return check_call(cmd, shell=True, cwd=dir)
+        return check_call(cmd, shell=False, cwd=dir)
     else:
-        return call(cmd, shell=True, cwd=dir)
+        return call(cmd, shell=False, cwd=dir)
 
 
 def find_git_root():
@@ -78,7 +78,7 @@ f.close()
 
 
 def cleanup():
-    run_cmd("git bisect reset", dir=gitroot)
+    run_cmd(["git", "bisect", "reset"], dir=gitroot)
     os.unlink(f.name)
     sys.exit(-1)
 
@@ -86,9 +86,9 @@ def cleanup():
 # run bisect
 ret = -1
 try:
-    run_cmd("git bisect reset", dir=gitroot, show=False, checkfail=False)
-    run_cmd("git bisect start %s %s --" % (opts.bad, opts.good), dir=gitroot)
-    ret = run_cmd("git bisect run bash %s" % f.name, dir=gitroot, show=True, checkfail=False)
+    run_cmd(["git", "bisect", "reset"], dir=gitroot, show=False, checkfail=False)
+    run_cmd(["git", "bisect", "start", opts.bad, opts.good, "--"], dir=gitroot)
+    ret = run_cmd(["git", "bisect", "run", "bash", f.name], dir=gitroot, show=True, checkfail=False)
 except KeyboardInterrupt:
     print("Cleaning up")
     cleanup()
@@ -96,6 +96,6 @@ except Exception as reason:
     print("Failed bisect: %s" % reason)
     cleanup()
 
-run_cmd("git bisect reset", dir=gitroot)
+run_cmd(["git", "bisect", "reset"], dir=gitroot)
 os.unlink(f.name)
 sys.exit(ret)
