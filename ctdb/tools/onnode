@@ -116,19 +116,23 @@ echo_nth ()
 
 parse_nodespec ()
 {
-    # Subshell avoids hacks to restore $IFS.
-    (
-	IFS=","
-	for i in $1 ; do
-	    case "$i" in
-		*-*) seq "${i%-*}" "${i#*-}" 2>/dev/null || invalid_nodespec ;;
-		all|any|ok|healthy|con|connected) echo "$i" ;;
-		*)
-		    [ "$i" -gt -1 ] 2>/dev/null || $names_ok || invalid_nodespec
-		    echo "$i"
-	    esac
-	done
-    )
+    # Process comma-separated node specification
+    local spec="$1"
+    local item
+    
+    # Replace commas with newlines and process each item
+    while IFS= read -r item ; do
+	[ -n "$item" ] || continue
+	case "$item" in
+	    *-*) seq "${item%-*}" "${item#*-}" 2>/dev/null || invalid_nodespec ;;
+	    all|any|ok|healthy|con|connected) echo "$item" ;;
+	    *)
+		[ "$item" -gt -1 ] 2>/dev/null || $names_ok || invalid_nodespec
+		echo "$item"
+	esac
+    done <<EOF
+$(echo "$spec" | tr ',' '\n')
+EOF
 }
 
 ctdb_status_output="" # cache
@@ -153,12 +157,11 @@ get_nodes_with_status ()
 
     (
 	local i
-	IFS="${IFS}|"
 	while IFS="" read -r i ; do
 
 	    # Intentional word splitting
 	    # shellcheck disable=SC2086
-	    set -- $i # split line on colons
+	    IFS="${IFS}|" set -- $i # split line on colons
 	    shift     # line starts with : so 1st field is empty
 	    local pnn="$1" ; shift
 	    shift # ignore IP address but need status bits below
