@@ -437,69 +437,30 @@ static void continue_srv_auth2(struct tevent_req *subreq)
 	}
 
 	/*
-	 * Strong keys could be unsupported (NT4) or disabled. So retry with the
-	 * flags returned by the server. - asn
+	 * Prevent downgrade to weak encryption algorithms.
+	 * Require AES encryption - do not allow fallback to ARCFOUR or DES.
 	 */
 	if (NT_STATUS_EQUAL(s->a.out.result, NT_STATUS_ACCESS_DENIED)) {
 		uint32_t lf = s->local_negotiate_flags;
-		const char *ln = NULL;
 		uint32_t rf = s->remote_negotiate_flags;
-		const char *rn = NULL;
 
-		if ((lf & rf) == lf) {
-			/*
-			 * without a change in flags
-			 * there's no need to retry...
-			 */
-			s->dcerpc_schannel_auto = false;
-		}
-
-		if (!s->dcerpc_schannel_auto) {
-			composite_error(c, s->a.out.result);
+		/*
+		 * Check if server supports AES. If not, reject the connection
+		 * to prevent downgrade attacks to weaker ciphers.
+		 */
+		if (!(rf & NETLOGON_NEG_SUPPORTS_AES)) {
+			DBG_ERR("Server does not support AES encryption. "
+				"Rejecting connection to prevent weak cipher usage. "
+				"local[0x%08X] remote[0x%08X]\n", lf, rf);
+			composite_error(c, NT_STATUS_DOWNGRADE_DETECTED);
 			return;
 		}
-		s->dcerpc_schannel_auto = false;
 
-		if (lf & NETLOGON_NEG_SUPPORTS_AES)  {
-			ln = "aes";
-			if (rf & NETLOGON_NEG_SUPPORTS_AES) {
-				composite_error(c, s->a.out.result);
-				return;
-			}
-		} else if (lf & NETLOGON_NEG_STRONG_KEYS) {
-			ln = "strong";
-			if (rf & NETLOGON_NEG_STRONG_KEYS) {
-				composite_error(c, s->a.out.result);
-				return;
-			}
-		} else {
-			ln = "des";
-		}
-
-		if (rf & NETLOGON_NEG_SUPPORTS_AES)  {
-			rn = "aes";
-		} else if (rf & NETLOGON_NEG_STRONG_KEYS) {
-			rn = "strong";
-		} else {
-			rn = "des";
-		}
-
-		DEBUG(3, ("Server doesn't support %s keys, downgrade to %s"
-			  "and retry! local[0x%08X] remote[0x%08X]\n",
-			  ln, rn, lf, rf));
-
-		s->local_negotiate_flags &= s->remote_negotiate_flags;
-
-		generate_random_buffer(s->credentials1.data,
-				       sizeof(s->credentials1.data));
-
-		subreq = dcerpc_netr_ServerReqChallenge_r_send(s,
-							       c->event_ctx,
-							       s->pipe2->binding_handle,
-							       &s->r);
-		if (composite_nomem(subreq, c)) return;
-
-		tevent_req_set_callback(subreq, continue_srv_challenge, c);
+		/*
+		 * Server supports AES but authentication failed.
+		 * Do not retry with downgraded encryption.
+		 */
+		composite_error(c, s->a.out.result);
 		return;
 	}
 
@@ -634,6 +595,14 @@ static struct composite_context *dcerpc_schannel_key_send(TALLOC_CTX *mem_ctx,
 		require_strong_key = lpcfg_require_strong_key(lp_ctx);
 	}
 
+	/*
+	 * Enforce AES encryption as a security requirement.
+	 * This prevents downgrade attacks to weak ciphers like ARCFOUR/RC4 or DES.
+	 */
+	s->required_negotiate_flags |= NETLOGON_NEG_PASSWORD_SET2;
+	s->required_negotiate_flags |= NETLOGON_NEG_SUPPORTS_AES;
+	reject_md5_servers = true;
+
 	if (lpcfg_weak_crypto(lp_ctx) == SAMBA_WEAK_CRYPTO_DISALLOWED) {
 		reject_md5_servers = true;
 	}
@@ -649,11 +618,6 @@ static struct composite_context *dcerpc_schannel_key_send(TALLOC_CTX *mem_ctx,
 	if (require_strong_key) {
 		s->required_negotiate_flags |= NETLOGON_NEG_ARCFOUR;
 		s->required_negotiate_flags |= NETLOGON_NEG_STRONG_KEYS;
-	}
-
-	if (reject_md5_servers) {
-		s->required_negotiate_flags |= NETLOGON_NEG_PASSWORD_SET2;
-		s->required_negotiate_flags |= NETLOGON_NEG_SUPPORTS_AES;
 	}
 
 	if (reject_aes_servers) {
