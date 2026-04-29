@@ -41,7 +41,8 @@ void wins_hook(struct winsdb_handle *h, const struct winsdb_record *rec,
 {
 	uint32_t i, length;
 	int child;
-	char *cmd = NULL;
+	char **argv = NULL;
+	uint32_t argc;
 	TALLOC_CTX *tmp_mem = NULL;
 
 	if (!wins_hook_script || !wins_hook_script[0]) return;
@@ -55,21 +56,37 @@ void wins_hook(struct winsdb_handle *h, const struct winsdb_record *rec,
 		action = WINS_HOOK_DELETE;
 	}
 
-	cmd = talloc_asprintf(tmp_mem,
-			      "%s %s %s %02x %ld",
-			      wins_hook_script,
-			      wins_hook_action_string(action),
-			      rec->name->name,
-			      rec->name->type,
-			      (long int) rec->expire_time);
-	if (!cmd) goto failed;
+	/* Build argv array instead of concatenating into shell command
+	 * argv[0] = script path
+	 * argv[1] = action
+	 * argv[2] = name
+	 * argv[3] = type (hex)
+	 * argv[4] = expire_time
+	 * argv[5..n] = addresses
+	 * argv[n+1] = NULL
+	 */
+	argc = 5 + length;
+	argv = talloc_array(tmp_mem, char *, argc + 1);
+	if (!argv) goto failed;
 
-	for (i=0; rec->addresses[i]; i++) {
-		cmd = talloc_asprintf_append_buffer(cmd, " %s", rec->addresses[i]->address);
-		if (!cmd) goto failed;
+	argv[0] = talloc_strdup(argv, wins_hook_script);
+	argv[1] = talloc_strdup(argv, wins_hook_action_string(action));
+	argv[2] = talloc_strdup(argv, rec->name->name);
+	argv[3] = talloc_asprintf(argv, "%02x", rec->name->type);
+	argv[4] = talloc_asprintf(argv, "%ld", (long int) rec->expire_time);
+
+	if (!argv[0] || !argv[1] || !argv[2] || !argv[3] || !argv[4]) {
+		goto failed;
 	}
 
-	DEBUG(10,("call wins hook '%s'\n", cmd));
+	for (i=0; rec->addresses[i]; i++) {
+		argv[5 + i] = talloc_strdup(argv, rec->addresses[i]->address);
+		if (!argv[5 + i]) goto failed;
+	}
+	argv[argc] = NULL;
+
+	DEBUG(10,("call wins hook '%s' with action '%s', name '%s'\n", 
+		  wins_hook_script, wins_hook_action_string(action), rec->name->name));
 
 	/* signal handling in posix really sucks - doing this in a library
 	   affects the whole app, but what else to do?? */
@@ -82,7 +99,7 @@ void wins_hook(struct winsdb_handle *h, const struct winsdb_record *rec,
 
 	if (child == 0) {
 /* TODO: close file handles */
-		execl("/bin/sh", "sh", "-c", cmd, NULL);
+		execv(wins_hook_script, argv);
 		_exit(0);
 	}
 
