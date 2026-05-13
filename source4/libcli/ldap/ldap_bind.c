@@ -39,6 +39,15 @@ struct ldap_simple_creds {
 	const char *pw;
 };
 
+static int ldap_simple_creds_destructor(struct ldap_simple_creds *creds)
+{
+	/* Securely zeroize password before freeing */
+	if (creds->pw != NULL) {
+		BURN_STR(discard_const(creds->pw));
+	}
+	return 0;
+}
+
 _PUBLIC_ NTSTATUS ldap_rebind(struct ldap_connection *conn)
 {
 	NTSTATUS status;
@@ -68,7 +77,17 @@ _PUBLIC_ NTSTATUS ldap_rebind(struct ldap_connection *conn)
 }
 
 
-static struct ldap_message *new_ldap_simple_bind_msg(struct ldap_connection *conn, 
+static int ldap_simple_bind_msg_destructor(struct ldap_message *msg)
+{
+	/* Securely zeroize password from BindRequest before freeing */
+	if (msg->r.BindRequest.mechanism == LDAP_AUTH_MECH_SIMPLE &&
+	    msg->r.BindRequest.creds.password != NULL) {
+		BURN_STR(discard_const(msg->r.BindRequest.creds.password));
+	}
+	return 0;
+}
+
+static struct ldap_message *new_ldap_simple_bind_msg(struct ldap_connection *conn,
 						     const char *dn, const char *pw)
 {
 	struct ldap_message *res;
@@ -84,6 +103,8 @@ static struct ldap_message *new_ldap_simple_bind_msg(struct ldap_connection *con
 	res->r.BindRequest.mechanism = LDAP_AUTH_MECH_SIMPLE;
 	res->r.BindRequest.creds.password = talloc_strdup(res, pw);
 	res->controls = NULL;
+
+	talloc_set_destructor(res, ldap_simple_bind_msg_destructor);
 
 	return res;
 }
@@ -124,6 +145,20 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 		}
 	}
 
+	/*
+	 * Enforce TLS/LDAPS for simple bind to prevent sending
+	 * credentials in cleartext. Allow anonymous bind (empty password)
+	 * without TLS as it contains no credentials to protect.
+	 */
+	if (pw && *pw != '\0') {
+		bool tls_active = (conn->sockets.active == conn->sockets.tls);
+		bool sasl_active = (conn->sockets.active == conn->sockets.sasl);
+
+		if (!tls_active && !sasl_active) {
+			return NT_STATUS_INVALID_PARAMETER_MIX;
+		}
+	}
+
 	msg = new_ldap_simple_bind_msg(conn, dn, pw);
 	NT_STATUS_HAVE_NO_MEMORY(msg);
 
@@ -158,8 +193,18 @@ _PUBLIC_ NTSTATUS ldap_bind_simple(struct ldap_connection *conn,
 		creds->dn = talloc_strdup(creds, dn);
 		creds->pw = talloc_strdup(creds, pw);
 		if (creds->dn == NULL || creds->pw == NULL) {
+			talloc_free(creds);
 			return NT_STATUS_NO_MEMORY;
 		}
+
+		/* Set destructor to securely zeroize password on free */
+		talloc_set_destructor(creds, ldap_simple_creds_destructor);
+
+		/* Free old credentials before storing new ones */
+		if (conn->bind.type == LDAP_BIND_SIMPLE && conn->bind.creds != NULL) {
+			TALLOC_FREE(conn->bind.creds);
+		}
+
 		conn->bind.type = LDAP_BIND_SIMPLE;
 		conn->bind.creds = creds;
 	}
